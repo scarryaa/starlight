@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/editor_painter.dart';
+import 'package:starlight/features/editor/line_numbers.dart';
 import 'package:starlight/features/editor/models/text_editing_core.dart';
 
 class CodeEditor extends StatefulWidget {
@@ -58,7 +59,7 @@ class _CodeEditorState extends State<CodeEditor> {
     final lineCount = editingCore.rope.lineCount;
     final maxLineNumberWidth =
         '$lineCount'.length * CodeEditorPainter.charWidth;
-    _lineNumberWidth = maxLineNumberWidth + 20;
+    _lineNumberWidth = maxLineNumberWidth + 40;
   }
 
   void _updateVisibleLines() {
@@ -306,21 +307,36 @@ class _CodeEditorState extends State<CodeEditor> {
                         constraints.maxHeight),
                     child: SingleChildScrollView(
                       controller: _verticalController,
-                      child: CustomPaint(
-                        painter: CodeEditorPainter(
-                          editingCore: editingCore,
-                          firstVisibleLine: _firstVisibleLine,
-                          visibleLineCount: _visibleLineCount,
-                          horizontalOffset: _horizontalController.hasClients
-                              ? _horizontalController.offset
-                              : 0,
-                          version: editingCore.version,
-                          lineNumberWidth: _lineNumberWidth,
-                        ),
-                        size: Size(
-                            max(_maxLineWidth, constraints.maxWidth),
-                            editingCore.rope.lineCount *
-                                CodeEditorPainter.lineHeight),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          LineNumbers(
+                            lineCount: editingCore.rope.lineCount,
+                            lineHeight: CodeEditorPainter.lineHeight,
+                            lineNumberWidth: _lineNumberWidth,
+                            firstVisibleLine: _firstVisibleLine,
+                            visibleLineCount: _visibleLineCount,
+                          ),
+                          Expanded(
+                            child: CustomPaint(
+                              painter: CodeEditorPainter(
+                                editingCore: editingCore,
+                                firstVisibleLine: _firstVisibleLine,
+                                visibleLineCount: _visibleLineCount,
+                                horizontalOffset:
+                                    _horizontalController.hasClients
+                                        ? _horizontalController.offset
+                                        : 0,
+                                version: editingCore.version,
+                              ),
+                              size: Size(
+                                  max(_maxLineWidth - _lineNumberWidth,
+                                      constraints.maxWidth - _lineNumberWidth),
+                                  editingCore.rope.lineCount *
+                                      CodeEditorPainter.lineHeight),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),

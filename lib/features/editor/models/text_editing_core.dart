@@ -27,7 +27,12 @@ class TextEditingCore extends ChangeNotifier {
   }
 
   void moveCursor(int horizontalMove, int verticalMove) {
-    int currentLine = rope.findLine(cursorPosition);
+    if (rope.length == 0) {
+      cursorPosition = 0;
+      return;
+    }
+
+    int currentLine = rope.findLine(cursorPosition.clamp(0, rope.length - 1));
     int lineStart = rope.findLineStart(currentLine);
     int currentColumn = cursorPosition - lineStart;
 
@@ -47,7 +52,7 @@ class TextEditingCore extends ChangeNotifier {
       currentColumn = currentColumn.clamp(0, lineLength);
     }
 
-    cursorPosition = newLineStart + currentColumn;
+    cursorPosition = (newLineStart + currentColumn).clamp(0, rope.length);
     incrementVersion();
   }
 
