@@ -178,30 +178,44 @@ class _CodeEditorState extends State<CodeEditor> {
   int _getPositionFromOffset(Offset offset) {
     final adjustedOffset = offset +
         Offset(_horizontalController.offset, _verticalController.offset);
+
     final tappedLine =
         (adjustedOffset.dy / CodeEditorPainter.lineHeight).floor();
 
-    if (tappedLine < editingCore.rope.lineCount) {
-      final tappedOffset = adjustedOffset.dx - _lineNumberWidth;
-      final column = (tappedOffset / CodeEditorPainter.charWidth).round();
+    // Return 0 for an empty document
+    if (editingCore.rope.lineCount == 0) {
+      return 0;
+    }
 
+    if (tappedLine < editingCore.rope.lineCount) {
+      final tappedOffset =
+          (adjustedOffset.dx - _lineNumberWidth).clamp(0, double.infinity);
+
+      final column = (tappedOffset / CodeEditorPainter.charWidth)
+          .round()
+          .clamp(0, double.infinity)
+          .toInt();
+
+      if (tappedLine < 0) return 0;
       int lineStartIndex = editingCore.getLineStartIndex(tappedLine);
+
       String line = editingCore.rope.sliceLines(tappedLine, tappedLine + 1)[0];
 
-      // Handle empty lines
       if (line.isEmpty) {
         return lineStartIndex;
       }
 
-      // Position cursor at the end of the line if clicked beyond the line's end
       if (column >= line.length) {
+        if (tappedLine == editingCore.rope.lineCount - 1) {
+          return lineStartIndex + line.length;
+        }
+
         return lineStartIndex + line.length - 1;
       }
 
       return lineStartIndex + column;
     }
 
-    // If clicked beyond the last line, position at the end of the document
     return editingCore.rope.length;
   }
 

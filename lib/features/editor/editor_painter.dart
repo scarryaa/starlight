@@ -58,18 +58,27 @@ class CodeEditorPainter extends CustomPainter {
         _paintCursor(canvas, i, lineContent);
       }
     }
+
+    // Paint cursor at the end of the document if necessary
+    if (editingCore.cursorPosition == editingCore.rope.length) {
+      _paintCursorAtEnd(canvas, lineCount == 0 ? lineCount : lineCount - 1);
+    }
   }
 
   String _safeGetLineContent(int lineIndex) {
+    if (editingCore.rope.lineCount == 0) return "";
     if (lineIndex < 0 || lineIndex >= editingCore.rope.lineCount) {
-      print(
-          "Warning: Attempted to access invalid line $lineIndex. Total lines: ${editingCore.rope.lineCount}");
+      print("Warning: Attempted to access an invalid line index $lineIndex. "
+          "Valid line indices are 0 to ${editingCore.rope.lineCount == 0 ? 0 : editingCore.rope.lineCount - 1}. "
+          "Total lines: ${editingCore.rope.lineCount}");
       return '';
     }
     try {
       return editingCore.getLineContent(lineIndex);
-    } catch (e) {
-      print("Error getting content for line $lineIndex: $e");
+    } catch (e, stackTrace) {
+      print("Error: Failed to retrieve content for line $lineIndex. "
+          "Total lines: ${editingCore.rope.lineCount}. "
+          "Error: $e\nStack trace:\n$stackTrace");
       return '';
     }
   }
@@ -118,6 +127,19 @@ class CodeEditorPainter extends CustomPainter {
     final cursorOffset = cursorPositionInLine * charWidth;
 
     final topY = line * lineHeight + (lineHeight - fontSize) / 2;
+    final bottomY = topY + fontSize;
+
+    canvas.drawLine(
+      Offset(cursorOffset - horizontalOffset, topY),
+      Offset(cursorOffset - horizontalOffset, bottomY),
+      Paint()..color = Colors.blue,
+    );
+  }
+
+  void _paintCursorAtEnd(Canvas canvas, int lastLine) {
+    final cursorOffset = _safeGetLineContent(lastLine).length * charWidth;
+
+    final topY = lastLine * lineHeight + (lineHeight - fontSize) / 2;
     final bottomY = topY + fontSize;
 
     canvas.drawLine(

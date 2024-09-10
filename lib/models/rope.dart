@@ -4,9 +4,7 @@ class Rope {
   Node? root;
 
   Rope(String s) {
-    if (s.isNotEmpty) {
-      root = _buildTree(s);
-    }
+    root = _buildTree(s);
   }
 
   static Node? _buildTree(String s) {
@@ -31,14 +29,22 @@ class Rope {
 
   Rope insert(int index, String s) {
     if (index < 0 || index > length) {
-      throw RangeError('Index out of bounds');
+      throw RangeError(
+          'Index $index is out of bounds. Valid range: 0 to $length.');
     }
     return Rope('')..root = root?.insert(index, s) ?? _buildTree(s);
   }
 
   Rope delete(int start, int end) {
-    if (start < 0 || end > length || start > end) {
-      throw RangeError('Invalid range');
+    if (start < 0) {
+      throw RangeError('Start index $start cannot be negative.');
+    }
+    if (end > length) {
+      throw RangeError('End index $end exceeds the valid length of $length.');
+    }
+    if (start > end) {
+      throw RangeError(
+          'Start index $start must be less than or equal to end index $end.');
     }
     return Rope('')..root = root?.delete(start, end);
   }
@@ -46,8 +52,14 @@ class Rope {
   int get length => root?.length ?? 0;
 
   String slice(int start, int end) {
+    if (start > end) {
+      start = end;
+    }
+
     if (start < 0 || end > length || start > end) {
-      throw RangeError('Invalid range');
+      throw RangeError(
+          'Invalid range: start=$start, end=$end. Valid range is 0 to $length. '
+          'Ensure that start >= 0, end <= $length, and start <= end.');
     }
     return root?.slice(start, end) ?? '';
   }
