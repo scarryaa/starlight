@@ -1,264 +1,280 @@
-import 'dart:math';
-
 class Rope {
-  Node root = Node();
-  int length = 0;
-  List<int> lineStarts = [0];
+  Node? root;
 
-  Rope([String? initialContent]) {
-    if (initialContent != null && initialContent.isNotEmpty) {
-      insert(0, initialContent);
-    }
+  Rope(String s) : root = _buildTree(s);
+
+  static Node? _buildTree(String s) {
+    if (s.isEmpty) return null;
+    if (s.length <= 64) return Leaf(s);
+    int mid = s.length ~/ 2;
+    return Branch(
+      _buildTree(s.substring(0, mid)),
+      _buildTree(s.substring(mid)),
+    );
   }
 
-  void insert(int index, String text) {
-    if (length == 0) {
-      root = Node(data: text, length: text.length);
-      length = text.length;
-      _updateLineStarts(0, text);
-      return;
+  @override
+  String toString() => root?.toString() ?? '';
+
+  String charAt(int index) {
+    if (index < 0 || index >= length) {
+      throw RangeError('Index out of bounds');
     }
-    _checkIfIndexOutOfRange(index);
-    Node? n;
-    int adjustedIndex;
-    (n, adjustedIndex) = findNodeFromCharacterIndex(index);
-    if (n != null) {
-      String beforeInsert = n.data.substring(0, adjustedIndex);
-      String afterInsert = n.data.substring(adjustedIndex);
-      n.data = beforeInsert + text + afterInsert;
-      updateLengths(root);
-      length += text.length;
-      _updateLineStarts(index, text);
-    }
+    return root!.charAt(index);
   }
 
-  void delete(int index, int deleteLength) {
-    if (deleteLength <= 0 || length == 0) return;
-    _checkIfIndexOutOfRange(index);
-    _checkIfIndexOutOfRange(index + deleteLength - 1);
-    Node? node;
-    int adjustedIndex;
-    (node, adjustedIndex) = findNodeFromCharacterIndex(index);
-    if (node != null) {
-      int actualDeleteLength =
-          min(deleteLength, node.data.length - adjustedIndex);
-      String deletedText = node.data
-          .substring(adjustedIndex, adjustedIndex + actualDeleteLength);
-      node.data = node.data.substring(0, adjustedIndex) +
-          node.data.substring(adjustedIndex + actualDeleteLength);
-      updateLengths(root);
-      length -= actualDeleteLength;
-      _updateLineStartsAfterDelete(index, deletedText);
+  Rope insert(int index, String s) {
+    if (index < 0 || index > length) {
+      throw RangeError('Index out of bounds');
     }
+    return Rope('')..root = root?.insert(index, s) ?? _buildTree(s);
   }
 
-  void _updateLineStarts(int index, String insertedText) {
-    int newLineCount = '\n'.allMatches(insertedText).length;
-    if (newLineCount == 0) {
-      for (int i = 1; i < lineStarts.length; i++) {
-        if (lineStarts[i] > index) {
-          lineStarts[i] += insertedText.length;
-        }
+  Rope delete(int start, int end) {
+    if (start < 0 || end > length || start > end) {
+      throw RangeError('Invalid range');
+    }
+    return Rope('')..root = root?.delete(start, end);
+  }
+
+  int get length => root?.length ?? 0;
+
+  String slice(int start, int end) {
+    if (start < 0 || end > length || start > end) {
+      throw RangeError('Invalid range');
+    }
+    return root?.slice(start, end) ?? '';
+  }
+
+  List<String> sliceLines(int startLine, int endLine) {
+    if (startLine < 0 || endLine > lineCount || startLine > endLine) {
+      throw RangeError('Invalid line range');
+    }
+    return root?.sliceLines(startLine, endLine) ?? [];
+  }
+
+  int get lineCount => root?.lineCount ?? 0;
+
+  int findLine(int index) {
+    if (index < 0 || index >= length) {
+      throw RangeError('Index out of bounds');
+    }
+    return root?.findLine(index) ?? 0;
+  }
+
+  int findLineStart(int line) {
+    if (line < 0 || line >= lineCount) {
+      throw RangeError('Invalid line number');
+    }
+    return root?.findLineStart(line) ?? 0;
+  }
+
+  int findLineEnd(int line) {
+    if (line < 0 || line >= lineCount) {
+      throw RangeError('Invalid line number');
+    }
+    if (line == lineCount - 1) {
+      return length - 1;
+    }
+    return findLineStart(line + 1) - 1;
+  }
+}
+
+abstract class Node {
+  int get length;
+  int get lineCount;
+  String charAt(int index);
+  Node? insert(int index, String s);
+  Node? delete(int start, int end);
+  String slice(int start, int end);
+  List<String> sliceLines(int startLine, int endLine);
+  int findLine(int index);
+  int findLineStart(int line);
+}
+
+class Leaf extends Node {
+  final String value;
+  late final List<int> _lineStarts;
+
+  Leaf(this.value) {
+    _computeLineStarts();
+  }
+
+  void _computeLineStarts() {
+    _lineStarts = [0];
+    for (int i = 0; i < value.length; i++) {
+      if (value[i] == '\n') {
+        _lineStarts.add(i + 1);
       }
-      return;
-    }
-
-    int currentLine = _getLineNumberFromIndex(index);
-    List<int> newLinePositions =
-        insertedText.split('\n').map((s) => s.length).toList();
-    int currentPosition = index - lineStarts[currentLine];
-
-    for (int i = 0; i < newLineCount; i++) {
-      currentPosition += newLinePositions[i] + 1;
-      lineStarts.insert(
-          currentLine + 1 + i, lineStarts[currentLine] + currentPosition);
-    }
-
-    for (int i = currentLine + newLineCount + 1; i < lineStarts.length; i++) {
-      lineStarts[i] += insertedText.length;
-    }
-  }
-
-  void _updateLineStartsAfterDelete(int index, String deletedText) {
-    int deletedNewLineCount = '\n'.allMatches(deletedText).length;
-    if (deletedNewLineCount == 0) {
-      for (int i = 1; i < lineStarts.length; i++) {
-        if (lineStarts[i] > index) {
-          lineStarts[i] -= deletedText.length;
-        }
-      }
-      return;
-    }
-
-    int currentLine = _getLineNumberFromIndex(index);
-    List<int> linesToRemove = [];
-
-    for (int i = currentLine + 1;
-        i < lineStarts.length && i <= currentLine + deletedNewLineCount;
-        i++) {
-      if (lineStarts[i] <= index + deletedText.length) {
-        linesToRemove.add(i);
-      }
-    }
-
-    linesToRemove.reversed.forEach(lineStarts.removeAt);
-
-    for (int i = currentLine + 1; i < lineStarts.length; i++) {
-      lineStarts[i] -= deletedText.length;
-    }
-
-    // Handle the case when deleting the last newline character
-    if (currentLine == lineStarts.length - 1 && deletedText.endsWith('\n')) {
-      lineStarts.removeLast();
     }
   }
 
   @override
-  String toString() {
-    return _toString(root);
+  int get length => value.length;
+
+  @override
+  int get lineCount => _lineStarts.length;
+
+  @override
+  String charAt(int index) => value[index];
+
+  @override
+  Node insert(int index, String s) {
+    return Leaf(value.substring(0, index) + s + value.substring(index));
   }
 
-  String _toString(Node? node) {
-    if (node == null) return '';
-    if (node.data.isNotEmpty) return node.data;
-    return _toString(node.left) + _toString(node.right);
+  @override
+  Node? delete(int start, int end) {
+    if (start == 0 && end == length) return null;
+    return Leaf(value.substring(0, start) + value.substring(end));
   }
 
-  String getSlice(int start, int end) {
-    if (start < 0 || end > length || start > end) {
-      throw RangeError('Invalid start or end index');
+  @override
+  String toString() => value;
+
+  @override
+  String slice(int start, int end) {
+    return value.substring(start, end);
+  }
+
+  @override
+  List<String> sliceLines(int startLine, int endLine) {
+    List<String> result = [];
+    for (int i = startLine; i < endLine; i++) {
+      int start = _lineStarts[i];
+      int end = i + 1 < _lineStarts.length ? _lineStarts[i + 1] : value.length;
+      result.add(value.substring(start, end));
     }
-
-    return _getSliceInternal(root, start, end);
+    return result;
   }
 
-  String _getSliceInternal(Node? node, int start, int end) {
-    if (node == null) return '';
-
-    if (node.data.isNotEmpty) {
-      return node.data.substring(max(0, start), min(end, node.data.length));
-    }
-
-    int leftLength = node.left?.length ?? 0;
-
-    if (end <= leftLength) {
-      return _getSliceInternal(node.left, start, end);
-    }
-
-    if (start >= leftLength) {
-      return _getSliceInternal(
-          node.right, start - leftLength, end - leftLength);
-    }
-
-    String leftPart = _getSliceInternal(node.left, start, leftLength);
-    String rightPart = _getSliceInternal(node.right, 0, end - leftLength);
-
-    return leftPart + rightPart;
-  }
-
-  int _getLineNumberFromIndex(int index) {
-    if (index < 0) return 0;
-    if (index >= length) return lineStarts.length - 1;
-    int line = lineStarts.indexWhere((start) => start > index) - 1;
-    return line >= 0 ? line : lineStarts.length - 1;
-  }
-
-  int getLineStartFromIndex(int index) {
-    int lineNumber = _getLineNumberFromIndex(index);
-    return lineStarts[lineNumber];
-  }
-
-  (Node?, int) findNodeFromCharacterIndex(int index) {
-    _checkIfIndexOutOfRange(index);
-    return findNodeFromCharacterIndexInternal(root, index);
-  }
-
-  (Node, int) findNodeFromCharacterIndexInternal(Node n, int index) {
-    if (n.data.isNotEmpty) {
-      return (n, index);
-    }
-    if (index > n.length) {
-      if (n.right == null) {
-        return (n, index);
-      }
-      return findNodeFromCharacterIndexInternal(n.right!, index - n.length);
-    } else {
-      if (n.left == null) {
-        return (n, index);
-      }
-      return findNodeFromCharacterIndexInternal(n.left!, index);
-    }
-  }
-
-  void updateLengths(Node? node) {
-    if (node == null) return;
-    node.length = node.data.length;
-    if (node.left != null) {
-      updateLengths(node.left);
-      node.length += node.left!.length;
-    }
-    if (node.right != null) {
-      updateLengths(node.right);
-      node.length += node.right!.length;
-    }
-  }
-
-  void _checkIfIndexOutOfRange(int index) {
-    if (index < 0 || index > length) {
-      throw RangeError.range(index, 0, length, 'index');
-    }
-  }
-
-  int getLineNumberFromIndex(int index) {
-    if (index < 0) return 0;
-    if (index >= length) return lineStarts.length - 1;
-
-    int low = 0;
-    int high = lineStarts.length - 1;
-
-    while (low <= high) {
-      int mid = (low + high) ~/ 2;
-      if (lineStarts[mid] > index) {
-        high = mid - 1;
-      } else if (mid < lineStarts.length - 1 && lineStarts[mid + 1] <= index) {
-        low = mid + 1;
-      } else {
-        return mid;
+  @override
+  int findLine(int index) {
+    for (int i = 0; i < _lineStarts.length; i++) {
+      if (index < _lineStarts[i]) {
+        return i - 1;
       }
     }
-
-    return low;
+    return _lineStarts.length - 1;
   }
 
-  int getLineEndFromIndex(int index) {
-    int lineNumber = getLineNumberFromIndex(index);
-    if (lineNumber >= lineStarts.length - 1) {
-      return length - 1;
+  @override
+  int findLineStart(int line) {
+    if (line < 0 || line >= _lineStarts.length) {
+      throw RangeError('Invalid line number');
     }
-    return lineStarts[lineNumber + 1] - 1;
-  }
-
-  String getLineContent(int lineNumber) {
-    if (lineNumber < 0 || lineNumber >= lineStarts.length) {
-      throw RangeError.range(
-          lineNumber, 0, lineStarts.length - 1, 'lineNumber');
-    }
-    int start = lineStarts[lineNumber];
-    int end = (lineNumber < lineStarts.length - 1)
-        ? lineStarts[lineNumber + 1] - 1
-        : length - 1;
-    return toString().substring(start, end + 1);
-  }
-
-  int getLineCount() {
-    return lineStarts.length;
+    return _lineStarts[line];
   }
 }
 
-class Node {
+class Branch extends Node {
   Node? left;
   Node? right;
-  String data = "";
-  int length = 0;
-  Node({this.left, this.right, this.data = "", this.length = 0});
+  late int _length;
+  late int _lineCount;
+
+  Branch(this.left, this.right) {
+    _length = (left?.length ?? 0) + (right?.length ?? 0);
+    _lineCount = (left?.lineCount ?? 0) + (right?.lineCount ?? 0);
+  }
+
+  @override
+  int get length => _length;
+
+  @override
+  int get lineCount => _lineCount;
+
+  @override
+  String charAt(int index) {
+    int leftLength = left?.length ?? 0;
+    if (index < leftLength) {
+      return left!.charAt(index);
+    } else {
+      return right!.charAt(index - leftLength);
+    }
+  }
+
+  @override
+  String slice(int start, int end) {
+    int leftLength = left?.length ?? 0;
+    if (end <= leftLength) {
+      return left!.slice(start, end);
+    } else if (start >= leftLength) {
+      return right!.slice(start - leftLength, end - leftLength);
+    } else {
+      return left!.slice(start, leftLength) + right!.slice(0, end - leftLength);
+    }
+  }
+
+  @override
+  Node insert(int index, String s) {
+    int leftLength = left?.length ?? 0;
+    if (index <= leftLength) {
+      left = left?.insert(index, s) ?? Leaf(s);
+    } else {
+      right = right?.insert(index - leftLength, s) ?? Leaf(s);
+    }
+    _length += s.length;
+    _lineCount += s.split('\n').length - 1;
+    return this;
+  }
+
+  @override
+  Node? delete(int start, int end) {
+    int leftLength = left?.length ?? 0;
+    if (end <= leftLength) {
+      left = left?.delete(start, end);
+    } else if (start >= leftLength) {
+      right = right?.delete(start - leftLength, end - leftLength);
+    } else {
+      left = left?.delete(start, leftLength);
+      right = right?.delete(0, end - leftLength);
+    }
+    if (left == null) return right;
+    if (right == null) return left;
+    _length -= end - start;
+    _lineCount = (left?.lineCount ?? 0) + (right?.lineCount ?? 0);
+    return this;
+  }
+
+  @override
+  List<String> sliceLines(int startLine, int endLine) {
+    int leftLineCount = left?.lineCount ?? 0;
+    if (endLine <= leftLineCount) {
+      return left!.sliceLines(startLine, endLine);
+    } else if (startLine >= leftLineCount) {
+      return right!
+          .sliceLines(startLine - leftLineCount, endLine - leftLineCount);
+    } else {
+      return [
+        ...left!.sliceLines(startLine, leftLineCount),
+        ...right!.sliceLines(0, endLine - leftLineCount)
+      ];
+    }
+  }
+
+  @override
+  int findLine(int index) {
+    int leftLength = left?.length ?? 0;
+    if (index < leftLength) {
+      return left!.findLine(index);
+    } else {
+      int rightLine = right!.findLine(index - leftLength);
+      return (left?.lineCount ?? 0) + rightLine;
+    }
+  }
+
+  @override
+  int findLineStart(int line) {
+    int leftLineCount = left?.lineCount ?? 0;
+    if (line < leftLineCount) {
+      return left!.findLineStart(line);
+    } else {
+      int rightLineStart = right!.findLineStart(line - leftLineCount);
+      return (left?.length ?? 0) + rightLineStart;
+    }
+  }
+
+  @override
+  String toString() => '${left.toString()}${right.toString()}';
 }

@@ -21,6 +21,7 @@ class _CodeEditorState extends State<CodeEditor> {
   int _firstVisibleLine = 0, _visibleLineCount = 0;
   double _maxLineWidth = 0.0;
 
+  @override
   void initState() {
     super.initState();
     editingCore = TextEditingCore(widget.initialCode);
@@ -54,21 +55,22 @@ class _CodeEditorState extends State<CodeEditor> {
     setState(() {
       _firstVisibleLine =
           (_verticalController.offset / CodeEditorPainter.lineHeight).floor();
-      _visibleLineCount =
-          (MediaQuery.of(context).size.height / CodeEditorPainter.lineHeight)
-                  .ceil() +
-              1;
+      _visibleLineCount = (MediaQuery.of(context).size.height /
+                  CodeEditorPainter.lineHeight)
+              .ceil() +
+          1 +
+          (_verticalController.offset / CodeEditorPainter.lineHeight).floor();
     });
   }
 
   void _calculateMaxLineWidth() {
-    _maxLineWidth = editingCore.getLineCount().toString().length *
-            CodeEditorPainter.charWidth +
-        CodeEditorPainter.lineNumberWidth;
-    for (int i = 0; i < editingCore.getLineCount(); i++) {
+    List<String> lines = editingCore.getText().split('\n');
+    _maxLineWidth =
+        lines.length.toString().length * CodeEditorPainter.charWidth +
+            CodeEditorPainter.lineNumberWidth;
+    for (String line in lines) {
       double lineWidth =
-          editingCore.getLineContent(i).length * CodeEditorPainter.charWidth +
-              _maxLineWidth;
+          line.length * CodeEditorPainter.charWidth + _maxLineWidth;
       if (lineWidth > _maxLineWidth) _maxLineWidth = lineWidth;
     }
     setState(() {});
@@ -120,29 +122,88 @@ class _CodeEditorState extends State<CodeEditor> {
     return KeyEventResult.handled;
   }
 
-  void _handleTap(TapDownDetails details) {
-    final tapPosition = details.localPosition;
-    final tappedLine = (tapPosition.dy / CodeEditorPainter.lineHeight).floor() +
-        _firstVisibleLine;
-    if (tappedLine < editingCore.getLineCount()) {
-      setState(() {
-        editingCore.cursorLine = tappedLine;
-        final tappedOffset = tapPosition.dx - CodeEditorPainter.lineNumberWidth;
-        editingCore.cursorColumn = _calculateColumnFromOffset(
-            tappedOffset, editingCore.getLineContent(tappedLine));
-        editingCore.clearSelection();
-      });
+  int _getPositionFromOffset(Offset offset) {
+    final adjustedOffset = offset +
+        Offset(_horizontalController.offset, _verticalController.offset);
+    final tappedLine =
+        (adjustedOffset.dy / CodeEditorPainter.lineHeight).floor();
+    final lines = editingCore.getText().split('\n');
+
+    if (tappedLine < lines.length) {
+      final tappedOffset =
+          adjustedOffset.dx - CodeEditorPainter.lineNumberWidth;
+      final column = (tappedOffset / CodeEditorPainter.charWidth).round();
+
+      // Calculate the position including empty lines
+      int position = 0;
+      for (int i = 0; i < tappedLine; i++) {
+        position += lines[i].length + 1; // +1 for the newline character
+      }
+      return position + min(column, lines[tappedLine].length);
     }
+
+    return editingCore.getText().length;
+  }
+
+  void _handleTap(TapDownDetails details) {
+    final position = _getPositionFromOffset(details.localPosition);
+    setState(() {
+      editingCore.cursorPosition = position;
+      editingCore.clearSelection();
+    });
     _focusNode.requestFocus();
     editingCore.incrementVersion();
   }
 
-  int _calculateColumnFromOffset(double offset, String line) {
-    final textPainter = TextPainter(
-      text: TextSpan(text: line, style: const TextStyle(fontSize: 20)),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    return textPainter.getPositionForOffset(Offset(offset, 0)).offset;
+  void _updateSelection(DragStartDetails details, bool isStart) {
+    final position = _getPositionFromOffset(details.localPosition);
+    setState(() {
+      if (isStart) {
+        editingCore.setSelection(position, position);
+      } else {
+        editingCore.setSelection(
+            editingCore.selectionStart ?? position, position);
+      }
+    });
+  }
+
+  void _updateSelectionOnDrag(DragUpdateDetails details) {
+    final position = _getPositionFromOffset(details.localPosition);
+    setState(() {
+      editingCore.setSelection(
+          editingCore.selectionStart ?? position, position);
+    });
+    editingCore.incrementVersion();
+
+    // Auto-scroll if necessary
+    _autoScrollOnDrag(details.localPosition);
+  }
+
+  void _autoScrollOnDrag(Offset position) {
+    const scrollThreshold = 50.0;
+    const scrollStep = 16.0;
+
+    if (position.dy < scrollThreshold && _verticalController.offset > 0) {
+      _verticalController
+          .jumpTo(max(0, _verticalController.offset - scrollStep));
+    } else if (position.dy > context.size!.height - scrollThreshold &&
+        _verticalController.offset <
+            _verticalController.position.maxScrollExtent) {
+      _verticalController.jumpTo(min(
+          _verticalController.position.maxScrollExtent,
+          _verticalController.offset + scrollStep));
+    }
+
+    if (position.dx < scrollThreshold && _horizontalController.offset > 0) {
+      _horizontalController
+          .jumpTo(max(0, _horizontalController.offset - scrollStep));
+    } else if (position.dx > context.size!.width - scrollThreshold &&
+        _horizontalController.offset <
+            _horizontalController.position.maxScrollExtent) {
+      _horizontalController.jumpTo(min(
+          _horizontalController.position.maxScrollExtent,
+          _horizontalController.offset + scrollStep));
+    }
   }
 
   void _handleCopy() async {
@@ -166,7 +227,8 @@ class _CodeEditorState extends State<CodeEditor> {
         await Clipboard.getData(Clipboard.kTextPlain);
     if (clipboardData?.text != null) {
       editingCore.insertText(clipboardData!.text!);
-      setState(() {});
+      _updateVisibleLines();
+      _calculateMaxLineWidth();
     }
   }
 
@@ -192,7 +254,7 @@ class _CodeEditorState extends State<CodeEditor> {
                   child: SizedBox(
                     width: max(_maxLineWidth, constraints.maxWidth),
                     height: max(
-                        editingCore.getLineCount() *
+                        editingCore.getText().split('\n').length *
                             CodeEditorPainter.lineHeight,
                         constraints.maxHeight),
                     child: SingleChildScrollView(
@@ -209,7 +271,7 @@ class _CodeEditorState extends State<CodeEditor> {
                         ),
                         size: Size(
                             max(_maxLineWidth, constraints.maxWidth),
-                            editingCore.getLineCount() *
+                            editingCore.getText().split('\n').length *
                                 CodeEditorPainter.lineHeight),
                       ),
                     ),
@@ -221,49 +283,5 @@ class _CodeEditorState extends State<CodeEditor> {
         );
       },
     );
-  }
-
-  void _updateSelection(DragStartDetails details, bool isStart) {
-    final tapPosition = details.localPosition;
-    final tappedLine = ((tapPosition.dy + _verticalController.offset) /
-            CodeEditorPainter.lineHeight)
-        .floor();
-    if (tappedLine < editingCore.getLineCount()) {
-      setState(() {
-        if (isStart) {
-          final tappedOffset = tapPosition.dx +
-              _horizontalController.offset -
-              CodeEditorPainter.lineNumberWidth;
-          final column = _calculateColumnFromOffset(
-              tappedOffset, editingCore.getLineContent(tappedLine));
-          editingCore.setSelection(tappedLine, column, tappedLine, column);
-        } else {
-          editingCore.selectionEndLine = tappedLine;
-          final tappedOffset = tapPosition.dx +
-              _horizontalController.offset -
-              CodeEditorPainter.lineNumberWidth;
-          editingCore.selectionEndColumn = _calculateColumnFromOffset(
-              tappedOffset, editingCore.getLineContent(tappedLine));
-        }
-      });
-    }
-  }
-
-  void _updateSelectionOnDrag(DragUpdateDetails details) {
-    final tapPosition = details.localPosition;
-    final tappedLine = ((tapPosition.dy + _verticalController.offset) /
-            CodeEditorPainter.lineHeight)
-        .floor();
-    if (tappedLine < editingCore.getLineCount()) {
-      setState(() {
-        editingCore.selectionEndLine = tappedLine;
-        final tappedOffset = tapPosition.dx +
-            _horizontalController.offset -
-            CodeEditorPainter.lineNumberWidth;
-        editingCore.selectionEndColumn = _calculateColumnFromOffset(
-            tappedOffset, editingCore.getLineContent(tappedLine));
-      });
-    }
-    editingCore.incrementVersion();
   }
 }
