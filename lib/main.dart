@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:starlight/editor.dart';
+import 'package:starlight/features/editor/editor.dart';
 
 void main() {
   runApp(const MyApp());
