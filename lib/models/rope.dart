@@ -1,7 +1,11 @@
 class Rope {
   Node? root;
 
-  Rope(String s) : root = _buildTree(s);
+  Rope(String s) {
+    if (s.isNotEmpty) {
+      root = _buildTree(s);
+    }
+  }
 
   static Node? _buildTree(String s) {
     if (s.isEmpty) return null;
@@ -180,8 +184,8 @@ class Branch extends Node {
 
   Branch(this.left, this.right) {
     _length = (left?.length ?? 0) + (right?.length ?? 0);
-    _lineCount = (left?.lineCount ?? 0) + (right?.lineCount ?? 0);
     _computeLineStarts();
+    _lineCount = _lineStarts.length;
   }
 
   void _computeLineStarts() {
@@ -189,10 +193,20 @@ class Branch extends Node {
     List<int> rightLineStarts = right?.lineStarts ?? [];
     int leftLength = left?.length ?? 0;
 
-    _lineStarts = [
-      ...leftLineStarts,
-      ...rightLineStarts.map((index) => index + leftLength)
-    ];
+    _lineStarts = [...leftLineStarts];
+
+    // Check if we need to join lines at the boundary
+    if (left != null && right != null) {
+      String leftLastChar = left!.charAt(left!.length - 1);
+      String rightFirstChar = right!.charAt(0);
+
+      if (leftLastChar != '\n' && rightFirstChar != '\n') {
+        // Remove the first line start of the right node
+        rightLineStarts = rightLineStarts.sublist(1);
+      }
+    }
+
+    _lineStarts.addAll(rightLineStarts.map((index) => index + leftLength));
   }
 
   @override
@@ -235,8 +249,8 @@ class Branch extends Node {
       right = right?.insert(index - leftLength, s) ?? Leaf(s);
     }
     _length += s.length;
-    _lineCount += s.split('\n').length - 1;
     _computeLineStarts();
+    _lineCount = _lineStarts.length;
     return this;
   }
 

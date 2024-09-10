@@ -55,20 +55,19 @@ class _CodeEditorState extends State<CodeEditor> {
     setState(() {
       _firstVisibleLine =
           (_verticalController.offset / CodeEditorPainter.lineHeight).floor();
-      _visibleLineCount = (MediaQuery.of(context).size.height /
-                  CodeEditorPainter.lineHeight)
-              .ceil() +
-          1 +
-          (_verticalController.offset / CodeEditorPainter.lineHeight).floor();
+      _visibleLineCount =
+          (MediaQuery.of(context).size.height / CodeEditorPainter.lineHeight)
+              .ceil();
     });
   }
 
   void _calculateMaxLineWidth() {
-    List<String> lines = editingCore.getText().split('\n');
-    _maxLineWidth =
-        lines.length.toString().length * CodeEditorPainter.charWidth +
-            CodeEditorPainter.lineNumberWidth;
-    for (String line in lines) {
+    int lineCount = editingCore.rope.lineCount;
+    _maxLineWidth = lineCount.toString().length * CodeEditorPainter.charWidth +
+        CodeEditorPainter.lineNumberWidth;
+
+    for (int i = 0; i < lineCount; i++) {
+      String line = editingCore.rope.sliceLines(i, i + 1)[0];
       double lineWidth =
           line.length * CodeEditorPainter.charWidth + _maxLineWidth;
       if (lineWidth > _maxLineWidth) _maxLineWidth = lineWidth;
@@ -127,22 +126,18 @@ class _CodeEditorState extends State<CodeEditor> {
         Offset(_horizontalController.offset, _verticalController.offset);
     final tappedLine =
         (adjustedOffset.dy / CodeEditorPainter.lineHeight).floor();
-    final lines = editingCore.getText().split('\n');
 
-    if (tappedLine < lines.length) {
+    if (tappedLine < editingCore.rope.lineCount) {
       final tappedOffset =
           adjustedOffset.dx - CodeEditorPainter.lineNumberWidth;
       final column = (tappedOffset / CodeEditorPainter.charWidth).round();
 
-      // Calculate the position including empty lines
-      int position = 0;
-      for (int i = 0; i < tappedLine; i++) {
-        position += lines[i].length + 1; // +1 for the newline character
-      }
-      return position + min(column, lines[tappedLine].length);
+      int lineStartIndex = editingCore.getLineStartIndex(tappedLine);
+      String line = editingCore.rope.sliceLines(tappedLine, tappedLine + 1)[0];
+      return lineStartIndex + min(column, line.length);
     }
 
-    return editingCore.getText().length;
+    return editingCore.rope.length;
   }
 
   void _handleTap(TapDownDetails details) {
@@ -254,7 +249,7 @@ class _CodeEditorState extends State<CodeEditor> {
                   child: SizedBox(
                     width: max(_maxLineWidth, constraints.maxWidth),
                     height: max(
-                        editingCore.getText().split('\n').length *
+                        editingCore.rope.lineCount *
                             CodeEditorPainter.lineHeight,
                         constraints.maxHeight),
                     child: SingleChildScrollView(
@@ -271,7 +266,7 @@ class _CodeEditorState extends State<CodeEditor> {
                         ),
                         size: Size(
                             max(_maxLineWidth, constraints.maxWidth),
-                            editingCore.getText().split('\n').length *
+                            editingCore.rope.lineCount *
                                 CodeEditorPainter.lineHeight),
                       ),
                     ),
