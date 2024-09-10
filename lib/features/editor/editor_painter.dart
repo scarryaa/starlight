@@ -158,13 +158,11 @@ class CodeEditorPainter extends CustomPainter {
   }
 
   int _getLineStartIndex(int line) {
-    return editingCore.getText().split('\n').take(line).join('\n').length +
-        (line > 0 ? 1 : 0);
+    return editingCore.getLineStartIndex(line);
   }
 
   int _getLineEndIndex(int line) {
-    List<String> lines = editingCore.getText().split('\n');
-    return _getLineStartIndex(line) + lines[line].length;
+    return editingCore.getLineEndIndex(line);
   }
 
   @override

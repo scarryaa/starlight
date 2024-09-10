@@ -105,6 +105,10 @@ class TextEditingCore extends ChangeNotifier {
     return rope.findLineStart(lineIndex);
   }
 
+  int getLineEndIndex(int lineIndex) {
+    return rope.findLineEnd(lineIndex);
+  }
+
   void clearSelection() {
     selectionStart = selectionEnd = null;
   }
