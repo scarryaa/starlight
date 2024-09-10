@@ -90,6 +90,7 @@ abstract class Node {
   List<String> sliceLines(int startLine, int endLine);
   int findLine(int index);
   int findLineStart(int line);
+  List<int> get lineStarts;
 }
 
 class Leaf extends Node {
@@ -114,6 +115,9 @@ class Leaf extends Node {
 
   @override
   int get lineCount => _lineStarts.length;
+
+  @override
+  List<int> get lineStarts => _lineStarts;
 
   @override
   String charAt(int index) => value[index];
@@ -172,10 +176,23 @@ class Branch extends Node {
   Node? right;
   late int _length;
   late int _lineCount;
+  late List<int> _lineStarts;
 
   Branch(this.left, this.right) {
     _length = (left?.length ?? 0) + (right?.length ?? 0);
     _lineCount = (left?.lineCount ?? 0) + (right?.lineCount ?? 0);
+    _computeLineStarts();
+  }
+
+  void _computeLineStarts() {
+    List<int> leftLineStarts = left?.lineStarts ?? [];
+    List<int> rightLineStarts = right?.lineStarts ?? [];
+    int leftLength = left?.length ?? 0;
+
+    _lineStarts = [
+      ...leftLineStarts,
+      ...rightLineStarts.map((index) => index + leftLength)
+    ];
   }
 
   @override
@@ -183,6 +200,9 @@ class Branch extends Node {
 
   @override
   int get lineCount => _lineCount;
+
+  @override
+  List<int> get lineStarts => _lineStarts;
 
   @override
   String charAt(int index) {
@@ -216,6 +236,7 @@ class Branch extends Node {
     }
     _length += s.length;
     _lineCount += s.split('\n').length - 1;
+    _computeLineStarts();
     return this;
   }
 
@@ -233,46 +254,44 @@ class Branch extends Node {
     if (left == null) return right;
     if (right == null) return left;
     _length -= end - start;
-    _lineCount = (left?.lineCount ?? 0) + (right?.lineCount ?? 0);
+    _computeLineStarts();
+    _lineCount = _lineStarts.length;
     return this;
   }
 
   @override
   List<String> sliceLines(int startLine, int endLine) {
-    int leftLineCount = left?.lineCount ?? 0;
-    if (endLine <= leftLineCount) {
-      return left!.sliceLines(startLine, endLine);
-    } else if (startLine >= leftLineCount) {
-      return right!
-          .sliceLines(startLine - leftLineCount, endLine - leftLineCount);
-    } else {
-      return [
-        ...left!.sliceLines(startLine, leftLineCount),
-        ...right!.sliceLines(0, endLine - leftLineCount)
-      ];
+    List<String> result = [];
+    int currentLine = startLine;
+
+    while (currentLine < endLine) {
+      int start = _lineStarts[currentLine];
+      int end = currentLine + 1 < _lineStarts.length
+          ? _lineStarts[currentLine + 1]
+          : _length;
+      result.add(slice(start, end));
+      currentLine++;
     }
+
+    return result;
   }
 
   @override
   int findLine(int index) {
-    int leftLength = left?.length ?? 0;
-    if (index < leftLength) {
-      return left!.findLine(index);
-    } else {
-      int rightLine = right!.findLine(index - leftLength);
-      return (left?.lineCount ?? 0) + rightLine;
+    for (int i = 0; i < _lineStarts.length; i++) {
+      if (index < _lineStarts[i]) {
+        return i - 1;
+      }
     }
+    return _lineStarts.length - 1;
   }
 
   @override
   int findLineStart(int line) {
-    int leftLineCount = left?.lineCount ?? 0;
-    if (line < leftLineCount) {
-      return left!.findLineStart(line);
-    } else {
-      int rightLineStart = right!.findLineStart(line - leftLineCount);
-      return (left?.length ?? 0) + rightLineStart;
+    if (line < 0 || line >= _lineStarts.length) {
+      throw RangeError('Invalid line number');
     }
+    return _lineStarts[line];
   }
 
   @override
