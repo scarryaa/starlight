@@ -187,9 +187,21 @@ class _CodeEditorState extends State<CodeEditor> {
 
       int lineStartIndex = editingCore.getLineStartIndex(tappedLine);
       String line = editingCore.rope.sliceLines(tappedLine, tappedLine + 1)[0];
-      return lineStartIndex + min(column, line.length);
+
+      // Handle empty lines
+      if (line.isEmpty) {
+        return lineStartIndex;
+      }
+
+      // Position cursor at the end of the line if clicked beyond the line's end
+      if (column >= line.length) {
+        return lineStartIndex + line.length - 1;
+      }
+
+      return lineStartIndex + column;
     }
 
+    // If clicked beyond the last line, position at the end of the document
     return editingCore.rope.length;
   }
 

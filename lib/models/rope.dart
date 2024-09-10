@@ -1,3 +1,5 @@
+import 'dart:math';
+
 class Rope {
   Node? root;
 
@@ -54,7 +56,19 @@ class Rope {
     if (startLine < 0 || endLine > lineCount || startLine > endLine) {
       throw RangeError('Invalid line range');
     }
-    return root?.sliceLines(startLine, endLine) ?? [];
+
+    if (startLine == lineCount) {
+      return List.filled(endLine - startLine, '');
+    }
+
+    List<String> result =
+        root?.sliceLines(startLine, min(endLine, lineCount)) ?? [];
+
+    if (endLine > lineCount) {
+      result.addAll(List.filled(endLine - lineCount, ''));
+    }
+
+    return result;
   }
 
   int get lineCount => root?.lineCount ?? 0;
@@ -148,7 +162,7 @@ class Leaf extends Node {
   @override
   List<String> sliceLines(int startLine, int endLine) {
     List<String> result = [];
-    for (int i = startLine; i < endLine; i++) {
+    for (int i = startLine; i < min(endLine, _lineStarts.length); i++) {
       int start = _lineStarts[i];
       int end = i + 1 < _lineStarts.length ? _lineStarts[i + 1] : value.length;
       result.add(value.substring(start, end));
@@ -278,7 +292,7 @@ class Branch extends Node {
     List<String> result = [];
     int currentLine = startLine;
 
-    while (currentLine < endLine) {
+    while (currentLine < min(endLine, _lineStarts.length)) {
       int start = _lineStarts[currentLine];
       int end = currentLine + 1 < _lineStarts.length
           ? _lineStarts[currentLine + 1]
