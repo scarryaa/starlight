@@ -20,6 +20,10 @@ class _CodeEditorState extends State<CodeEditor> {
 
   int _firstVisibleLine = 0, _visibleLineCount = 0;
   double _maxLineWidth = 0.0;
+  int _lastLineCount = 0;
+  final Map<int, double> _lineWidthCache = {};
+  static const double _lineWidthBuffer = 50.0;
+  late double _lineNumberWidth;
 
   @override
   void initState() {
@@ -28,9 +32,43 @@ class _CodeEditorState extends State<CodeEditor> {
     editingCore.addListener(_onTextChanged);
     _verticalController = ScrollController()..addListener(_updateVisibleLines);
     _horizontalController = ScrollController();
+
+    // Initialize charWidth
+    _initializeCharWidth();
+
+    _calculateLineNumberWidth();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculateMaxLineWidth();
       _updateVisibleLines();
+    });
+  }
+
+  void _initializeCharWidth() {
+    final TextPainter textPainter = TextPainter(
+      text: const TextSpan(
+          text: 'X',
+          style: TextStyle(
+              fontSize: CodeEditorPainter.fontSize, fontFamily: 'Courier')),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    CodeEditorPainter.charWidth = textPainter.width;
+  }
+
+  void _calculateLineNumberWidth() {
+    final lineCount = editingCore.rope.lineCount;
+    final maxLineNumberWidth =
+        '$lineCount'.length * CodeEditorPainter.charWidth;
+    _lineNumberWidth = maxLineNumberWidth + 20;
+  }
+
+  void _updateVisibleLines() {
+    if (!mounted || !_verticalController.hasClients) return;
+    setState(() {
+      _firstVisibleLine =
+          (_verticalController.offset / CodeEditorPainter.lineHeight).floor();
+      _visibleLineCount =
+          (MediaQuery.of(context).size.height / CodeEditorPainter.lineHeight)
+              .ceil();
     });
   }
 
@@ -45,34 +83,49 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _onTextChanged() {
-    setState(() {
-      _calculateMaxLineWidth();
-    });
-  }
-
-  void _updateVisibleLines() {
-    if (!mounted || !_verticalController.hasClients) return;
-    setState(() {
-      _firstVisibleLine =
-          (_verticalController.offset / CodeEditorPainter.lineHeight).floor();
-      _visibleLineCount =
-          (MediaQuery.of(context).size.height / CodeEditorPainter.lineHeight)
-              .ceil();
-    });
+    _calculateLineNumberWidth();
+    _calculateMaxLineWidth();
+    setState(() {});
   }
 
   void _calculateMaxLineWidth() {
-    int lineCount = editingCore.rope.lineCount;
-    _maxLineWidth = lineCount.toString().length * CodeEditorPainter.charWidth +
-        CodeEditorPainter.lineNumberWidth;
+    int currentLineCount = editingCore.rope.lineCount;
+    bool needsUpdate = false;
 
-    for (int i = 0; i < lineCount; i++) {
-      String line = editingCore.rope.sliceLines(i, i + 1)[0];
-      double lineWidth =
-          line.length * CodeEditorPainter.charWidth + _maxLineWidth;
-      if (lineWidth > _maxLineWidth) _maxLineWidth = lineWidth;
+    // Check if line count has changed
+    if (currentLineCount != _lastLineCount) {
+      _lastLineCount = currentLineCount;
+      needsUpdate = true;
     }
-    setState(() {});
+
+    double newMaxLineWidth = _lineNumberWidth;
+
+    for (int i = 0; i < currentLineCount; i++) {
+      if (!_lineWidthCache.containsKey(i)) {
+        String line = editingCore.rope.sliceLines(i, i + 1)[0];
+        double lineWidth = _estimateLineWidth(line) + _lineNumberWidth;
+        _lineWidthCache[i] = lineWidth;
+        needsUpdate = true;
+      }
+
+      if (_lineWidthCache[i]! > newMaxLineWidth) {
+        newMaxLineWidth = _lineWidthCache[i]!;
+      }
+    }
+
+    // Remove cached widths for lines that no longer exist
+    _lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
+
+    // Only update state if max line width has changed
+    if (needsUpdate || (newMaxLineWidth + _lineWidthBuffer) != _maxLineWidth) {
+      setState(() {
+        _maxLineWidth = newMaxLineWidth + _lineWidthBuffer;
+      });
+    }
+  }
+
+  double _estimateLineWidth(String line) {
+    return line.length * CodeEditorPainter.charWidth;
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
@@ -128,8 +181,7 @@ class _CodeEditorState extends State<CodeEditor> {
         (adjustedOffset.dy / CodeEditorPainter.lineHeight).floor();
 
     if (tappedLine < editingCore.rope.lineCount) {
-      final tappedOffset =
-          adjustedOffset.dx - CodeEditorPainter.lineNumberWidth;
+      final tappedOffset = adjustedOffset.dx - _lineNumberWidth;
       final column = (tappedOffset / CodeEditorPainter.charWidth).round();
 
       int lineStartIndex = editingCore.getLineStartIndex(tappedLine);
@@ -263,6 +315,7 @@ class _CodeEditorState extends State<CodeEditor> {
                               ? _horizontalController.offset
                               : 0,
                           version: editingCore.version,
+                          lineNumberWidth: _lineNumberWidth,
                         ),
                         size: Size(
                             max(_maxLineWidth, constraints.maxWidth),

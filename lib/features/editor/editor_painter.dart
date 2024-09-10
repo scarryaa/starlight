@@ -5,19 +5,20 @@ import 'package:starlight/features/editor/models/text_editing_core.dart';
 class CodeEditorPainter extends CustomPainter {
   static const double lineHeight = 24.0;
   static late double charWidth;
-  static const double lineNumberWidth = 50.0;
-  static double fontSize = 14.0;
+  static const double fontSize = 14.0;
+  static const int _lineBuffer = 5;
 
   final TextEditingCore editingCore;
   final int firstVisibleLine;
   final int visibleLineCount;
   final double horizontalOffset;
   final int version;
+  final double lineNumberWidth;
 
   final TextStyle _lineNumberStyle =
       TextStyle(fontSize: fontSize, color: Colors.grey[600]);
-  final TextStyle _textStyle =
-      TextStyle(fontSize: fontSize, color: Colors.black, fontFamily: 'Courier');
+  final TextStyle _textStyle = const TextStyle(
+      fontSize: fontSize, color: Colors.black, fontFamily: 'Courier');
 
   CodeEditorPainter({
     required this.editingCore,
@@ -25,6 +26,7 @@ class CodeEditorPainter extends CustomPainter {
     required this.visibleLineCount,
     required this.horizontalOffset,
     required this.version,
+    required this.lineNumberWidth,
   }) {
     _calculateCharWidth();
   }
@@ -39,21 +41,19 @@ class CodeEditorPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    List<String> lines = editingCore.getText().split('\n');
+    final lineCount = editingCore.rope.lineCount;
 
     for (int i = firstVisibleLine;
-        i < firstVisibleLine + visibleLineCount;
+        i < min(firstVisibleLine + visibleLineCount + _lineBuffer, lineCount);
         i++) {
-      if (i >= lines.length) break;
-
-      final lineContent = lines[i];
-      final lineNumber = '${i + 1}'.padLeft(lines.length.toString().length);
+      final lineContent = _safeGetLineContent(i);
+      final lineNumber = '${i + 1}'.padLeft(lineCount.toString().length);
 
       // Paint line number
       _paintText(
           canvas,
           lineNumber,
-          Offset(lineNumberWidth - lineNumberWidth / 2, i * lineHeight),
+          Offset(lineNumberWidth - 10, i * lineHeight),
           _lineNumberStyle,
           TextAlign.right);
 
@@ -73,6 +73,15 @@ class CodeEditorPainter extends CustomPainter {
       if (_isCursorOnLine(i)) {
         _paintCursor(canvas, i, lineContent);
       }
+    }
+  }
+
+  String _safeGetLineContent(int lineIndex) {
+    try {
+      return editingCore.getLineContent(lineIndex);
+    } catch (e) {
+      print("Error getting content for line $lineIndex: $e");
+      return '';
     }
   }
 
@@ -171,6 +180,7 @@ class CodeEditorPainter extends CustomPainter {
         firstVisibleLine != oldDelegate.firstVisibleLine ||
         visibleLineCount != oldDelegate.visibleLineCount ||
         horizontalOffset != oldDelegate.horizontalOffset ||
-        version != oldDelegate.version;
+        version != oldDelegate.version ||
+        lineNumberWidth != oldDelegate.lineNumberWidth;
   }
 }
