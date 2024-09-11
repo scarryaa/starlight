@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
@@ -10,7 +9,7 @@ import 'line_numbers.dart';
 class CodeEditor extends StatefulWidget {
   final String initialCode;
 
-  const CodeEditor({Key? key, required this.initialCode}) : super(key: key);
+  const CodeEditor({super.key, required this.initialCode});
 
   @override
   _CodeEditorState createState() => _CodeEditorState();
@@ -32,7 +31,10 @@ class _CodeEditorState extends State<CodeEditor> {
   int visibleLineCount = 0;
   double maxLineWidth = 0.0;
   double lineNumberWidth = 0.0;
-  Map<int, double> lineWidthCache = {};
+  final Map<int, double> _lineWidthCache = {};
+  int _lastCalculatedLine = -1;
+  double _cachedMaxLineWidth = 0;
+  int _lastLineCount = 0;
 
   static const double lineHeight = 24.0;
   static const double fontSize = 14.0;
@@ -61,7 +63,7 @@ class _CodeEditorState extends State<CodeEditor> {
     _calculateLineNumberWidth();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _calculateMaxLineWidth();
+      _updateMaxLineWidth();
       _updateVisibleLines();
     });
   }
@@ -145,7 +147,6 @@ class _CodeEditorState extends State<CodeEditor> {
     if (_lastKnownVersion != editingCore.version) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recalculateEditor();
-        _calculateMaxLineWidth();
       });
       _lastKnownVersion = editingCore.version;
     }
@@ -153,39 +154,60 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _recalculateEditor() {
     _calculateLineNumberWidth();
-    _calculateMaxLineWidth();
+    _updateMaxLineWidth();
     _updateVisibleLines();
     _ensureCursorVisibility();
     setState(() {});
   }
 
-  void _calculateMaxLineWidth() {
-    double newMaxLineWidth = 0;
+  void _updateMaxLineWidth() {
     int currentLineCount = editingCore.lineCount;
+    double newMaxLineWidth = _cachedMaxLineWidth;
 
-    for (int i = 0; i < currentLineCount; i++) {
-      String line = editingCore.getLineContent(i);
-      double lineWidth = _calculateLineWidth(line);
-      lineWidthCache[i] = lineWidth;
-      newMaxLineWidth = max(newMaxLineWidth, lineWidth);
+    // Only recalculate if the line count has changed
+    if (currentLineCount != _lastLineCount) {
+      // Check for deleted lines
+      if (currentLineCount < _lastLineCount) {
+        _lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
+        // Recalculate max width if we removed the previously longest line
+        if (_cachedMaxLineWidth == newMaxLineWidth) {
+          newMaxLineWidth = _lineWidthCache.values.fold(0, max);
+        }
+      }
+
+      // Calculate only new lines
+      for (int i = _lastCalculatedLine + 1; i < currentLineCount; i++) {
+        String line = editingCore.getLineContent(i);
+        double lineWidth = _calculateLineWidth(line);
+        _lineWidthCache[i] = lineWidth;
+        newMaxLineWidth = max(newMaxLineWidth, lineWidth);
+      }
+
+      _lastCalculatedLine = currentLineCount - 1;
+      _lastLineCount = currentLineCount;
+    } else {
+      // If line count hasn't changed, we only need to check the last modified line
+      int lastModifiedLine = editingCore.lastModifiedLine;
+      if (lastModifiedLine >= 0 && lastModifiedLine < currentLineCount) {
+        String line = editingCore.getLineContent(lastModifiedLine);
+        double lineWidth = _calculateLineWidth(line);
+        _lineWidthCache[lastModifiedLine] = lineWidth;
+        newMaxLineWidth = max(newMaxLineWidth, lineWidth);
+      }
     }
 
     newMaxLineWidth += lineNumberWidth;
 
-    if (newMaxLineWidth != maxLineWidth) {
+    if (newMaxLineWidth != _cachedMaxLineWidth) {
       setState(() {
         maxLineWidth = newMaxLineWidth;
+        _cachedMaxLineWidth = newMaxLineWidth - lineNumberWidth;
       });
     }
   }
 
   double _calculateLineWidth(String line) {
-    _textPainter.text = TextSpan(
-      text: line,
-      style: const TextStyle(fontSize: fontSize, fontFamily: 'Courier'),
-    );
-    _textPainter.layout(maxWidth: double.infinity);
-    return _textPainter.width + lineNumberWidth;
+    return line.length * charWidth;
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {

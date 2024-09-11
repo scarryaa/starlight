@@ -7,17 +7,23 @@ class TextEditingCore extends ChangeNotifier {
   int? selectionStart;
   int? selectionEnd;
   int _version = 0;
+  int _lastModifiedLine = -1;
 
   TextEditingCore(String initialText) : rope = Rope(initialText);
 
   int get version => _version;
+  int get lineCount => rope.lineCount;
+  int get length => rope.length;
+  int get lastModifiedLine => _lastModifiedLine;
+
   void incrementVersion() {
     _version++;
     notifyListeners();
   }
 
-  int get lineCount => rope.lineCount;
-  int get length => rope.length;
+  void _updateLastModifiedLine(int position) {
+    _lastModifiedLine = rope.findLine(position);
+  }
 
   String getLineContent(int line) {
     int start = rope.findLineStart(line);
@@ -67,6 +73,7 @@ class TextEditingCore extends ChangeNotifier {
   void insertText(String text) {
     if (hasSelection()) deleteSelection();
     rope = rope.insert(cursorPosition, text);
+    _updateLastModifiedLine(cursorPosition);
     cursorPosition += text.length;
     incrementVersion();
     clearSelection();
@@ -76,6 +83,7 @@ class TextEditingCore extends ChangeNotifier {
     if (hasSelection()) {
       deleteSelection();
     } else if (cursorPosition > 1) {
+      _updateLastModifiedLine(cursorPosition - 1);
       rope = rope.delete(cursorPosition - 1, cursorPosition);
       cursorPosition--;
       incrementVersion();
@@ -87,6 +95,7 @@ class TextEditingCore extends ChangeNotifier {
     if (hasSelection()) {
       deleteSelection();
     } else if (cursorPosition < rope.length) {
+      _updateLastModifiedLine(cursorPosition);
       rope = rope.delete(cursorPosition, cursorPosition + 1);
       incrementVersion();
     }
@@ -108,6 +117,7 @@ class TextEditingCore extends ChangeNotifier {
     int start =
         selectionStart! < selectionEnd! ? selectionStart! : selectionEnd!;
     int end = selectionStart! < selectionEnd! ? selectionEnd! : selectionStart!;
+    _updateLastModifiedLine(start);
     rope = rope.delete(start, end);
     cursorPosition = start <= 0 ? start + 1 : start;
     incrementVersion();
