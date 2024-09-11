@@ -112,7 +112,7 @@ class Rope {
       throw RangeError('Invalid line number');
     }
     if (line == lineCount - 1) {
-      return length - 1;
+      return length;
     }
     return findLineStart(line + 1) - 1;
   }
