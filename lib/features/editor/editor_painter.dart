@@ -13,6 +13,7 @@ class CodeEditorPainter extends CustomPainter {
   final double horizontalOffset;
   final int version;
   final double viewportWidth;
+  final double lineNumberWidth;
 
   late double charWidth;
   final TextStyle textStyle = const TextStyle(
@@ -26,6 +27,7 @@ class CodeEditorPainter extends CustomPainter {
     required this.firstVisibleLine,
     required this.visibleLineCount,
     required this.horizontalOffset,
+    required this.lineNumberWidth,
     required this.version,
     required this.viewportWidth,
   }) {
@@ -41,10 +43,8 @@ class CodeEditorPainter extends CustomPainter {
   }
 
   @override
+  @override
   void paint(Canvas canvas, Size size) {
-    canvas.save();
-    canvas.translate(-horizontalOffset, 0);
-
     final lineCount = editingCore.lineCount;
     final visibleEndLine =
         min(firstVisibleLine + visibleLineCount + lineBuffer, lineCount);
@@ -70,8 +70,6 @@ class CodeEditorPainter extends CustomPainter {
     if (editingCore.cursorPosition == editingCore.length) {
       _paintCursorAtEnd(canvas, lineCount - 1);
     }
-
-    canvas.restore();
   }
 
   String _getLineContent(int lineIndex) {

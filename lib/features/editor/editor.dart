@@ -33,7 +33,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
   static const double lineHeight = 24.0;
   static const double fontSize = 14.0;
-  static const double lineWidthBuffer = 50.0;
+  static const double lineWidthBuffer = 0.0;
   static late double charWidth;
   static const double scrollbarWidth = 10.0;
   late ScrollController horizontalScrollbarController;
@@ -144,9 +144,10 @@ class _CodeEditorState extends State<CodeEditor> {
     // Remove cached widths for lines that no longer exist
     lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
 
-    if ((newMaxLineWidth + lineWidthBuffer) != maxLineWidth) {
+    // Change this condition:
+    if (newMaxLineWidth != maxLineWidth) {
       setState(() {
-        maxLineWidth = newMaxLineWidth + lineWidthBuffer;
+        maxLineWidth = newMaxLineWidth;
       });
     }
   }
@@ -216,15 +217,14 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   int _getPositionFromOffset(Offset offset) {
-    final adjustedOffset =
-        offset + Offset(horizontalController.offset, verticalController.offset);
+    final adjustedOffset = offset +
+        Offset(max(0, horizontalController.offset), verticalController.offset);
     final tappedLine = (adjustedOffset.dy / lineHeight).floor();
 
     if (editingCore.lineCount == 0) return 0;
 
     if (tappedLine < editingCore.lineCount) {
-      final tappedOffset =
-          (adjustedOffset.dx - lineNumberWidth).clamp(0, double.infinity);
+      final tappedOffset = (adjustedOffset.dx).clamp(0, double.infinity);
       final column =
           (tappedOffset / charWidth).round().clamp(0, double.infinity).toInt();
 
@@ -393,6 +393,7 @@ class _CodeEditorState extends State<CodeEditor> {
                                 constraints.maxHeight),
                             child: CustomPaint(
                               painter: CodeEditorPainter(
+                                lineNumberWidth: lineNumberWidth,
                                 viewportWidth: constraints.maxWidth,
                                 version: editingCore.version,
                                 editingCore: editingCore,
