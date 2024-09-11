@@ -24,6 +24,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
   bool _isVerticalScrolling = false;
   bool _isLineNumberScrolling = false;
+  bool _isHorizontalScrolling = false;
 
   int firstVisibleLine = 0;
   int visibleLineCount = 0;
@@ -33,7 +34,6 @@ class _CodeEditorState extends State<CodeEditor> {
 
   static const double lineHeight = 24.0;
   static const double fontSize = 14.0;
-  static const double lineWidthBuffer = 0.0;
   static late double charWidth;
   static const double scrollbarWidth = 10.0;
   late ScrollController horizontalScrollbarController;
@@ -50,8 +50,8 @@ class _CodeEditorState extends State<CodeEditor> {
     horizontalController = ScrollController()..addListener(_onHorizontalScroll);
     lineNumberController = ScrollController()
       ..addListener(() => _syncScroll(isVertical: false));
-    horizontalScrollbarController = ScrollController();
-    horizontalController.addListener(_syncHorizontalScrollbar);
+    horizontalScrollbarController = ScrollController()
+      ..addListener(_syncHorizontalScrollbar);
     _initializeTextPainter();
     _calculateLineNumberWidth();
 
@@ -62,9 +62,26 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _syncHorizontalScrollbar() {
-    if (horizontalController.position.maxScrollExtent > 0) {
-      horizontalScrollbarController.jumpTo(horizontalController.offset);
+    if (!_isHorizontalScrolling &&
+        horizontalScrollbarController.hasClients &&
+        horizontalController.hasClients) {
+      _isHorizontalScrolling = true;
+      horizontalController.jumpTo(horizontalScrollbarController.offset);
+      _isHorizontalScrolling = false;
     }
+  }
+
+  void _onHorizontalScroll() {
+    if (!_isHorizontalScrolling &&
+        horizontalController.hasClients &&
+        horizontalScrollbarController.hasClients) {
+      _isHorizontalScrolling = true;
+      horizontalScrollbarController.jumpTo(horizontalController.offset);
+      _isHorizontalScrolling = false;
+    }
+    setState(() {
+      // This empty setState ensures the widget rebuilds with the new scroll position
+    });
   }
 
   void _initializeTextPainter() {
@@ -96,12 +113,7 @@ class _CodeEditorState extends State<CodeEditor> {
       _isVerticalScrolling = false;
     }
     _updateVisibleLines();
-  }
-
-  void _onHorizontalScroll() {
-    setState(() {
-      // This empty setState ensures the widget rebuilds with the new scroll position
-    });
+    setState(() {});
   }
 
   void _updateVisibleLines() {
@@ -125,6 +137,7 @@ class _CodeEditorState extends State<CodeEditor> {
     if (_lastKnownVersion != editingCore.version) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recalculateEditor();
+        _calculateMaxLineWidth();
       });
       _lastKnownVersion = editingCore.version;
     }
@@ -139,29 +152,22 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _calculateMaxLineWidth() {
-    double newMaxLineWidth = lineNumberWidth;
+    double newMaxLineWidth = 0;
     int currentLineCount = editingCore.lineCount;
 
-    // Only recalculate widths for visible lines and a buffer
-    int startLine = max(0, firstVisibleLine - 10);
-    int endLine =
-        min(currentLineCount, firstVisibleLine + visibleLineCount + 10);
-
-    for (int i = startLine; i < endLine; i++) {
-      if (!lineWidthCache.containsKey(i) ||
-          _lastKnownVersion != editingCore.version) {
-        String line = editingCore.getLineContent(i);
-        double lineWidth = _calculateLineWidth(line);
-        lineWidthCache[i] = lineWidth;
-      }
-      newMaxLineWidth = max(newMaxLineWidth, lineWidthCache[i]!);
+    for (int i = 0; i < currentLineCount; i++) {
+      String line = editingCore.getLineContent(i);
+      double lineWidth = _calculateLineWidth(line);
+      lineWidthCache[i] = lineWidth;
+      newMaxLineWidth = max(newMaxLineWidth, lineWidth);
     }
 
-    // Remove cached widths for lines that no longer exist
-    lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
+    newMaxLineWidth += lineNumberWidth;
 
     if (newMaxLineWidth != maxLineWidth) {
-      maxLineWidth = newMaxLineWidth;
+      setState(() {
+        maxLineWidth = newMaxLineWidth;
+      });
     }
   }
 
@@ -325,8 +331,9 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _ensureCursorVisibility() {
-    if (!verticalController.hasClients || !horizontalController.hasClients)
+    if (!verticalController.hasClients || !horizontalController.hasClients) {
       return;
+    }
 
     final cursorPosition =
         editingCore.cursorPosition.clamp(0, editingCore.length);
@@ -445,6 +452,7 @@ class _CodeEditorState extends State<CodeEditor> {
       onTapDown: _handleTap,
       onPanStart: _updateSelection,
       onPanUpdate: _updateSelectionOnDrag,
+      behavior: HitTestBehavior.deferToChild,
       child: Focus(
         focusNode: focusNode,
         onKeyEvent: _handleKeyPress,
@@ -457,10 +465,12 @@ class _CodeEditorState extends State<CodeEditor> {
               return Stack(
                 children: [
                   Scrollbar(
+                    interactive: true,
                     controller: verticalController,
                     child: SingleChildScrollView(
                       physics: const ClampingScrollPhysics(),
                       controller: verticalController,
+                      scrollDirection: Axis.vertical,
                       child: SizedBox(
                         width: constraints.maxWidth,
                         child: SingleChildScrollView(
