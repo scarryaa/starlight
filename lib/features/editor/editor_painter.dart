@@ -12,6 +12,7 @@ class CodeEditorPainter extends CustomPainter {
   final int visibleLineCount;
   final double horizontalOffset;
   final int version;
+  final double viewportWidth;
 
   late double charWidth;
   final TextStyle textStyle = const TextStyle(
@@ -26,6 +27,7 @@ class CodeEditorPainter extends CustomPainter {
     required this.visibleLineCount,
     required this.horizontalOffset,
     required this.version,
+    required this.viewportWidth,
   }) {
     _calculateCharWidth();
   }
@@ -40,15 +42,18 @@ class CodeEditorPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final lineCount = editingCore.lineCount;
+    canvas.save();
+    canvas.translate(-horizontalOffset, 0);
 
-    for (int i = firstVisibleLine;
-        i < min(firstVisibleLine + visibleLineCount + lineBuffer, lineCount);
-        i++) {
+    final lineCount = editingCore.lineCount;
+    final visibleEndLine =
+        min(firstVisibleLine + visibleLineCount + lineBuffer, lineCount);
+
+    for (int i = firstVisibleLine; i < visibleEndLine; i++) {
       final lineContent = _getLineContent(i);
 
       // Paint line content
-      _paintText(canvas, lineContent, Offset(horizontalOffset, i * lineHeight));
+      _paintText(canvas, lineContent, Offset(0, i * lineHeight));
 
       // Paint selection if needed
       if (_isLineSelected(i)) {
@@ -65,6 +70,8 @@ class CodeEditorPainter extends CustomPainter {
     if (editingCore.cursorPosition == editingCore.length) {
       _paintCursorAtEnd(canvas, lineCount - 1);
     }
+
+    canvas.restore();
   }
 
   String _getLineContent(int lineIndex) {
@@ -78,13 +85,10 @@ class CodeEditorPainter extends CustomPainter {
     final textPainter = TextPainter(
       text: TextSpan(text: text, style: textStyle),
       textDirection: TextDirection.ltr,
-    )..layout();
+    )..layout(maxWidth: double.infinity);
 
-    final xOffset =
-        offset.dx + (charWidth * text.length - textPainter.width) / 2;
     final yOffset = offset.dy + (lineHeight - textPainter.height) / 2;
-
-    textPainter.paint(canvas, Offset(xOffset, yOffset));
+    textPainter.paint(canvas, Offset(offset.dx, yOffset));
   }
 
   void _paintSelection(Canvas canvas, int line, String lineContent) {
@@ -100,9 +104,9 @@ class CodeEditorPainter extends CustomPainter {
 
     canvas.drawRect(
       Rect.fromLTRB(
-        selectionStart * charWidth - horizontalOffset,
+        selectionStart * charWidth,
         topY,
-        selectionEnd * charWidth - horizontalOffset,
+        selectionEnd * charWidth,
         bottomY,
       ),
       selectionPaint,
@@ -117,8 +121,8 @@ class CodeEditorPainter extends CustomPainter {
     final bottomY = topY + fontSize;
 
     canvas.drawLine(
-      Offset(cursorOffset - horizontalOffset, topY),
-      Offset(cursorOffset - horizontalOffset, bottomY),
+      Offset(cursorOffset, topY),
+      Offset(cursorOffset, bottomY),
       Paint()..color = Colors.blue,
     );
   }
@@ -130,8 +134,8 @@ class CodeEditorPainter extends CustomPainter {
     final bottomY = topY + fontSize;
 
     canvas.drawLine(
-      Offset(cursorOffset - horizontalOffset, topY),
-      Offset(cursorOffset - horizontalOffset, bottomY),
+      Offset(cursorOffset, topY),
+      Offset(cursorOffset, bottomY),
       Paint()..color = Colors.blue,
     );
   }
@@ -182,6 +186,7 @@ class CodeEditorPainter extends CustomPainter {
         firstVisibleLine != oldDelegate.firstVisibleLine ||
         visibleLineCount != oldDelegate.visibleLineCount ||
         horizontalOffset != oldDelegate.horizontalOffset ||
-        version != oldDelegate.version;
+        version != oldDelegate.version ||
+        viewportWidth != oldDelegate.viewportWidth;
   }
 }

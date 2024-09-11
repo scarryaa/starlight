@@ -35,7 +35,10 @@ class _CodeEditorState extends State<CodeEditor> {
   static const double fontSize = 14.0;
   static const double lineWidthBuffer = 50.0;
   static late double charWidth;
-  static const double scrollbarWidth = 12.0;
+  static const double scrollbarWidth = 10.0;
+  late ScrollController horizontalScrollbarController;
+  late TextPainter _textPainter;
+  int _lastKnownVersion = -1;
 
   @override
   void initState() {
@@ -44,11 +47,12 @@ class _CodeEditorState extends State<CodeEditor> {
     editingCore.addListener(_onTextChanged);
     verticalController = ScrollController()
       ..addListener(() => _syncScroll(isVertical: true));
+    horizontalController = ScrollController()..addListener(_onHorizontalScroll);
     lineNumberController = ScrollController()
       ..addListener(() => _syncScroll(isVertical: false));
-    horizontalController = ScrollController();
-
-    _initializeCharWidth();
+    horizontalScrollbarController = ScrollController();
+    horizontalController.addListener(_syncHorizontalScrollbar);
+    _initializeTextPainter();
     _calculateLineNumberWidth();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -57,15 +61,22 @@ class _CodeEditorState extends State<CodeEditor> {
     });
   }
 
-  void _initializeCharWidth() {
-    final textPainter = TextPainter(
+  void _syncHorizontalScrollbar() {
+    if (horizontalController.position.maxScrollExtent > 0) {
+      horizontalScrollbarController.jumpTo(horizontalController.offset);
+    }
+  }
+
+  void _initializeTextPainter() {
+    _textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
       text: const TextSpan(
         text: 'X',
         style: TextStyle(fontSize: fontSize, fontFamily: 'Courier'),
       ),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    charWidth = textPainter.width;
+    );
+    _textPainter.layout();
+    charWidth = _textPainter.width;
   }
 
   void _calculateLineNumberWidth() {
@@ -76,15 +87,21 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _syncScroll({required bool isVertical}) {
     if (isVertical && !_isLineNumberScrolling) {
-      _isVerticalScrolling = true;
-      lineNumberController.jumpTo(verticalController.offset);
-      _isVerticalScrolling = false;
-    } else if (!isVertical && !_isVerticalScrolling) {
       _isLineNumberScrolling = true;
-      verticalController.jumpTo(lineNumberController.offset);
+      lineNumberController.jumpTo(verticalController.offset);
       _isLineNumberScrolling = false;
+    } else if (!isVertical && !_isVerticalScrolling) {
+      _isVerticalScrolling = true;
+      verticalController.jumpTo(lineNumberController.offset);
+      _isVerticalScrolling = false;
     }
     _updateVisibleLines();
+  }
+
+  void _onHorizontalScroll() {
+    setState(() {
+      // This empty setState ensures the widget rebuilds with the new scroll position
+    });
   }
 
   void _updateVisibleLines() {
@@ -97,24 +114,34 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _onTextChanged() {
-    _calculateLineNumberWidth();
-    _calculateMaxLineWidth();
-    setState(() {});
+    if (_lastKnownVersion != editingCore.version) {
+      _calculateLineNumberWidth();
+      _calculateMaxLineWidth();
+      setState(() {});
+      _lastKnownVersion = editingCore.version;
+    }
   }
 
   void _calculateMaxLineWidth() {
     double newMaxLineWidth = lineNumberWidth;
     int currentLineCount = editingCore.lineCount;
 
-    for (int i = 0; i < currentLineCount; i++) {
-      if (!lineWidthCache.containsKey(i)) {
+    // Only recalculate widths for visible lines and a buffer
+    int startLine = max(0, firstVisibleLine - 10);
+    int endLine =
+        min(currentLineCount, firstVisibleLine + visibleLineCount + 10);
+
+    for (int i = startLine; i < endLine; i++) {
+      if (!lineWidthCache.containsKey(i) ||
+          _lastKnownVersion != editingCore.version) {
         String line = editingCore.getLineContent(i);
-        double lineWidth = line.length * charWidth + lineNumberWidth;
+        double lineWidth = _calculateLineWidth(line);
         lineWidthCache[i] = lineWidth;
       }
       newMaxLineWidth = max(newMaxLineWidth, lineWidthCache[i]!);
     }
 
+    // Remove cached widths for lines that no longer exist
     lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
 
     if ((newMaxLineWidth + lineWidthBuffer) != maxLineWidth) {
@@ -122,6 +149,15 @@ class _CodeEditorState extends State<CodeEditor> {
         maxLineWidth = newMaxLineWidth + lineWidthBuffer;
       });
     }
+  }
+
+  double _calculateLineWidth(String line) {
+    _textPainter.text = TextSpan(
+      text: line,
+      style: const TextStyle(fontSize: fontSize, fontFamily: 'Courier'),
+    );
+    _textPainter.layout(maxWidth: double.infinity);
+    return _textPainter.width + lineNumberWidth;
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
@@ -288,108 +324,127 @@ class _CodeEditorState extends State<CodeEditor> {
       builder: (context, constraints) {
         return ColoredBox(
           color: Colors.white,
-          child: ScrollbarTheme(
-              data: ScrollbarThemeData(
-                thumbColor:
-                    WidgetStateProperty.all(Colors.grey.withOpacity(0.6)),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildLineNumbers(constraints),
+              Expanded(
+                child: _buildCodeArea(constraints),
               ),
-              child: GestureDetector(
-                onTapDown: _handleTap,
-                onPanStart: _updateSelection,
-                onPanUpdate: _updateSelectionOnDrag,
-                child: Focus(
-                  focusNode: focusNode,
-                  onKeyEvent: _handleKeyPress,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: lineNumberWidth,
-                        child: ScrollConfiguration(
-                          behavior: ScrollConfiguration.of(context)
-                              .copyWith(scrollbars: false),
-                          child: SingleChildScrollView(
-                            controller: lineNumberController,
-                            child: SizedBox(
-                              height: max(editingCore.lineCount * lineHeight,
-                                  constraints.maxHeight),
-                              child: LineNumbers(
-                                lineCount: editingCore.lineCount,
-                                lineHeight: lineHeight,
-                                lineNumberWidth: lineNumberWidth,
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildLineNumbers(BoxConstraints constraints) {
+    return SizedBox(
+        width: lineNumberWidth,
+        child: ScrollConfiguration(
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: SingleChildScrollView(
+            controller: lineNumberController,
+            child: SizedBox(
+              height: max(
+                  editingCore.lineCount * lineHeight, constraints.maxHeight),
+              child: LineNumbers(
+                lineCount: editingCore.lineCount,
+                lineHeight: lineHeight,
+                lineNumberWidth: lineNumberWidth,
+                firstVisibleLine: firstVisibleLine,
+                visibleLineCount: visibleLineCount,
+              ),
+            ),
+          ),
+        ));
+  }
+
+  Widget _buildCodeArea(BoxConstraints constraints) {
+    return GestureDetector(
+      onTapDown: _handleTap,
+      onPanStart: _updateSelection,
+      onPanUpdate: _updateSelectionOnDrag,
+      child: Focus(
+        focusNode: focusNode,
+        onKeyEvent: _handleKeyPress,
+        child: ScrollbarTheme(
+          data: ScrollbarThemeData(
+              thumbColor: WidgetStateProperty.all(Colors.grey.withOpacity(0.6)),
+              radius: Radius.zero),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Stack(
+                children: [
+                  Scrollbar(
+                    controller: verticalController,
+                    child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      controller: verticalController,
+                      child: SizedBox(
+                        width: constraints.maxWidth,
+                        child: SingleChildScrollView(
+                          physics: const ClampingScrollPhysics(),
+                          scrollDirection: Axis.horizontal,
+                          controller: horizontalController,
+                          child: SizedBox(
+                            width: max(maxLineWidth, constraints.maxWidth),
+                            height: max(editingCore.lineCount * lineHeight,
+                                constraints.maxHeight),
+                            child: CustomPaint(
+                              painter: CodeEditorPainter(
+                                viewportWidth: constraints.maxWidth,
+                                version: editingCore.version,
+                                editingCore: editingCore,
                                 firstVisibleLine: firstVisibleLine,
                                 visibleLineCount: visibleLineCount,
+                                horizontalOffset:
+                                    horizontalController.hasClients
+                                        ? horizontalController.offset.clamp(
+                                            0.0,
+                                            horizontalController
+                                                .position.maxScrollExtent)
+                                        : 0,
                               ),
                             ),
                           ),
                         ),
                       ),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            Scrollbar(
-                              radius: Radius.zero,
-                              controller: verticalController,
-                              child: Scrollbar(
-                                radius: Radius.zero,
-                                controller: horizontalController,
-                                notificationPredicate: (notification) =>
-                                    notification.depth == 1,
-                                child: SingleChildScrollView(
-                                  controller: verticalController,
-                                  child: SingleChildScrollView(
-                                    scrollDirection: Axis.horizontal,
-                                    controller: horizontalController,
-                                    child: SizedBox(
-                                      width: max(
-                                          maxLineWidth - lineNumberWidth,
-                                          constraints.maxWidth -
-                                              lineNumberWidth),
-                                      height: max(
-                                          editingCore.lineCount * lineHeight,
-                                          constraints.maxHeight),
-                                      child: CustomPaint(
-                                        painter: CodeEditorPainter(
-                                          version: editingCore.version,
-                                          editingCore: editingCore,
-                                          firstVisibleLine: firstVisibleLine,
-                                          visibleLineCount: visibleLineCount,
-                                          horizontalOffset:
-                                              horizontalController.hasClients
-                                                  ? horizontalController.offset
-                                                  : 0,
-                                        ),
-                                        size: Size(
-                                          max(
-                                              maxLineWidth - lineNumberWidth,
-                                              constraints.maxWidth -
-                                                  lineNumberWidth),
-                                          editingCore.lineCount * lineHeight,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Positioned(
-                              right: 0,
-                              bottom: 0,
-                              child: SizedBox(
-                                width: scrollbarWidth,
-                                height: scrollbarWidth,
-                                child: ColoredBox(color: Colors.white),
-                              ),
-                            ),
-                          ],
+                    ),
+                  ),
+                  const Positioned(
+                    right: 0,
+                    bottom: 0,
+                    child: SizedBox(
+                      width: scrollbarWidth,
+                      height: scrollbarWidth,
+                      child: ColoredBox(color: Colors.white),
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: SizedBox(
+                      height: scrollbarWidth,
+                      child: Scrollbar(
+                        controller: horizontalScrollbarController,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          controller: horizontalScrollbarController,
+                          child: SizedBox(
+                            width: max(maxLineWidth, constraints.maxWidth),
+                          ),
                         ),
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              )),
-        );
-      },
+                ],
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 
@@ -401,6 +456,7 @@ class _CodeEditorState extends State<CodeEditor> {
     horizontalController.dispose();
     lineNumberController.dispose();
     focusNode.dispose();
+    _textPainter.dispose();
     super.dispose();
   }
 }

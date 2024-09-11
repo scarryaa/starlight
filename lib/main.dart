@@ -31,12 +31,10 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: LayoutBuilder(
-        builder: (context, constraints) {
-          return const CodeEditor(initialCode: "");
-        },
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return const CodeEditor(initialCode: "");
+      },
     );
   }
 }
