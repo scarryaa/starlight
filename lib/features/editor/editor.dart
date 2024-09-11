@@ -385,7 +385,7 @@ class _CodeEditorState extends State<CodeEditor> {
     int cursorColumn;
 
     if (cursorPosition == editingCore.length) {
-      cursorLine = editingCore.lineCount - 1;
+      cursorLine = editingCore.lineCount == 0 ? 0 : editingCore.lineCount - 1;
       lineStartIndex = editingCore.getLineStartIndex(cursorLine);
       cursorColumn = cursorPosition - lineStartIndex;
     } else {

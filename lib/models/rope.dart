@@ -49,7 +49,7 @@ class Rope {
 
     Node? newRoot = root?.delete(start, end);
 
-    if (newRoot == null || (newRoot.length ?? 0) == 0) {
+    if (newRoot == null || (newRoot.length) == 0) {
       // If the document is empty or null after deletion, return a new Rope with a newline
       return Rope("\n");
     }
@@ -133,6 +133,7 @@ abstract class Node {
   int findLine(int index);
   int findLineStart(int line);
   List<int> get lineStarts;
+  void updateLineStarts();
 }
 
 class Leaf extends Node {
@@ -140,10 +141,11 @@ class Leaf extends Node {
   late final List<int> _lineStarts;
 
   Leaf(this.value) {
-    _computeLineStarts();
+    updateLineStarts();
   }
 
-  void _computeLineStarts() {
+  @override
+  void updateLineStarts() {
     _lineStarts = [];
     for (int i = 0; i < value.length; i++) {
       if (value[i] == '\n') {
@@ -166,13 +168,15 @@ class Leaf extends Node {
 
   @override
   Node insert(int index, String s) {
-    return Leaf(value.substring(0, index) + s + value.substring(index));
+    String newValue = value.substring(0, index) + s + value.substring(index);
+    return Leaf(newValue);
   }
 
   @override
   Node? delete(int start, int end) {
     if (start == 0 && end == length) return null;
-    return Leaf(value.substring(0, start) + value.substring(end));
+    String newValue = value.substring(0, start) + value.substring(end);
+    return Leaf(newValue);
   }
 
   @override
@@ -222,16 +226,17 @@ class Branch extends Node {
 
   Branch(this.left, this.right) {
     _length = (left?.length ?? 0) + (right?.length ?? 0);
-    _computeLineStarts();
-    _lineCount = _lineStarts.length;
+    updateLineStarts();
   }
 
-  void _computeLineStarts() {
-    List<int> leftLineStarts = left?.lineStarts ?? [];
-    List<int> rightLineStarts = right?.lineStarts ?? [];
+  @override
+  void updateLineStarts() {
+    List<int> leftLineStarts = left?.lineStarts ?? [0];
+    List<int> rightLineStarts = right?.lineStarts ?? [0];
     int leftLength = left?.length ?? 0;
 
-    _lineStarts = [...leftLineStarts];
+    // Efficiently merge left and right line starts
+    _lineStarts = List<int>.from(leftLineStarts);
 
     // Check if we need to join lines at the boundary
     if (left != null && right != null) {
@@ -239,12 +244,17 @@ class Branch extends Node {
       String rightFirstChar = right!.charAt(0);
 
       if (leftLastChar != '\n' && rightFirstChar != '\n') {
-        // Remove the first line start of the right node
+        // Remove the first line start of the right node (which is always 0)
         rightLineStarts = rightLineStarts.sublist(1);
       }
     }
 
-    _lineStarts.addAll(rightLineStarts.map((index) => index + leftLength));
+    if (rightLineStarts.isNotEmpty) {
+      int rightOffset = leftLength - leftLineStarts.last;
+      _lineStarts.addAll(rightLineStarts.map((index) => index + rightOffset));
+    }
+
+    _lineCount = _lineStarts.length;
   }
 
   @override
@@ -287,8 +297,7 @@ class Branch extends Node {
       right = right?.insert(index - leftLength, s) ?? Leaf(s);
     }
     _length += s.length;
-    _computeLineStarts();
-    _lineCount = _lineStarts.length;
+    updateLineStarts();
     return this;
   }
 
@@ -306,8 +315,7 @@ class Branch extends Node {
     if (left == null) return right;
     if (right == null) return left;
     _length -= end - start;
-    _computeLineStarts();
-    _lineCount = _lineStarts.length;
+    updateLineStarts();
     return this;
   }
 
