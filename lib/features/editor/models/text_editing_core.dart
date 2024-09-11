@@ -124,6 +124,7 @@ class TextEditingCore extends ChangeNotifier {
 
   void clearSelection() {
     selectionStart = selectionEnd = null;
+    incrementVersion();
   }
 
   void setSelection(int start, int end) {
