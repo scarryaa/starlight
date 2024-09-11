@@ -106,20 +106,36 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _updateVisibleLines() {
     if (!mounted || !verticalController.hasClients) return;
-    setState(() {
-      firstVisibleLine = (verticalController.offset / lineHeight).floor();
-      visibleLineCount =
-          (MediaQuery.of(context).size.height / lineHeight).ceil() + 1;
-    });
+
+    final totalLines = editingCore.lineCount;
+    final viewportHeight = verticalController.position.viewportDimension;
+
+    firstVisibleLine = (verticalController.offset / lineHeight)
+        .floor()
+        .clamp(0, totalLines - 1);
+    visibleLineCount = (viewportHeight / lineHeight).ceil() + 1;
+
+    // Ensure we don't try to display more lines than exist
+    if (firstVisibleLine + visibleLineCount > totalLines) {
+      visibleLineCount = totalLines - firstVisibleLine;
+    }
   }
 
   void _onTextChanged() {
     if (_lastKnownVersion != editingCore.version) {
-      _calculateLineNumberWidth();
-      _calculateMaxLineWidth();
-      setState(() {});
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _recalculateEditor();
+      });
       _lastKnownVersion = editingCore.version;
     }
+  }
+
+  void _recalculateEditor() {
+    _calculateLineNumberWidth();
+    _calculateMaxLineWidth();
+    _updateVisibleLines();
+    _ensureCursorVisibility();
+    setState(() {});
   }
 
   void _calculateMaxLineWidth() {
@@ -144,11 +160,8 @@ class _CodeEditorState extends State<CodeEditor> {
     // Remove cached widths for lines that no longer exist
     lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
 
-    // Change this condition:
     if (newMaxLineWidth != maxLineWidth) {
-      setState(() {
-        maxLineWidth = newMaxLineWidth;
-      });
+      maxLineWidth = newMaxLineWidth;
     }
   }
 
@@ -180,6 +193,9 @@ class _CodeEditorState extends State<CodeEditor> {
       } else if (event.logicalKey == LogicalKeyboardKey.keyV) {
         _handlePaste();
         return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.keyA) {
+        _handleSelectAll();
+        return KeyEventResult.handled;
       }
     }
 
@@ -202,18 +218,34 @@ class _CodeEditorState extends State<CodeEditor> {
           break;
         case LogicalKeyboardKey.backspace:
           editingCore.handleBackspace();
+          _recalculateEditor();
           break;
         case LogicalKeyboardKey.delete:
           editingCore.handleDelete();
+          _recalculateEditor();
           break;
         case LogicalKeyboardKey.tab:
           editingCore.insertText('    ');
           break;
         default:
-          if (event.character != null) editingCore.insertText(event.character!);
+          if (event.character != null) {
+            editingCore.insertText(event.character!);
+            _recalculateEditor();
+          }
       }
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureCursorVisibility();
+    });
+
     return KeyEventResult.handled;
+  }
+
+  void _handleSelectAll() {
+    setState(() {
+      editingCore.setSelection(0, editingCore.length);
+    });
+    _recalculateEditor();
   }
 
   int _getPositionFromOffset(Offset offset) {
@@ -292,6 +324,53 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
+  void _ensureCursorVisibility() {
+    if (!verticalController.hasClients || !horizontalController.hasClients)
+      return;
+
+    final cursorPosition =
+        editingCore.cursorPosition.clamp(0, editingCore.length);
+    int cursorLine;
+    int lineStartIndex;
+    int cursorColumn;
+
+    if (cursorPosition == editingCore.length) {
+      // Handle the case when the cursor is at the very end
+      cursorLine = editingCore.lineCount - 1;
+      lineStartIndex = editingCore.getLineStartIndex(cursorLine);
+      cursorColumn = cursorPosition - lineStartIndex;
+    } else {
+      cursorLine = editingCore.rope.findLine(cursorPosition);
+      lineStartIndex = editingCore.getLineStartIndex(cursorLine);
+      cursorColumn = cursorPosition - lineStartIndex;
+    }
+
+    // Vertical scrolling
+    final cursorY = cursorLine * lineHeight;
+    if (cursorY < verticalController.offset) {
+      verticalController.jumpTo(cursorY);
+    } else if (cursorY >
+        verticalController.offset +
+            verticalController.position.viewportDimension -
+            lineHeight) {
+      verticalController.jumpTo(
+          cursorY - verticalController.position.viewportDimension + lineHeight);
+    }
+
+    // Horizontal scrolling
+    final cursorX = cursorColumn * charWidth + lineNumberWidth;
+    if (cursorX < horizontalController.offset + lineNumberWidth) {
+      horizontalController.jumpTo(cursorX - lineNumberWidth);
+    } else if (cursorX >
+        horizontalController.offset +
+            horizontalController.position.viewportDimension -
+            charWidth) {
+      horizontalController.jumpTo(cursorX -
+          horizontalController.position.viewportDimension +
+          charWidth);
+    }
+  }
+
   void _handleCopy() async {
     if (editingCore.hasSelection()) {
       await Clipboard.setData(
@@ -301,10 +380,12 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _handleCut() async {
     if (editingCore.hasSelection()) {
-      await Clipboard.setData(
-          ClipboardData(text: editingCore.getSelectedText()));
-      editingCore.deleteSelection();
-      setState(() {});
+      final selectedText = editingCore.getSelectedText();
+      await Clipboard.setData(ClipboardData(text: selectedText));
+      setState(() {
+        editingCore.deleteSelection();
+      });
+      _recalculateEditor();
     }
   }
 
@@ -313,8 +394,7 @@ class _CodeEditorState extends State<CodeEditor> {
         await Clipboard.getData(Clipboard.kTextPlain);
     if (clipboardData?.text != null) {
       editingCore.insertText(clipboardData!.text!);
-      _updateVisibleLines();
-      _calculateMaxLineWidth();
+      _recalculateEditor();
     }
   }
 
