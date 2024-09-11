@@ -109,7 +109,7 @@ class TextEditingCore extends ChangeNotifier {
         selectionStart! < selectionEnd! ? selectionStart! : selectionEnd!;
     int end = selectionStart! < selectionEnd! ? selectionEnd! : selectionStart!;
     rope = rope.delete(start, end);
-    cursorPosition = start;
+    cursorPosition = start <= 0 ? start + 1 : start;
     incrementVersion();
     clearSelection();
   }

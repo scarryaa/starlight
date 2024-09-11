@@ -100,11 +100,16 @@ class CodeEditorPainter extends CustomPainter {
     final topY = (line * lineHeight);
     final bottomY = topY + lineHeight;
 
+    // For empty lines, draw a selection width of 1 character
+    final endX = lineContent.isEmpty
+        ? max(selectionStart, 1) * charWidth
+        : selectionEnd * charWidth;
+
     canvas.drawRect(
       Rect.fromLTRB(
         selectionStart * charWidth,
         topY,
-        selectionEnd * charWidth,
+        endX,
         bottomY,
       ),
       selectionPaint,
