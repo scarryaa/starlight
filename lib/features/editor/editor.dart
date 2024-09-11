@@ -196,6 +196,9 @@ class _CodeEditorState extends State<CodeEditor> {
     final bool isControlPressed = Platform.isMacOS
         ? HardwareKeyboard.instance.isMetaPressed
         : HardwareKeyboard.instance.isControlPressed;
+    final bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+    final bool isAltPressed = HardwareKeyboard.instance.isAltPressed;
+    final bool isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
 
     if (isControlPressed) {
       if (event.logicalKey == LogicalKeyboardKey.keyC) {
@@ -248,9 +251,16 @@ class _CodeEditorState extends State<CodeEditor> {
           }
       }
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureCursorVisibility();
-    });
+
+    // Only ensure cursor visibility if no modifier keys are pressed
+    if (!isShiftPressed &&
+        !isAltPressed &&
+        !isMetaPressed &&
+        !isControlPressed) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _ensureCursorVisibility();
+      });
+    }
 
     return KeyEventResult.handled;
   }
