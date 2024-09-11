@@ -28,17 +28,24 @@ class TextEditingCore extends ChangeNotifier {
   }
 
   void moveCursor(int horizontalMove, int verticalMove) {
-    if (rope.length == 0) {
+    if (rope.length == 0 || rope.lineCount == 0) {
       cursorPosition = 0;
       return;
     }
 
     int currentLine = rope.findLine(cursorPosition.clamp(0, rope.length - 1));
+    if (currentLine < 0) return;
+
     int lineStart = rope.findLineStart(currentLine);
     int currentColumn = cursorPosition - lineStart;
 
     // Apply vertical movement
     currentLine = (currentLine + verticalMove).clamp(0, rope.lineCount - 1);
+
+    // Check if the new line is valid before proceeding
+    if (currentLine < 0 || currentLine >= rope.lineCount) {
+      return; // Exit the method if the new line is invalid
+    }
 
     // Apply horizontal movement
     int newLineStart = rope.findLineStart(currentLine);

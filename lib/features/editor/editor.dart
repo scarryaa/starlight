@@ -19,7 +19,11 @@ class _CodeEditorState extends State<CodeEditor> {
   late TextEditingCore editingCore;
   late ScrollController verticalController;
   late ScrollController horizontalController;
+  late ScrollController lineNumberController;
   final FocusNode focusNode = FocusNode();
+
+  bool _isVerticalScrolling = false;
+  bool _isLineNumberScrolling = false;
 
   int firstVisibleLine = 0;
   int visibleLineCount = 0;
@@ -37,7 +41,10 @@ class _CodeEditorState extends State<CodeEditor> {
     super.initState();
     editingCore = TextEditingCore(widget.initialCode);
     editingCore.addListener(_onTextChanged);
-    verticalController = ScrollController()..addListener(_updateVisibleLines);
+    verticalController = ScrollController()
+      ..addListener(() => _syncScroll(isVertical: true));
+    lineNumberController = ScrollController()
+      ..addListener(() => _syncScroll(isVertical: false));
     horizontalController = ScrollController();
 
     _initializeCharWidth();
@@ -66,12 +73,25 @@ class _CodeEditorState extends State<CodeEditor> {
     lineNumberWidth = maxLineNumberWidth + 40;
   }
 
+  void _syncScroll({required bool isVertical}) {
+    if (isVertical && !_isLineNumberScrolling) {
+      _isVerticalScrolling = true;
+      lineNumberController.jumpTo(verticalController.offset);
+      _isVerticalScrolling = false;
+    } else if (!isVertical && !_isVerticalScrolling) {
+      _isLineNumberScrolling = true;
+      verticalController.jumpTo(lineNumberController.offset);
+      _isLineNumberScrolling = false;
+    }
+    _updateVisibleLines();
+  }
+
   void _updateVisibleLines() {
     if (!mounted || !verticalController.hasClients) return;
     setState(() {
       firstVisibleLine = (verticalController.offset / lineHeight).floor();
       visibleLineCount =
-          (MediaQuery.of(context).size.height / lineHeight).ceil();
+          (MediaQuery.of(context).size.height / lineHeight).ceil() + 1;
     });
   }
 
@@ -104,7 +124,9 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
 
     final bool isControlPressed = Platform.isMacOS
         ? HardwareKeyboard.instance.isMetaPressed
@@ -272,52 +294,71 @@ class _CodeEditorState extends State<CodeEditor> {
             child: Focus(
               focusNode: focusNode,
               onKeyEvent: _handleKeyPress,
-              child: ScrollConfiguration(
-                behavior:
-                    ScrollConfiguration.of(context).copyWith(scrollbars: false),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  controller: horizontalController,
-                  child: SizedBox(
-                    width: max(maxLineWidth, constraints.maxWidth),
-                    height: max(editingCore.lineCount * lineHeight,
-                        constraints.maxHeight),
-                    child: SingleChildScrollView(
-                      controller: verticalController,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          LineNumbers(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: lineNumberWidth,
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context)
+                          .copyWith(scrollbars: false),
+                      child: SingleChildScrollView(
+                        controller: lineNumberController,
+                        child: SizedBox(
+                          height: max(editingCore.lineCount * lineHeight,
+                              constraints.maxHeight),
+                          child: LineNumbers(
                             lineCount: editingCore.lineCount,
                             lineHeight: lineHeight,
                             lineNumberWidth: lineNumberWidth,
                             firstVisibleLine: firstVisibleLine,
                             visibleLineCount: visibleLineCount,
                           ),
-                          Expanded(
-                            child: CustomPaint(
-                              painter: CodeEditorPainter(
-                                version: editingCore.version,
-                                editingCore: editingCore,
-                                firstVisibleLine: firstVisibleLine,
-                                visibleLineCount: visibleLineCount,
-                                horizontalOffset:
-                                    horizontalController.hasClients
-                                        ? horizontalController.offset
-                                        : 0,
-                              ),
-                              size: Size(
-                                max(maxLineWidth - lineNumberWidth,
-                                    constraints.maxWidth - lineNumberWidth),
-                                editingCore.lineCount * lineHeight,
-                              ),
-                            ),
-                          ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: Scrollbar(
+                      controller: verticalController,
+                      child: Scrollbar(
+                        controller: horizontalController,
+                        notificationPredicate: (notification) =>
+                            notification.depth == 1,
+                        child: SingleChildScrollView(
+                          controller: verticalController,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            controller: horizontalController,
+                            child: SizedBox(
+                              width: max(maxLineWidth - lineNumberWidth,
+                                  constraints.maxWidth - lineNumberWidth),
+                              height: max(editingCore.lineCount * lineHeight,
+                                  constraints.maxHeight),
+                              child: CustomPaint(
+                                painter: CodeEditorPainter(
+                                  version: editingCore.version,
+                                  editingCore: editingCore,
+                                  firstVisibleLine: firstVisibleLine,
+                                  visibleLineCount: visibleLineCount,
+                                  horizontalOffset:
+                                      horizontalController.hasClients
+                                          ? horizontalController.offset
+                                          : 0,
+                                ),
+                                size: Size(
+                                  max(maxLineWidth - lineNumberWidth,
+                                      constraints.maxWidth - lineNumberWidth),
+                                  editingCore.lineCount * lineHeight,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -332,6 +373,7 @@ class _CodeEditorState extends State<CodeEditor> {
     editingCore.dispose();
     verticalController.dispose();
     horizontalController.dispose();
+    lineNumberController.dispose();
     focusNode.dispose();
     super.dispose();
   }

@@ -68,6 +68,9 @@ class CodeEditorPainter extends CustomPainter {
   }
 
   String _getLineContent(int lineIndex) {
+    if (lineIndex < 0 || lineIndex >= editingCore.lineCount) {
+      return '';
+    }
     return editingCore.getLineContent(lineIndex);
   }
 

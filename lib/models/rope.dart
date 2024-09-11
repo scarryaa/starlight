@@ -102,9 +102,13 @@ class Rope {
 
   int findLineStart(int line) {
     if (line < 0 || line >= lineCount) {
-      throw RangeError('Invalid line number');
+      throw RangeError(
+          'Invalid line number: $line. Valid range is 0 to ${lineCount - 1}');
     }
-    return root?.findLineStart(line) ?? 0;
+    if (root == null) {
+      return 0;
+    }
+    return root!.findLineStart(line);
   }
 
   int findLineEnd(int line) {
