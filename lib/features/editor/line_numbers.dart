@@ -55,11 +55,8 @@ class LineNumberPainter extends CustomPainter {
       textAlign: TextAlign.center,
     );
 
-    // Ensure at least one line number is shown
-    int totalLinesToShow = lineCount > 0 ? lineCount : 1;
-
     for (int i = firstVisibleLine;
-        i < firstVisibleLine + visibleLineCount + 5 && i < totalLinesToShow;
+        i < firstVisibleLine + visibleLineCount + 5 && i < lineCount;
         i++) {
       textPainter.text = TextSpan(
         text: '${i + 1}',

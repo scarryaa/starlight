@@ -2,42 +2,47 @@ import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:starlight/features/editor/editor_painter.dart';
-import 'package:starlight/features/editor/line_numbers.dart';
 import 'package:starlight/features/editor/models/text_editing_core.dart';
+import 'editor_painter.dart';
+import 'line_numbers.dart';
 
 class CodeEditor extends StatefulWidget {
   final String initialCode;
+
   const CodeEditor({super.key, required this.initialCode});
 
   @override
-  State<CodeEditor> createState() => _CodeEditorState();
+  _CodeEditorState createState() => _CodeEditorState();
 }
 
 class _CodeEditorState extends State<CodeEditor> {
   late TextEditingCore editingCore;
-  late ScrollController _verticalController, _horizontalController;
-  final FocusNode _focusNode = FocusNode();
+  late ScrollController verticalController;
+  late ScrollController horizontalController;
+  final FocusNode focusNode = FocusNode();
 
-  int _firstVisibleLine = 0, _visibleLineCount = 0;
-  double _maxLineWidth = 0.0;
-  int _lastLineCount = 0;
-  final Map<int, double> _lineWidthCache = {};
-  static const double _lineWidthBuffer = 50.0;
-  late double _lineNumberWidth;
+  int firstVisibleLine = 0;
+  int visibleLineCount = 0;
+  double maxLineWidth = 0.0;
+  double lineNumberWidth = 0.0;
+  Map<int, double> lineWidthCache = {};
+
+  static const double lineHeight = 24.0;
+  static const double fontSize = 14.0;
+  static const double lineWidthBuffer = 50.0;
+  static late double charWidth;
 
   @override
   void initState() {
     super.initState();
     editingCore = TextEditingCore(widget.initialCode);
     editingCore.addListener(_onTextChanged);
-    _verticalController = ScrollController()..addListener(_updateVisibleLines);
-    _horizontalController = ScrollController();
+    verticalController = ScrollController()..addListener(_updateVisibleLines);
+    horizontalController = ScrollController();
 
-    // Initialize charWidth
     _initializeCharWidth();
-
     _calculateLineNumberWidth();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _calculateMaxLineWidth();
       _updateVisibleLines();
@@ -45,42 +50,29 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _initializeCharWidth() {
-    final TextPainter textPainter = TextPainter(
+    final textPainter = TextPainter(
       text: const TextSpan(
-          text: 'X',
-          style: TextStyle(
-              fontSize: CodeEditorPainter.fontSize, fontFamily: 'Courier')),
+        text: 'X',
+        style: TextStyle(fontSize: fontSize, fontFamily: 'Courier'),
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
-    CodeEditorPainter.charWidth = textPainter.width;
+    charWidth = textPainter.width;
   }
 
   void _calculateLineNumberWidth() {
-    final lineCount = editingCore.rope.lineCount;
-    final maxLineNumberWidth =
-        '$lineCount'.length * CodeEditorPainter.charWidth;
-    _lineNumberWidth = maxLineNumberWidth + 40;
+    final lineCount = editingCore.lineCount;
+    final maxLineNumberWidth = '$lineCount'.length * charWidth;
+    lineNumberWidth = maxLineNumberWidth + 40;
   }
 
   void _updateVisibleLines() {
-    if (!mounted || !_verticalController.hasClients) return;
+    if (!mounted || !verticalController.hasClients) return;
     setState(() {
-      _firstVisibleLine =
-          (_verticalController.offset / CodeEditorPainter.lineHeight).floor();
-      _visibleLineCount =
-          (MediaQuery.of(context).size.height / CodeEditorPainter.lineHeight)
-              .ceil();
+      firstVisibleLine = (verticalController.offset / lineHeight).floor();
+      visibleLineCount =
+          (MediaQuery.of(context).size.height / lineHeight).ceil();
     });
-  }
-
-  @override
-  void dispose() {
-    editingCore.removeListener(_onTextChanged);
-    editingCore.dispose();
-    _verticalController.dispose();
-    _horizontalController.dispose();
-    _focusNode.dispose();
-    super.dispose();
   }
 
   void _onTextChanged() {
@@ -90,43 +82,25 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _calculateMaxLineWidth() {
-    int currentLineCount = editingCore.rope.lineCount;
-    bool needsUpdate = false;
-
-    // Check if line count has changed
-    if (currentLineCount != _lastLineCount) {
-      _lastLineCount = currentLineCount;
-      needsUpdate = true;
-    }
-
-    double newMaxLineWidth = _lineNumberWidth;
+    double newMaxLineWidth = lineNumberWidth;
+    int currentLineCount = editingCore.lineCount;
 
     for (int i = 0; i < currentLineCount; i++) {
-      if (!_lineWidthCache.containsKey(i)) {
-        String line = editingCore.rope.sliceLines(i, i + 1)[0];
-        double lineWidth = _estimateLineWidth(line) + _lineNumberWidth;
-        _lineWidthCache[i] = lineWidth;
-        needsUpdate = true;
+      if (!lineWidthCache.containsKey(i)) {
+        String line = editingCore.getLineContent(i);
+        double lineWidth = line.length * charWidth + lineNumberWidth;
+        lineWidthCache[i] = lineWidth;
       }
-
-      if (_lineWidthCache[i]! > newMaxLineWidth) {
-        newMaxLineWidth = _lineWidthCache[i]!;
-      }
+      newMaxLineWidth = max(newMaxLineWidth, lineWidthCache[i]!);
     }
 
-    // Remove cached widths for lines that no longer exist
-    _lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
+    lineWidthCache.removeWhere((key, value) => key >= currentLineCount);
 
-    // Only update state if max line width has changed
-    if (needsUpdate || (newMaxLineWidth + _lineWidthBuffer) != _maxLineWidth) {
+    if ((newMaxLineWidth + lineWidthBuffer) != maxLineWidth) {
       setState(() {
-        _maxLineWidth = newMaxLineWidth + _lineWidthBuffer;
+        maxLineWidth = newMaxLineWidth + lineWidthBuffer;
       });
     }
-  }
-
-  double _estimateLineWidth(String line) {
-    return line.length * CodeEditorPainter.charWidth;
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
@@ -137,16 +111,15 @@ class _CodeEditorState extends State<CodeEditor> {
         : HardwareKeyboard.instance.isControlPressed;
 
     if (isControlPressed) {
-      switch (event.logicalKey) {
-        case LogicalKeyboardKey.keyC:
-          _handleCopy();
-          return KeyEventResult.handled;
-        case LogicalKeyboardKey.keyX:
-          _handleCut();
-          return KeyEventResult.handled;
-        case LogicalKeyboardKey.keyV:
-          _handlePaste();
-          return KeyEventResult.handled;
+      if (event.logicalKey == LogicalKeyboardKey.keyC) {
+        _handleCopy();
+        return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.keyX) {
+        _handleCut();
+        return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.keyV) {
+        _handlePaste();
+        return KeyEventResult.handled;
       }
     }
 
@@ -154,20 +127,28 @@ class _CodeEditorState extends State<CodeEditor> {
       switch (event.logicalKey) {
         case LogicalKeyboardKey.arrowLeft:
           editingCore.moveCursor(-1, 0);
+          break;
         case LogicalKeyboardKey.arrowRight:
           editingCore.moveCursor(1, 0);
+          break;
         case LogicalKeyboardKey.arrowUp:
           editingCore.moveCursor(0, -1);
+          break;
         case LogicalKeyboardKey.arrowDown:
           editingCore.moveCursor(0, 1);
+          break;
         case LogicalKeyboardKey.enter:
           editingCore.insertText('\n');
+          break;
         case LogicalKeyboardKey.backspace:
           editingCore.handleBackspace();
+          break;
         case LogicalKeyboardKey.delete:
           editingCore.handleDelete();
+          break;
         case LogicalKeyboardKey.tab:
           editingCore.insertText('    ');
+          break;
         default:
           if (event.character != null) editingCore.insertText(event.character!);
       }
@@ -176,47 +157,30 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   int _getPositionFromOffset(Offset offset) {
-    final adjustedOffset = offset +
-        Offset(_horizontalController.offset, _verticalController.offset);
+    final adjustedOffset =
+        offset + Offset(horizontalController.offset, verticalController.offset);
+    final tappedLine = (adjustedOffset.dy / lineHeight).floor();
 
-    final tappedLine =
-        (adjustedOffset.dy / CodeEditorPainter.lineHeight).floor();
+    if (editingCore.lineCount == 0) return 0;
 
-    // Return 0 for an empty document
-    if (editingCore.rope.lineCount == 0) {
-      return 0;
-    }
-
-    if (tappedLine < editingCore.rope.lineCount) {
+    if (tappedLine < editingCore.lineCount) {
       final tappedOffset =
-          (adjustedOffset.dx - _lineNumberWidth).clamp(0, double.infinity);
-
-      final column = (tappedOffset / CodeEditorPainter.charWidth)
-          .round()
-          .clamp(0, double.infinity)
-          .toInt();
+          (adjustedOffset.dx - lineNumberWidth).clamp(0, double.infinity);
+      final column =
+          (tappedOffset / charWidth).round().clamp(0, double.infinity).toInt();
 
       if (tappedLine < 0) return 0;
       int lineStartIndex = editingCore.getLineStartIndex(tappedLine);
+      String line = editingCore.getLineContent(tappedLine);
 
-      String line = editingCore.rope.sliceLines(tappedLine, tappedLine + 1)[0];
-
-      if (line.isEmpty) {
-        return lineStartIndex;
-      }
-
+      if (line.isEmpty) return lineStartIndex;
       if (column >= line.length) {
-        if (tappedLine == editingCore.rope.lineCount - 1) {
-          return lineStartIndex + line.length;
-        }
-
-        return lineStartIndex + line.length - 1;
+        return lineStartIndex + line.length;
       }
-
       return lineStartIndex + column;
     }
 
-    return editingCore.rope.length;
+    return editingCore.length;
   }
 
   void _handleTap(TapDownDetails details) {
@@ -225,19 +189,13 @@ class _CodeEditorState extends State<CodeEditor> {
       editingCore.cursorPosition = position;
       editingCore.clearSelection();
     });
-    _focusNode.requestFocus();
-    editingCore.incrementVersion();
+    focusNode.requestFocus();
   }
 
-  void _updateSelection(DragStartDetails details, bool isStart) {
+  void _updateSelection(DragStartDetails details) {
     final position = _getPositionFromOffset(details.localPosition);
     setState(() {
-      if (isStart) {
-        editingCore.setSelection(position, position);
-      } else {
-        editingCore.setSelection(
-            editingCore.selectionStart ?? position, position);
-      }
+      editingCore.setSelection(position, position);
     });
   }
 
@@ -247,9 +205,6 @@ class _CodeEditorState extends State<CodeEditor> {
       editingCore.setSelection(
           editingCore.selectionStart ?? position, position);
     });
-    editingCore.incrementVersion();
-
-    // Auto-scroll if necessary
     _autoScrollOnDrag(details.localPosition);
   }
 
@@ -257,26 +212,24 @@ class _CodeEditorState extends State<CodeEditor> {
     const scrollThreshold = 50.0;
     const scrollStep = 16.0;
 
-    if (position.dy < scrollThreshold && _verticalController.offset > 0) {
-      _verticalController
-          .jumpTo(max(0, _verticalController.offset - scrollStep));
+    if (position.dy < scrollThreshold && verticalController.offset > 0) {
+      verticalController.jumpTo(max(0, verticalController.offset - scrollStep));
     } else if (position.dy > context.size!.height - scrollThreshold &&
-        _verticalController.offset <
-            _verticalController.position.maxScrollExtent) {
-      _verticalController.jumpTo(min(
-          _verticalController.position.maxScrollExtent,
-          _verticalController.offset + scrollStep));
+        verticalController.offset <
+            verticalController.position.maxScrollExtent) {
+      verticalController.jumpTo(min(verticalController.position.maxScrollExtent,
+          verticalController.offset + scrollStep));
     }
 
-    if (position.dx < scrollThreshold && _horizontalController.offset > 0) {
-      _horizontalController
-          .jumpTo(max(0, _horizontalController.offset - scrollStep));
+    if (position.dx < scrollThreshold && horizontalController.offset > 0) {
+      horizontalController
+          .jumpTo(max(0, horizontalController.offset - scrollStep));
     } else if (position.dx > context.size!.width - scrollThreshold &&
-        _horizontalController.offset <
-            _horizontalController.position.maxScrollExtent) {
-      _horizontalController.jumpTo(min(
-          _horizontalController.position.maxScrollExtent,
-          _horizontalController.offset + scrollStep));
+        horizontalController.offset <
+            horizontalController.position.maxScrollExtent) {
+      horizontalController.jumpTo(min(
+          horizontalController.position.maxScrollExtent,
+          horizontalController.offset + scrollStep));
     }
   }
 
@@ -314,52 +267,50 @@ class _CodeEditorState extends State<CodeEditor> {
           color: Colors.white,
           child: GestureDetector(
             onTapDown: _handleTap,
-            onPanStart: (details) => _updateSelection(details, true),
+            onPanStart: _updateSelection,
             onPanUpdate: _updateSelectionOnDrag,
             child: Focus(
-              focusNode: _focusNode,
+              focusNode: focusNode,
               onKeyEvent: _handleKeyPress,
               child: ScrollConfiguration(
                 behavior:
                     ScrollConfiguration.of(context).copyWith(scrollbars: false),
                 child: SingleChildScrollView(
                   scrollDirection: Axis.horizontal,
-                  controller: _horizontalController,
+                  controller: horizontalController,
                   child: SizedBox(
-                    width: max(_maxLineWidth, constraints.maxWidth),
-                    height: max(
-                        editingCore.rope.lineCount *
-                            CodeEditorPainter.lineHeight,
+                    width: max(maxLineWidth, constraints.maxWidth),
+                    height: max(editingCore.lineCount * lineHeight,
                         constraints.maxHeight),
                     child: SingleChildScrollView(
-                      controller: _verticalController,
+                      controller: verticalController,
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           LineNumbers(
-                            lineCount: editingCore.rope.lineCount,
-                            lineHeight: CodeEditorPainter.lineHeight,
-                            lineNumberWidth: _lineNumberWidth,
-                            firstVisibleLine: _firstVisibleLine,
-                            visibleLineCount: _visibleLineCount,
+                            lineCount: editingCore.lineCount,
+                            lineHeight: lineHeight,
+                            lineNumberWidth: lineNumberWidth,
+                            firstVisibleLine: firstVisibleLine,
+                            visibleLineCount: visibleLineCount,
                           ),
                           Expanded(
                             child: CustomPaint(
                               painter: CodeEditorPainter(
-                                editingCore: editingCore,
-                                firstVisibleLine: _firstVisibleLine,
-                                visibleLineCount: _visibleLineCount,
-                                horizontalOffset:
-                                    _horizontalController.hasClients
-                                        ? _horizontalController.offset
-                                        : 0,
                                 version: editingCore.version,
+                                editingCore: editingCore,
+                                firstVisibleLine: firstVisibleLine,
+                                visibleLineCount: visibleLineCount,
+                                horizontalOffset:
+                                    horizontalController.hasClients
+                                        ? horizontalController.offset
+                                        : 0,
                               ),
                               size: Size(
-                                  max(_maxLineWidth - _lineNumberWidth,
-                                      constraints.maxWidth - _lineNumberWidth),
-                                  editingCore.rope.lineCount *
-                                      CodeEditorPainter.lineHeight),
+                                max(maxLineWidth - lineNumberWidth,
+                                    constraints.maxWidth - lineNumberWidth),
+                                editingCore.lineCount * lineHeight,
+                              ),
                             ),
                           ),
                         ],
@@ -373,5 +324,15 @@ class _CodeEditorState extends State<CodeEditor> {
         );
       },
     );
+  }
+
+  @override
+  void dispose() {
+    editingCore.removeListener(_onTextChanged);
+    editingCore.dispose();
+    verticalController.dispose();
+    horizontalController.dispose();
+    focusNode.dispose();
+    super.dispose();
   }
 }

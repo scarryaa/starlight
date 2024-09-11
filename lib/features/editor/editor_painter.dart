@@ -4,9 +4,8 @@ import 'package:starlight/features/editor/models/text_editing_core.dart';
 
 class CodeEditorPainter extends CustomPainter {
   static const double lineHeight = 24.0;
-  static late double charWidth;
   static const double fontSize = 14.0;
-  static const int _lineBuffer = 5;
+  static const int lineBuffer = 5;
 
   final TextEditingCore editingCore;
   final int firstVisibleLine;
@@ -14,8 +13,12 @@ class CodeEditorPainter extends CustomPainter {
   final double horizontalOffset;
   final int version;
 
-  final TextStyle _textStyle = const TextStyle(
-      fontSize: fontSize, color: Colors.black, fontFamily: 'Courier');
+  late double charWidth;
+  final TextStyle textStyle = const TextStyle(
+    fontSize: fontSize,
+    color: Colors.black,
+    fontFamily: 'Courier',
+  );
 
   CodeEditorPainter({
     required this.editingCore,
@@ -28,8 +31,8 @@ class CodeEditorPainter extends CustomPainter {
   }
 
   void _calculateCharWidth() {
-    final TextPainter textPainter = TextPainter(
-      text: TextSpan(text: 'X', style: _textStyle),
+    final textPainter = TextPainter(
+      text: TextSpan(text: 'X', style: textStyle),
       textDirection: TextDirection.ltr,
     )..layout();
     charWidth = textPainter.width;
@@ -37,16 +40,15 @@ class CodeEditorPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final lineCount = editingCore.rope.lineCount;
+    final lineCount = editingCore.lineCount;
 
     for (int i = firstVisibleLine;
-        i < min(firstVisibleLine + visibleLineCount + _lineBuffer, lineCount);
+        i < min(firstVisibleLine + visibleLineCount + lineBuffer, lineCount);
         i++) {
-      final lineContent = _safeGetLineContent(i);
+      final lineContent = _getLineContent(i);
 
       // Paint line content
-      _paintText(canvas, lineContent, Offset(horizontalOffset, i * lineHeight),
-          _textStyle);
+      _paintText(canvas, lineContent, Offset(horizontalOffset, i * lineHeight));
 
       // Paint selection if needed
       if (_isLineSelected(i)) {
@@ -60,49 +62,31 @@ class CodeEditorPainter extends CustomPainter {
     }
 
     // Paint cursor at the end of the document if necessary
-    if (editingCore.cursorPosition == editingCore.rope.length) {
-      _paintCursorAtEnd(canvas, lineCount == 0 ? lineCount : lineCount - 1);
+    if (editingCore.cursorPosition == editingCore.length) {
+      _paintCursorAtEnd(canvas, lineCount - 1);
     }
   }
 
-  String _safeGetLineContent(int lineIndex) {
-    if (editingCore.rope.lineCount == 0) return "";
-    if (lineIndex < 0 || lineIndex >= editingCore.rope.lineCount) {
-      print("Warning: Attempted to access an invalid line index $lineIndex. "
-          "Valid line indices are 0 to ${editingCore.rope.lineCount == 0 ? 0 : editingCore.rope.lineCount - 1}. "
-          "Total lines: ${editingCore.rope.lineCount}");
-      return '';
-    }
-    try {
-      return editingCore.getLineContent(lineIndex);
-    } catch (e, stackTrace) {
-      print("Error: Failed to retrieve content for line $lineIndex. "
-          "Total lines: ${editingCore.rope.lineCount}. "
-          "Error: $e\nStack trace:\n$stackTrace");
-      return '';
-    }
+  String _getLineContent(int lineIndex) {
+    return editingCore.getLineContent(lineIndex);
   }
 
-  void _paintText(Canvas canvas, String text, Offset offset, TextStyle style,
-      [TextAlign align = TextAlign.left]) {
+  void _paintText(Canvas canvas, String text, Offset offset) {
     final textPainter = TextPainter(
-      text: TextSpan(text: text, style: style),
+      text: TextSpan(text: text, style: textStyle),
       textDirection: TextDirection.ltr,
-      textAlign: align,
-    );
-    textPainter.layout();
+    )..layout();
 
-    // Horizontal centering
     final xOffset =
         offset.dx + (charWidth * text.length - textPainter.width) / 2;
-
-    // Vertical centering
     final yOffset = offset.dy + (lineHeight - textPainter.height) / 2;
 
     textPainter.paint(canvas, Offset(xOffset, yOffset));
   }
 
   void _paintSelection(Canvas canvas, int line, String lineContent) {
+    if (!editingCore.hasSelection()) return;
+
     final selectionPaint = Paint()
       ..color = Colors.lightBlueAccent.withOpacity(0.3);
     final selectionStart = _getSelectionStartForLine(line);
@@ -137,7 +121,7 @@ class CodeEditorPainter extends CustomPainter {
   }
 
   void _paintCursorAtEnd(Canvas canvas, int lastLine) {
-    final cursorOffset = _safeGetLineContent(lastLine).length * charWidth;
+    final cursorOffset = _getLineContent(lastLine).length * charWidth;
 
     final topY = lastLine * lineHeight + (lineHeight - fontSize) / 2;
     final bottomY = topY + fontSize;
@@ -155,8 +139,8 @@ class CodeEditorPainter extends CustomPainter {
         min(editingCore.selectionStart ?? 0, editingCore.selectionEnd ?? 0);
     int selectionEnd =
         max(editingCore.selectionStart ?? 0, editingCore.selectionEnd ?? 0);
-    int lineStart = _safeGetLineStartIndex(line);
-    int lineEnd = _safeGetLineEndIndex(line);
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
     return (selectionStart < lineEnd && selectionEnd > lineStart);
   }
 
@@ -164,7 +148,7 @@ class CodeEditorPainter extends CustomPainter {
     if (!editingCore.hasSelection()) return 0;
     int selectionStart =
         min(editingCore.selectionStart!, editingCore.selectionEnd!);
-    int lineStart = _safeGetLineStartIndex(line);
+    int lineStart = editingCore.getLineStartIndex(line);
     return max(0, selectionStart - lineStart);
   }
 
@@ -172,35 +156,21 @@ class CodeEditorPainter extends CustomPainter {
     if (!editingCore.hasSelection()) return 0;
     int selectionEnd =
         max(editingCore.selectionStart!, editingCore.selectionEnd!);
-    int lineStart = _safeGetLineStartIndex(line);
-    int lineEnd = _safeGetLineEndIndex(line);
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
     return min(lineEnd - lineStart, selectionEnd - lineStart);
   }
 
   bool _isCursorOnLine(int line) {
-    int lineStart = _safeGetLineStartIndex(line);
-    int lineEnd = _safeGetLineEndIndex(line);
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
     return editingCore.cursorPosition >= lineStart &&
         editingCore.cursorPosition <= lineEnd;
   }
 
   int _getCursorPositionInLine(int line) {
-    int lineStart = _safeGetLineStartIndex(line);
+    int lineStart = editingCore.getLineStartIndex(line);
     return editingCore.cursorPosition - lineStart;
-  }
-
-  int _safeGetLineStartIndex(int line) {
-    if (line < 0 || line >= editingCore.rope.lineCount) {
-      return 0;
-    }
-    return editingCore.getLineStartIndex(line);
-  }
-
-  int _safeGetLineEndIndex(int line) {
-    if (line < 0 || line >= editingCore.rope.lineCount) {
-      return editingCore.rope.length;
-    }
-    return editingCore.getLineEndIndex(line);
   }
 
   @override

@@ -17,6 +17,7 @@ class TextEditingCore extends ChangeNotifier {
   }
 
   int get lineCount => rope.lineCount;
+  int get length => rope.length;
 
   String getLineContent(int line) {
     int start = rope.findLineStart(line);
@@ -67,7 +68,7 @@ class TextEditingCore extends ChangeNotifier {
   void handleBackspace() {
     if (hasSelection()) {
       deleteSelection();
-    } else if (cursorPosition > 0) {
+    } else if (cursorPosition > 1) {
       rope = rope.delete(cursorPosition - 1, cursorPosition);
       cursorPosition--;
       incrementVersion();

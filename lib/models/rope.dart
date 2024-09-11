@@ -4,7 +4,7 @@ class Rope {
   Node? root;
 
   Rope(String s) {
-    root = _buildTree(s);
+    root = _buildTree(s.isEmpty ? "\n" : s);
   }
 
   static Node? _buildTree(String s) {
@@ -18,7 +18,7 @@ class Rope {
   }
 
   @override
-  String toString() => root?.toString() ?? '';
+  String toString() => root?.toString() ?? '\n';
 
   String charAt(int index) {
     if (index < 0 || index >= length) {
@@ -46,10 +46,18 @@ class Rope {
       throw RangeError(
           'Start index $start must be less than or equal to end index $end.');
     }
-    return Rope('')..root = root?.delete(start, end);
+
+    Node? newRoot = root?.delete(start, end);
+
+    if (newRoot == null || (newRoot.length ?? 0) == 0) {
+      // If the document is empty or null after deletion, return a new Rope with a newline
+      return Rope("\n");
+    }
+
+    return Rope('')..root = newRoot;
   }
 
-  int get length => root?.length ?? 0;
+  int get length => root?.length ?? 1;
 
   String slice(int start, int end) {
     if (start > end) {
@@ -61,7 +69,7 @@ class Rope {
           'Invalid range: start=$start, end=$end. Valid range is 0 to $length. '
           'Ensure that start >= 0, end <= $length, and start <= end.');
     }
-    return root?.slice(start, end) ?? '';
+    return root?.slice(start, end) ?? '\n';
   }
 
   List<String> sliceLines(int startLine, int endLine) {
@@ -83,7 +91,7 @@ class Rope {
     return result;
   }
 
-  int get lineCount => root?.lineCount ?? 0;
+  int get lineCount => root?.lineCount ?? 1;
 
   int findLine(int index) {
     if (index < 0 || index >= length) {
@@ -132,7 +140,7 @@ class Leaf extends Node {
   }
 
   void _computeLineStarts() {
-    _lineStarts = [0];
+    _lineStarts = [];
     for (int i = 0; i < value.length; i++) {
       if (value[i] == '\n') {
         _lineStarts.add(i + 1);
