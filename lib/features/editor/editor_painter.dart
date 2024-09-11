@@ -97,8 +97,8 @@ class CodeEditorPainter extends CustomPainter {
     final selectionStart = _getSelectionStartForLine(line);
     final selectionEnd = _getSelectionEndForLine(line);
 
-    final topY = (line * lineHeight) + (lineHeight - fontSize) / 2;
-    final bottomY = topY + fontSize;
+    final topY = (line * lineHeight);
+    final bottomY = topY + lineHeight;
 
     canvas.drawRect(
       Rect.fromLTRB(
