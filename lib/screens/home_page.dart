@@ -101,12 +101,6 @@ class _MyHomePageState extends State<MyHomePage> {
           Positioned.fill(
             child: GestureDetector(
               onPanStart: (_) => windowManager.startDragging(),
-              child: Center(
-                child: Text(
-                  'starlight',
-                  style: Theme.of(context).appBarTheme.titleTextStyle,
-                ),
-              ),
             ),
           ),
           Row(
