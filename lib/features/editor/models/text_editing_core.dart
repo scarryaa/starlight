@@ -16,6 +16,14 @@ class TextEditingCore extends ChangeNotifier {
   int get length => rope.length;
   int get lastModifiedLine => _lastModifiedLine;
 
+  void setText(String newText) {
+    rope = Rope(newText);
+    cursorPosition = 0;
+    _lastModifiedLine = 0;
+    clearSelection();
+    incrementVersion();
+  }
+
   void incrementVersion() {
     _version++;
     notifyListeners();

@@ -8,8 +8,13 @@ import 'line_numbers.dart';
 
 class CodeEditor extends StatefulWidget {
   final String initialCode;
+  final String filePath;
 
-  const CodeEditor({super.key, required this.initialCode});
+  const CodeEditor({
+    super.key,
+    required this.initialCode,
+    required this.filePath,
+  });
 
   @override
   _CodeEditorState createState() => _CodeEditorState();
@@ -578,6 +583,28 @@ class _CodeEditorState extends State<CodeEditor> {
         ),
       ),
     );
+  }
+
+  @override
+  void didUpdateWidget(CodeEditor oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.filePath != oldWidget.filePath) {
+      _loadFile();
+    }
+  }
+
+  void _loadFile() {
+    if (widget.filePath.isNotEmpty) {
+      try {
+        final file = File(widget.filePath);
+        final content = file.readAsStringSync();
+        setState(() {
+          editingCore.setText(content);
+        });
+      } catch (e) {
+        print('Error loading file: $e');
+      }
+    }
   }
 
   @override

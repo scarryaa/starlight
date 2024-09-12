@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/editor.dart';
+import 'package:starlight/features/file_explorer/file_explorer.dart';
+import 'dart:io';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  SystemChannels.platform.invokeMethod<void>('setPreferredOrientations', []);
   runApp(const MyApp());
 }
 
@@ -29,12 +34,32 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  String currentFilePath = '';
+  String currentFileContent = '';
+
+  void _openFile(File file) {
+    setState(() {
+      currentFilePath = file.path;
+      currentFileContent = file.readAsStringSync();
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return const CodeEditor(initialCode: "");
-      },
+    return Scaffold(
+      body: Row(
+        children: [
+          FileExplorer(
+            onFileSelected: _openFile,
+          ),
+          Expanded(
+            child: CodeEditor(
+              initialCode: currentFileContent,
+              filePath: currentFilePath,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
