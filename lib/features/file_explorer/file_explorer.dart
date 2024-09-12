@@ -8,22 +8,36 @@ import 'package:provider/provider.dart';
 
 class FileExplorer extends StatelessWidget {
   final Function(File) onFileSelected;
+  final Function(String?) onDirectorySelected;
+  final FileExplorerController controller;
 
-  const FileExplorer({super.key, required this.onFileSelected});
+  const FileExplorer({
+    super.key,
+    required this.onFileSelected,
+    required this.onDirectorySelected,
+    required this.controller,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => FileExplorerController(),
-      child: _FileExplorerContent(onFileSelected: onFileSelected),
+    return ChangeNotifierProvider.value(
+      value: controller,
+      child: _FileExplorerContent(
+        onFileSelected: onFileSelected,
+        onDirectorySelected: onDirectorySelected,
+      ),
     );
   }
 }
 
 class _FileExplorerContent extends StatefulWidget {
   final Function(File) onFileSelected;
+  final Function(String?) onDirectorySelected;
 
-  const _FileExplorerContent({required this.onFileSelected});
+  const _FileExplorerContent({
+    required this.onFileSelected,
+    required this.onDirectorySelected,
+  });
 
   @override
   _FileExplorerContentState createState() => _FileExplorerContentState();
@@ -40,7 +54,10 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
     final controller = context.read<FileExplorerController>();
     try {
       String? selectedDirectory = await FileService.pickDirectory();
-      controller.setDirectory(Directory(selectedDirectory ?? "./"));
+      if (selectedDirectory != null) {
+        controller.setDirectory(Directory(selectedDirectory));
+        widget.onDirectorySelected(selectedDirectory);
+      }
     } catch (e) {
       print('Error picking directory: $e');
       ScaffoldMessenger.of(context).showSnackBar(

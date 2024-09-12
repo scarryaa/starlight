@@ -1,9 +1,9 @@
 import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide TabBar;
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
+import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/file_menu/file_menu_actions.dart';
 import 'package:starlight/features/file_menu/menu_actions.dart';
@@ -22,8 +22,9 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final List<FileTab> _tabs = [];
   final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
-  late final FileExplorer _fileExplorer;
   late final FileMenuActions _fileMenuActions;
+  late final FileExplorerController _fileExplorerController;
+  String? _selectedDirectory;
 
   @override
   Widget build(BuildContext context) {
@@ -40,7 +41,15 @@ class _MyHomePageState extends State<MyHomePage> {
               children: [
                 ResizableWidget(
                   maxWidthPercentage: 0.9,
-                  child: _fileExplorer,
+                  child: ChangeNotifierProvider.value(
+                    value: _fileExplorerController,
+                    child: FileExplorer(
+                      key: ValueKey(_selectedDirectory),
+                      onFileSelected: _openFile,
+                      onDirectorySelected: _onDirectorySelected,
+                      controller: _fileExplorerController,
+                    ),
+                  ),
                 ),
                 Expanded(
                   child: _buildMainContent(isDarkMode),
@@ -53,26 +62,25 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
+  void _onDirectorySelected(String? directory) {
+    setState(() {
+      _selectedDirectory = directory;
+    });
+    if (directory != null) {
+      _fileExplorerController.setDirectory(Directory(directory));
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    _fileExplorer = FileExplorer(
-      key: const ValueKey('file_explorer'),
-      onFileSelected: _openFile,
-    );
+    _fileExplorerController = FileExplorerController();
     _fileMenuActions = FileMenuActions(
       addNewTab: _addNewTab,
       openFile: _openFile,
       saveCurrentFile: _saveCurrentFile,
       saveFileAs: _saveFileAs,
     );
-  }
-
-  void _addNewTab(String filePath, String content) {
-    setState(() {
-      _tabs.add(FileTab(filePath: filePath, content: content));
-      _selectedTabIndex.value = _tabs.length - 1;
-    });
   }
 
   Widget _buildAppBar(
@@ -88,10 +96,9 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ),
       ),
-      child: Row(
+      child: Stack(
         children: [
-          const SizedBox(width: 70),
-          Expanded(
+          Positioned.fill(
             child: GestureDetector(
               onPanStart: (_) => windowManager.startDragging(),
               child: Center(
@@ -102,18 +109,42 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             ),
           ),
-          IconButton(
-            icon: Icon(
-              isDarkMode ? Icons.light_mode : Icons.dark_mode,
-              color: Theme.of(context).appBarTheme.iconTheme?.color,
-              size: 14,
-            ),
-            onPressed: () => themeProvider.toggleTheme(),
+          Row(
+            children: [
+              const SizedBox(width: 70),
+              const SizedBox(width: 8),
+              if (_selectedDirectory != null)
+                TextButton(
+                  onPressed: _pickDirectory,
+                  child: Text(
+                    _selectedDirectory!.split('/').last,
+                    style: TextStyle(
+                      color: Theme.of(context).textTheme.bodyLarge?.color,
+                    ),
+                  ),
+                ),
+              const Spacer(),
+              IconButton(
+                icon: Icon(
+                  isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                  color: Theme.of(context).appBarTheme.iconTheme?.color,
+                  size: 14,
+                ),
+                onPressed: () => themeProvider.toggleTheme(),
+              ),
+              const SizedBox(width: 8),
+            ],
           ),
-          const SizedBox(width: 8),
         ],
       ),
     );
+  }
+
+  void _addNewTab(String filePath, String content) {
+    setState(() {
+      _tabs.add(FileTab(filePath: filePath, content: content));
+      _selectedTabIndex.value = _tabs.length - 1;
+    });
   }
 
   Widget _buildCodeEditor(int selectedIndex) {
@@ -261,6 +292,14 @@ class _MyHomePageState extends State<MyHomePage> {
     } catch (e) {
       print('Error reading file: $e');
       _showErrorDialog(file, e);
+    }
+  }
+
+  Future<void> _pickDirectory() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      _onDirectorySelected(selectedDirectory);
+      _fileExplorerController.setDirectory(Directory(selectedDirectory));
     }
   }
 
