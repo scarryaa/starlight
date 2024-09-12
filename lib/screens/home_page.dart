@@ -1,13 +1,13 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide TabBar;
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/file_menu/file_menu_actions.dart';
 import 'package:starlight/features/file_menu/menu_actions.dart';
-import 'package:starlight/features/sidebar_switcher/sidebar_switcher.dart';
 import 'package:starlight/features/tabs/tab.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:starlight/utils/widgets/resizable_widget.dart';
@@ -17,15 +17,29 @@ class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  _MyHomePageState createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  final List<FileTab> _tabs = [];
-  final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
-  late final FileMenuActions _fileMenuActions;
   late final FileExplorerController _fileExplorerController;
-  String? _selectedDirectory;
+  late final FileMenuActions _fileMenuActions;
+  final ValueNotifier<String?> _selectedDirectory =
+      ValueNotifier<String?>(null);
+  final GlobalKey<_EditorWidgetState> _editorKey =
+      GlobalKey<_EditorWidgetState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _fileExplorerController = FileExplorerController();
+    _fileMenuActions = FileMenuActions(
+      newFile: _handleNewFile,
+      openFile: _handleOpenFile,
+      save: _handleSaveCurrentFile,
+      saveAs: _handleSaveFileAs,
+      exit: _handleExit,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,67 +47,29 @@ class _MyHomePageState extends State<MyHomePage> {
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
-      body: Column(
-        children: [
-          _buildAppBar(context, themeProvider, isDarkMode),
-          _buildDesktopMenu(context),
-          Expanded(
-            child: Row(
-              children: [
-                ResizableWidget(
-                  maxWidthPercentage: 0.9,
-                  child: SidebarSwitcher(
-                    onFileSelected: _openFile,
-                    onDirectorySelected: _onDirectorySelected,
-                    fileExplorerController: _fileExplorerController,
-                  ),
-                ),
-                Expanded(
-                  child: _buildMainContent(isDarkMode),
-                ),
-              ],
+        body: Column(children: [
+      _buildAppBar(context, themeProvider, isDarkMode),
+      _buildDesktopMenu(context),
+      Expanded(
+          child: Row(children: [
+        ResizableWidget(
+          maxWidthPercentage: 0.9,
+          child: RepaintBoundary(
+            child: FileExplorerWidget(
+              controller: _fileExplorerController,
+              onFileSelected: _handleOpenFile,
+              onDirectorySelected: _handleDirectorySelected,
             ),
           ),
-          _buildStatusBar(),
-        ],
-      ),
-    );
-  }
-
-  void _onDirectorySelected(String? directory) {
-    setState(() {
-      _selectedDirectory = directory;
-    });
-    if (directory != null) {
-      _fileExplorerController.setDirectory(Directory(directory));
-    }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _fileExplorerController = FileExplorerController();
-    _fileMenuActions = FileMenuActions(
-      addNewTab: _addNewTab,
-      openFile: _openFile,
-      saveCurrentFile: _saveCurrentFile,
-      saveFileAs: _saveFileAs,
-    );
-  }
-
-  Widget _buildStatusBar() {
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).dividerColor,
-          ),
         ),
-      ),
-    );
+        Expanded(
+            child: EditorWidget(
+          key: _editorKey,
+          fileMenuActions: _fileMenuActions,
+        )),
+        _buildStatusBar(),
+      ]))
+    ]));
   }
 
   Widget _buildAppBar(
@@ -120,16 +96,23 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               const SizedBox(width: 70),
               const SizedBox(width: 8),
-              if (_selectedDirectory != null)
-                TextButton(
-                  onPressed: _pickDirectory,
-                  child: Text(
-                    _selectedDirectory!.split('/').last,
-                    style: TextStyle(
-                      color: Theme.of(context).textTheme.bodyLarge?.color,
-                    ),
-                  ),
-                ),
+              ValueListenableBuilder<String?>(
+                valueListenable: _selectedDirectory,
+                builder: (context, directory, _) {
+                  return directory != null
+                      ? TextButton(
+                          onPressed: _pickDirectory,
+                          child: Text(
+                            directory.split('/').last,
+                            style: TextStyle(
+                              color:
+                                  Theme.of(context).textTheme.bodyLarge?.color,
+                            ),
+                          ),
+                        )
+                      : const SizedBox.shrink();
+                },
+              ),
               const Spacer(),
               IconButton(
                 icon: Icon(
@@ -144,22 +127,6 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ],
       ),
-    );
-  }
-
-  void _addNewTab(String filePath, String content) {
-    setState(() {
-      _tabs.add(FileTab(filePath: filePath, content: content));
-      _selectedTabIndex.value = _tabs.length - 1;
-    });
-  }
-
-  Widget _buildCodeEditor(int selectedIndex) {
-    return CodeEditor(
-      key: ValueKey(_tabs[selectedIndex].filePath),
-      initialCode: _tabs[selectedIndex].content,
-      filePath: _tabs[selectedIndex].filePath,
-      onModified: (isModified) => _onFileModified(selectedIndex, isModified),
     );
   }
 
@@ -213,31 +180,6 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget _buildMainContent(bool isDarkMode) {
-    return ValueListenableBuilder<int>(
-      valueListenable: _selectedTabIndex,
-      builder: (context, selectedIndex, child) {
-        if (_tabs.isEmpty) {
-          return _buildWelcomeScreen(isDarkMode);
-        } else {
-          return Column(
-            children: [
-              TabBar(
-                tabs: _tabs,
-                selectedIndex: selectedIndex,
-                onTabSelected: _selectTab,
-                onTabClosed: _closeTab,
-              ),
-              Expanded(
-                child: _buildCodeEditor(selectedIndex),
-              ),
-            ],
-          );
-        }
-      },
-    );
-  }
-
   Widget _buildMenuBarButton(BuildContext context, String title,
       List<PopupMenuEntry<Function>> items) {
     return PopupMenuButton<Function>(
@@ -266,7 +208,196 @@ class _MyHomePageState extends State<MyHomePage> {
     );
   }
 
-  Widget _buildWelcomeScreen(bool isDarkMode) {
+  Widget _buildStatusBar() {
+    return Container(
+      height: 24,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        border: Border(
+          top: BorderSide(
+            color: Theme.of(context).dividerColor,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleDirectorySelected(String? directory) {
+    _selectedDirectory.value = directory;
+    if (directory != null) {
+      _fileExplorerController.setDirectory(Directory(directory));
+    }
+  }
+
+  void _handleNewFile() {
+    _editorKey.currentState?.addEmptyTab();
+  }
+
+  void _handleOpenFile(File file) {
+    _editorKey.currentState?.openFile(file);
+  }
+
+  void _handleSaveCurrentFile() {
+    _editorKey.currentState?.saveCurrentFile();
+  }
+
+  void _handleSaveFileAs() {
+    _editorKey.currentState?.saveFileAs();
+  }
+
+  void _handleExit(BuildContext context) {
+    SystemNavigator.pop();
+  }
+
+  Future<void> _pickDirectory() async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      _handleDirectorySelected(selectedDirectory);
+    }
+  }
+}
+
+class FileExplorerWidget extends StatelessWidget {
+  final FileExplorerController controller;
+  final Function(File) onFileSelected;
+  final Function(String?) onDirectorySelected;
+
+  const FileExplorerWidget({
+    super.key,
+    required this.controller,
+    required this.onFileSelected,
+    required this.onDirectorySelected,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      child: FileExplorer(
+        controller: controller,
+        onFileSelected: onFileSelected,
+        onDirectorySelected: onDirectorySelected,
+      ),
+    );
+  }
+}
+
+class EditorWidget extends StatefulWidget {
+  final FileMenuActions fileMenuActions;
+
+  const EditorWidget({super.key, required this.fileMenuActions});
+
+  @override
+  _EditorWidgetState createState() => _EditorWidgetState();
+}
+
+class _EditorWidgetState extends State<EditorWidget> {
+  final List<FileTab> _tabs = [];
+  final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
+
+  @override
+  void initState() {
+    super.initState();
+    widget.fileMenuActions.newFile = addEmptyTab;
+    widget.fileMenuActions.openFile = openFile;
+    widget.fileMenuActions.save = saveCurrentFile;
+    widget.fileMenuActions.saveAs = saveFileAs;
+  }
+
+  void addEmptyTab() {
+    setState(() {
+      _tabs.add(FileTab(filePath: 'Untitled', content: ''));
+      _selectedTabIndex.value = _tabs.length - 1;
+    });
+  }
+
+  void openFile(File file) {
+    try {
+      String content = file.readAsStringSync();
+      setState(() {
+        _tabs.add(FileTab(filePath: file.path, content: content));
+        _selectedTabIndex.value = _tabs.length - 1;
+      });
+    } catch (e) {
+      print('Error reading file: $e');
+      _showErrorDialog(file, e);
+    }
+  }
+
+  void saveCurrentFile() {
+    if (_selectedTabIndex.value != -1) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      if (currentTab.filePath != 'Untitled') {
+        File(currentTab.filePath).writeAsStringSync(currentTab.content);
+        currentTab.isModified = false;
+      } else {
+        saveFileAs();
+      }
+    }
+  }
+
+  Future<void> saveFileAs() async {
+    if (_selectedTabIndex.value != -1) {
+      String? outputFile = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save file as:',
+        fileName: 'Untitled.txt',
+      );
+
+      if (outputFile != null) {
+        final currentTab = _tabs[_selectedTabIndex.value];
+        File(outputFile).writeAsStringSync(currentTab.content);
+        setState(() {
+          currentTab.filePath = outputFile;
+          currentTab.isModified = false;
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _buildTabBar(),
+        Expanded(child: _buildEditor()),
+      ],
+    );
+  }
+
+  Widget _buildTabBar() {
+    return ValueListenableBuilder<int>(
+      valueListenable: _selectedTabIndex,
+      builder: (context, selectedIndex, _) {
+        if (_tabs.isNotEmpty) {
+          return RepaintBoundary(
+            child: TabBar(
+              tabs: _tabs,
+              selectedIndex: selectedIndex,
+              onTabSelected: _selectTab,
+              onTabClosed: _closeTab,
+            ),
+          );
+        } else {
+          return Container();
+        }
+      },
+    );
+  }
+
+  Widget _buildEditor() {
+    return ValueListenableBuilder<int>(
+      valueListenable: _selectedTabIndex,
+      builder: (context, selectedIndex, _) {
+        if (_tabs.isEmpty) {
+          return _buildWelcomeScreen();
+        }
+        return _buildCodeEditor(selectedIndex);
+      },
+    );
+  }
+
+  Widget _buildWelcomeScreen() {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
     return Center(
       child: Image(
         image: AssetImage(
@@ -277,6 +408,19 @@ class _MyHomePageState extends State<MyHomePage> {
         height: 500,
       ),
     );
+  }
+
+  Widget _buildCodeEditor(int selectedIndex) {
+    return CodeEditor(
+      key: ValueKey(_tabs[selectedIndex].filePath),
+      initialCode: _tabs[selectedIndex].content,
+      filePath: _tabs[selectedIndex].filePath,
+      onModified: (isModified) => _onFileModified(selectedIndex, isModified),
+    );
+  }
+
+  void _selectTab(int index) {
+    _selectedTabIndex.value = index;
   }
 
   void _closeTab(int index) {
@@ -290,52 +434,6 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _onFileModified(int index, bool isModified) {
     _tabs[index].isModified = isModified;
-  }
-
-  void _openFile(File file) {
-    try {
-      String content = file.readAsStringSync();
-      _addNewTab(file.path, content.isEmpty ? '\n' : content);
-    } catch (e) {
-      print('Error reading file: $e');
-      _showErrorDialog(file, e);
-    }
-  }
-
-  Future<void> _pickDirectory() async {
-    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
-    if (selectedDirectory != null) {
-      _onDirectorySelected(selectedDirectory);
-      _fileExplorerController.setDirectory(Directory(selectedDirectory));
-    }
-  }
-
-  void _saveCurrentFile() {
-    if (_selectedTabIndex.value != -1) {
-      final currentTab = _tabs[_selectedTabIndex.value];
-      if (currentTab.filePath != 'Untitled') {
-        File(currentTab.filePath).writeAsStringSync(currentTab.content);
-        currentTab.isModified = false;
-      } else {
-        _saveFileAs();
-      }
-    }
-  }
-
-  void _saveFileAs() async {
-    String? outputFile = await FilePicker.platform.saveFile(
-      dialogTitle: 'Please select an output file:',
-      fileName: 'Untitled.txt',
-    );
-
-    final currentTab = _tabs[_selectedTabIndex.value];
-    File(outputFile!).writeAsStringSync(currentTab.content);
-    currentTab.filePath = outputFile;
-    currentTab.isModified = false;
-  }
-
-  void _selectTab(int index) {
-    _selectedTabIndex.value = index;
   }
 
   void _showErrorDialog(File file, dynamic error) {

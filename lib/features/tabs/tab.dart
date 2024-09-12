@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'dart:io';
 
 class FileTab {
@@ -22,7 +23,7 @@ class FileTab {
   }
 }
 
-class TabBar extends StatelessWidget {
+class TabBar extends StatefulWidget {
   final List<FileTab> tabs;
   final int selectedIndex;
   final ValueChanged<int> onTabSelected;
@@ -37,6 +38,25 @@ class TabBar extends StatelessWidget {
   });
 
   @override
+  State<TabBar> createState() => _TabBarState();
+}
+
+class _TabBarState extends State<TabBar> {
+  late ScrollController _scrollController;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Container(
@@ -45,22 +65,38 @@ class TabBar extends StatelessWidget {
         color: theme.colorScheme.surface,
         border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: tabs.length,
-        itemBuilder: (context, index) => Tab(
-          text: tabs[index].fileName,
-          isSelected: selectedIndex == index,
-          isModified: tabs[index].isModified,
-          onTap: () => onTabSelected(index),
-          onClose: () => onTabClosed(index),
-        ),
+      child: Listener(
+        onPointerSignal: (pointerSignal) {
+          if (pointerSignal is PointerScrollEvent) {
+            _scrollController.jumpTo(
+              (_scrollController.offset + pointerSignal.scrollDelta.dy)
+                  .clamp(0.0, _scrollController.position.maxScrollExtent),
+            );
+          }
+        },
+        child: Scrollbar(
+            controller: _scrollController,
+            thickness: 5,
+            radius: const Radius.circular(0),
+            child: Center(
+                child: ListView.builder(
+              controller: _scrollController,
+              scrollDirection: Axis.horizontal,
+              itemCount: widget.tabs.length,
+              itemBuilder: (context, index) => Tab(
+                text: widget.tabs[index].fileName,
+                isSelected: widget.selectedIndex == index,
+                isModified: widget.tabs[index].isModified,
+                onTap: () => widget.onTabSelected(index),
+                onClose: () => widget.onTabClosed(index),
+              ),
+            ))),
       ),
     );
   }
 }
 
-class Tab extends StatelessWidget {
+class Tab extends StatefulWidget {
   final String text;
   final bool isSelected;
   final bool isModified;
@@ -77,69 +113,112 @@ class Tab extends StatelessWidget {
   });
 
   @override
+  State<Tab> createState() => _TabState();
+}
+
+class _TabState extends State<Tab> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        margin: const EdgeInsets.fromLTRB(4, 4, 4, 0),
-        decoration: BoxDecoration(
-          color: isSelected ? theme.hoverColor : Colors.transparent,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(
-            color: isSelected ? theme.dividerColor : Colors.transparent,
-          ),
-        ),
-        child: Row(
-          children: [
-            if (isModified)
-              Container(
-                width: 6,
-                height: 6,
-                margin: const EdgeInsets.only(right: 6),
-                decoration: BoxDecoration(
-                  color: theme.colorScheme.primary,
-                  shape: BoxShape.circle,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Listener(
+            onPointerDown: (PointerDownEvent event) {
+              if (event.buttons == kMiddleMouseButton) {
+                widget.onClose();
+              }
+            },
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+              decoration: BoxDecoration(
+                color: widget.isSelected
+                    ? theme.colorScheme.primary.withOpacity(0.2)
+                    : Colors.transparent,
+                border: Border(
+                  right: BorderSide(color: theme.dividerColor, width: 2),
                 ),
               ),
-            Text(
-              text,
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: isSelected ? theme.textTheme.bodyLarge?.color : null,
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
+              child: Center(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SizedBox(
+                      width: 12,
+                      child: widget.isModified
+                          ? Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: theme.colorScheme.secondary,
+                                shape: BoxShape.circle,
+                              ),
+                            )
+                          : null,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      textAlign: TextAlign.center,
+                      widget.text,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.textTheme.bodyMedium?.color,
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    if (_isHovered)
+                      _CloseButton(
+                          onTap: widget.onClose, color: theme.iconTheme.color)
+                    else
+                      Container(width: 18)
+                  ],
+                ),
               ),
-            ),
-            const SizedBox(width: 8),
-            _CloseButton(
-              onTap: onClose,
-              color: isSelected
-                  ? theme.iconTheme.color
-                  : theme.iconTheme.color?.withOpacity(0.5),
-            ),
-          ],
-        ),
+            )),
       ),
     );
   }
 }
 
-class _CloseButton extends StatelessWidget {
+class _CloseButton extends StatefulWidget {
   final VoidCallback onTap;
   final Color? color;
 
   const _CloseButton({required this.onTap, this.color});
 
   @override
+  State<_CloseButton> createState() => _CloseButtonState();
+}
+
+class _CloseButtonState extends State<_CloseButton> {
+  bool _isHovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return MouseRegion(
       cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
       child: GestureDetector(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(2),
-          child: Icon(Icons.close, size: 14, color: color),
+        onTap: widget.onTap,
+        child: Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: _isHovered ? theme.hoverColor : Colors.transparent,
+            shape: BoxShape.rectangle,
+          ),
+          child: Icon(
+            Icons.close,
+            size: 14,
+            color: widget.color,
+          ),
         ),
       ),
     );

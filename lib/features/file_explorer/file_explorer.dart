@@ -6,7 +6,7 @@ import 'file_tree_item.dart';
 
 import 'package:provider/provider.dart';
 
-class FileExplorer extends StatelessWidget {
+class FileExplorer extends StatefulWidget {
   final Function(File) onFileSelected;
   final Function(String?) onDirectorySelected;
   final FileExplorerController controller;
@@ -19,14 +19,27 @@ class FileExplorer extends StatelessWidget {
   });
 
   @override
+  FileExplorerState createState() => FileExplorerState();
+}
+
+class FileExplorerState extends State<FileExplorer> {
+  @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
-      value: controller,
+      value: widget.controller,
       child: _FileExplorerContent(
-        onFileSelected: onFileSelected,
-        onDirectorySelected: onDirectorySelected,
+        onFileSelected: widget.onFileSelected,
+        onDirectorySelected: widget.onDirectorySelected,
       ),
     );
+  }
+
+  @override
+  void didUpdateWidget(FileExplorer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.controller != oldWidget.controller) {
+      setState(() {});
+    }
   }
 }
 

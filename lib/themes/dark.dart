@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:starlight/themes/common.dart';
 
 final ThemeData darkTheme = ThemeData(
   brightness: Brightness.dark,
   useMaterial3: true,
-  primaryColor: Colors.blueGrey[900],
+  primaryColor: primaryBlue,
   colorScheme: ColorScheme.dark(
-    primary: Colors.blueGrey[900]!,
-    secondary: Colors.blueGrey[700]!,
+    primary: primaryBlue,
+    secondary: secondaryBlue,
     surface: Colors.black,
   ),
   appBarTheme: const AppBarTheme(
@@ -26,7 +27,8 @@ final ThemeData darkTheme = ThemeData(
     bodyLarge: TextStyle(color: Colors.grey[300]),
     bodyMedium: TextStyle(color: Colors.grey[400]),
   ),
-  iconTheme: IconThemeData(color: Colors.blueGrey[400]),
+  hoverColor: Colors.white.withOpacity(0.1),
+  iconTheme: IconThemeData(color: secondaryBlue),
   dividerColor: Colors.grey[900],
   scaffoldBackgroundColor: Colors.black,
 );

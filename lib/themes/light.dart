@@ -1,31 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:starlight/themes/common.dart';
 
 final ThemeData lightTheme = ThemeData(
   brightness: Brightness.light,
   useMaterial3: true,
-  primaryColor: Colors.blue,
-  colorScheme: const ColorScheme.light(
-    primary: Colors.blue,
-    secondary: Colors.blueAccent,
+  primaryColor: primaryBlue,
+  colorScheme: ColorScheme.light(
+    primary: primaryBlue,
+    secondary: secondaryBlue,
     surface: Colors.white,
   ),
-  appBarTheme: const AppBarTheme(
+  appBarTheme: AppBarTheme(
     backgroundColor: Colors.white,
     foregroundColor: Colors.black,
     elevation: 2,
     centerTitle: true,
-    titleTextStyle: TextStyle(
+    titleTextStyle: const TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.bold,
       letterSpacing: 1,
     ),
-    iconTheme: IconThemeData(color: Colors.black),
-    actionsIconTheme: IconThemeData(color: Colors.white),
+    iconTheme: const IconThemeData(color: Colors.black),
+    actionsIconTheme: IconThemeData(color: primaryBlue),
   ),
   textTheme: const TextTheme(
     bodyLarge: TextStyle(color: Colors.black87),
     bodyMedium: TextStyle(color: Colors.black54),
   ),
-  iconTheme: const IconThemeData(color: Colors.blue),
+  hoverColor: Colors.black.withOpacity(0.05),
+  iconTheme: IconThemeData(color: primaryBlue),
   dividerColor: Colors.grey[300],
+  scaffoldBackgroundColor: Colors.white,
 );
