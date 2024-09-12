@@ -57,10 +57,12 @@ class _CodeEditorState extends State<CodeEditor> {
     try {
       // Again, dumb way to avoid formatting bug when initializing rope for now
       // TODO fix this
-      editingCore = TextEditingCore("");
-      editingCore.insertText("\n");
-      editingCore.insertText(widget.initialCode);
-      editingCore.handleBackspace();
+      editingCore = TextEditingCore("\n");
+      print(widget.initialCode.isEmpty);
+      editingCore.setText(widget.initialCode);
+      if (widget.initialCode.isEmpty) {
+        editingCore.handleBackspace();
+      }
     } catch (e) {
       print('Error initializing TextEditingCore: $e');
       editingCore = TextEditingCore('\n');

@@ -31,14 +31,9 @@ class TextEditingCore extends ChangeNotifier {
       rope = rope.delete(0, rope.length);
     }
 
-    if (newText.isEmpty) {
-      rope = rope.insert(0, "\n");
-      cursorPosition = 0;
-    } else {
-      rope = rope.insert(1, newText);
+    rope = rope.insert(1, newText);
 
-      cursorPosition = newText.length;
-    }
+    cursorPosition = 1;
 
     _lastModifiedLine = rope.lineCount - 1;
     clearSelection();
