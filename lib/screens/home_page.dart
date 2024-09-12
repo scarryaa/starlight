@@ -176,30 +176,27 @@ class _MyHomePageState extends State<MyHomePage> {
   }
 
   Widget _buildMainContent(bool isDarkMode) {
-    return Column(
-      children: [
-        ValueListenableBuilder<int>(
-          valueListenable: _selectedTabIndex,
-          builder: (context, selectedIndex, child) {
-            return TabBar(
-              tabs: _tabs,
-              selectedIndex: selectedIndex,
-              onTabSelected: _selectTab,
-              onTabClosed: _closeTab,
-            );
-          },
-        ),
-        Expanded(
-          child: ValueListenableBuilder<int>(
-            valueListenable: _selectedTabIndex,
-            builder: (context, selectedIndex, child) {
-              return selectedIndex != -1
-                  ? _buildCodeEditor(selectedIndex)
-                  : _buildWelcomeScreen(isDarkMode);
-            },
-          ),
-        ),
-      ],
+    return ValueListenableBuilder<int>(
+      valueListenable: _selectedTabIndex,
+      builder: (context, selectedIndex, child) {
+        if (_tabs.isEmpty) {
+          return _buildWelcomeScreen(isDarkMode);
+        } else {
+          return Column(
+            children: [
+              TabBar(
+                tabs: _tabs,
+                selectedIndex: selectedIndex,
+                onTabSelected: _selectTab,
+                onTabClosed: _closeTab,
+              ),
+              Expanded(
+                child: _buildCodeEditor(selectedIndex),
+              ),
+            ],
+          );
+        }
+      },
     );
   }
 
