@@ -14,13 +14,11 @@ class CodeEditorPainter extends CustomPainter {
   final int version;
   final double viewportWidth;
   final double lineNumberWidth;
+  final TextStyle textStyle;
+  final Color selectionColor;
+  final Color cursorColor;
 
   late double charWidth;
-  final TextStyle textStyle = const TextStyle(
-    fontSize: fontSize,
-    color: Colors.black,
-    fontFamily: 'Courier',
-  );
 
   CodeEditorPainter({
     required this.editingCore,
@@ -30,6 +28,9 @@ class CodeEditorPainter extends CustomPainter {
     required this.lineNumberWidth,
     required this.version,
     required this.viewportWidth,
+    required this.textStyle,
+    required this.selectionColor,
+    required this.cursorColor,
   }) {
     _calculateCharWidth();
   }
@@ -42,7 +43,6 @@ class CodeEditorPainter extends CustomPainter {
     charWidth = textPainter.width;
   }
 
-  @override
   @override
   void paint(Canvas canvas, Size size) {
     final lineCount = editingCore.lineCount;
@@ -92,8 +92,7 @@ class CodeEditorPainter extends CustomPainter {
   void _paintSelection(Canvas canvas, int line, String lineContent) {
     if (!editingCore.hasSelection()) return;
 
-    final selectionPaint = Paint()
-      ..color = Colors.lightBlueAccent.withOpacity(0.3);
+    final selectionPaint = Paint()..color = selectionColor;
     final selectionStart = _getSelectionStartForLine(line);
     final selectionEnd = _getSelectionEndForLine(line);
 
@@ -126,7 +125,7 @@ class CodeEditorPainter extends CustomPainter {
     canvas.drawLine(
       Offset(cursorOffset, topY),
       Offset(cursorOffset, bottomY),
-      Paint()..color = Colors.blue,
+      Paint()..color = cursorColor,
     );
   }
 
@@ -139,7 +138,7 @@ class CodeEditorPainter extends CustomPainter {
     canvas.drawLine(
       Offset(cursorOffset, topY),
       Offset(cursorOffset, bottomY),
-      Paint()..color = Colors.blue,
+      Paint()..color = cursorColor,
     );
   }
 

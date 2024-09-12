@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart' hide TabBar;
+import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/tabs/tab.dart';
+import 'package:starlight/themes/dark.dart';
+import 'package:starlight/themes/light.dart';
 import 'dart:io';
 import 'package:starlight/utils/widgets/resizable_widget.dart';
 import 'package:window_manager/window_manager.dart';
@@ -16,7 +19,7 @@ void main() async {
     center: true,
     backgroundColor: Colors.transparent,
     skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.normal,
+    titleBarStyle: TitleBarStyle.hidden,
   );
 
   windowManager.waitUntilReadyToShow(windowOptions, () async {
@@ -24,7 +27,24 @@ void main() async {
     await windowManager.focus();
   });
 
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => ThemeProvider(),
+      child: const MyApp(),
+    ),
+  );
+}
+
+class ThemeProvider with ChangeNotifier {
+  ThemeMode _themeMode = ThemeMode.system;
+
+  ThemeMode get themeMode => _themeMode;
+
+  void toggleTheme() {
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    notifyListeners();
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -32,17 +52,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
-        dividerTheme: const DividerThemeData(
-          color: Colors.grey,
-          thickness: 1,
-        ),
-      ),
-      home: const MyHomePage(),
+    return Consumer<ThemeProvider>(
+      builder: (context, themeProvider, child) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          theme: lightTheme,
+          darkTheme: darkTheme,
+          themeMode: themeProvider.themeMode,
+          home: const MyHomePage(),
+        );
+      },
     );
   }
 }
@@ -114,57 +133,99 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      body: Row(
+      body: Column(
         children: [
-          ResizableWidget(
-            maxWidthPercentage: 0.9,
-            child: FileExplorer(
-              key: const ValueKey('file_explorer'),
-              onFileSelected: _openFile,
+          Container(
+            height: 30,
+            color: Theme.of(context).appBarTheme.backgroundColor,
+            child: Row(
+              children: [
+                const SizedBox(width: 70), // Space for traffic lights
+                Expanded(
+                  child: GestureDetector(
+                    onPanStart: (_) => windowManager.startDragging(),
+                    child: Center(
+                      child: Text(
+                        'starlight',
+                        style: Theme.of(context).appBarTheme.titleTextStyle,
+                      ),
+                    ),
+                  ),
+                ),
+                IconButton(
+                  icon: Icon(
+                    isDarkMode ? Icons.light_mode : Icons.dark_mode,
+                    color: Theme.of(context).appBarTheme.iconTheme?.color,
+                    size: 14,
+                  ),
+                  onPressed: () => themeProvider.toggleTheme(),
+                ),
+                const SizedBox(width: 8),
+              ],
             ),
           ),
+          // Main content
           Expanded(
-            child: Column(
+            child: Row(
               children: [
-                ValueListenableBuilder<int>(
-                  valueListenable: _selectedTabIndex,
-                  builder: (context, selectedIndex, child) {
-                    return TabBar(
-                      tabs: _tabs,
-                      selectedIndex: selectedIndex,
-                      onTabSelected: _selectTab,
-                      onTabClosed: _closeTab,
-                    );
-                  },
+                ResizableWidget(
+                  maxWidthPercentage: 0.9,
+                  child: FileExplorer(
+                    key: const ValueKey('file_explorer'),
+                    onFileSelected: _openFile,
+                  ),
                 ),
                 Expanded(
-                  child: ValueListenableBuilder<int>(
-                    valueListenable: _selectedTabIndex,
-                    builder: (context, selectedIndex, child) {
-                      if (selectedIndex != -1) {
-                        return CodeEditor(
-                          key: ValueKey(_tabs[selectedIndex].filePath),
-                          initialCode: _tabs[selectedIndex].content,
-                          filePath: _tabs[selectedIndex].filePath,
-                          onModified: (isModified) =>
-                              _onFileModified(selectedIndex, isModified),
-                        );
-                      } else {
-                        return const Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Image(
-                                image: AssetImage(
-                                    'assets/starlight_logo_grey.png'),
-                                height: 500,
-                              ),
-                            ],
-                          ),
-                        );
-                      }
-                    },
+                  child: Column(
+                    children: [
+                      ValueListenableBuilder<int>(
+                        valueListenable: _selectedTabIndex,
+                        builder: (context, selectedIndex, child) {
+                          return TabBar(
+                            tabs: _tabs,
+                            selectedIndex: selectedIndex,
+                            onTabSelected: _selectTab,
+                            onTabClosed: _closeTab,
+                          );
+                        },
+                      ),
+                      Expanded(
+                        child: ValueListenableBuilder<int>(
+                          valueListenable: _selectedTabIndex,
+                          builder: (context, selectedIndex, child) {
+                            if (selectedIndex != -1) {
+                              return CodeEditor(
+                                key: ValueKey(_tabs[selectedIndex].filePath),
+                                initialCode: _tabs[selectedIndex].content,
+                                filePath: _tabs[selectedIndex].filePath,
+                                onModified: (isModified) =>
+                                    _onFileModified(selectedIndex, isModified),
+                              );
+                            } else {
+                              return Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Image(
+                                      image: AssetImage(
+                                        isDarkMode
+                                            ? 'assets/starlight_logo_white.png'
+                                            : 'assets/starlight_logo_grey.png',
+                                      ),
+                                      height: 500,
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ],

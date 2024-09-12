@@ -46,8 +46,7 @@ class _CodeEditorState extends State<CodeEditor> {
   int _lastLineCount = 0;
 
   static const double lineHeight = 24.0;
-  static const double fontSize = 14.0;
-  static late double charWidth;
+  static double charWidth = 8.0;
   static const double scrollbarWidth = 10.0;
   late TextPainter _textPainter;
   int _lastKnownVersion = -1;
@@ -74,7 +73,6 @@ class _CodeEditorState extends State<CodeEditor> {
     horizontalScrollbarController = ScrollController()
       ..addListener(_syncHorizontalScrollbar);
 
-    _initializeTextPainter();
     _calculateLineNumberWidth();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -83,12 +81,13 @@ class _CodeEditorState extends State<CodeEditor> {
     });
   }
 
-  void _initializeTextPainter() {
+  void _initializeTextPainter(BuildContext context) {
+    final theme = Theme.of(context);
     _textPainter = TextPainter(
       textDirection: TextDirection.ltr,
-      text: const TextSpan(
+      text: TextSpan(
         text: 'X',
-        style: TextStyle(fontSize: fontSize, fontFamily: 'Courier'),
+        style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'Courier'),
       ),
     );
     _textPainter.layout();
@@ -469,10 +468,13 @@ class _CodeEditorState extends State<CodeEditor> {
 
   @override
   Widget build(BuildContext context) {
+    _initializeTextPainter(context);
+
+    final theme = Theme.of(context);
     return LayoutBuilder(
       builder: (context, constraints) {
         return ColoredBox(
-          color: Colors.white,
+          color: theme.scaffoldBackgroundColor,
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -488,6 +490,8 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   Widget _buildLineNumbers(BoxConstraints constraints) {
+    final theme = Theme.of(context);
+
     return SizedBox(
         width: lineNumberWidth,
         child: ScrollConfiguration(
@@ -503,6 +507,8 @@ class _CodeEditorState extends State<CodeEditor> {
                 lineNumberWidth: lineNumberWidth,
                 firstVisibleLine: firstVisibleLine,
                 visibleLineCount: visibleLineCount,
+                textStyle: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.onSurface.withOpacity(0.6)),
               ),
             ),
           ),
@@ -510,6 +516,8 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   Widget _buildCodeArea(BoxConstraints constraints) {
+    final theme = Theme.of(context);
+
     return GestureDetector(
       onTapDown: _handleTap,
       onPanStart: _updateSelection,
@@ -520,7 +528,8 @@ class _CodeEditorState extends State<CodeEditor> {
         onKeyEvent: _handleKeyPress,
         child: ScrollbarTheme(
           data: ScrollbarThemeData(
-              thumbColor: WidgetStateProperty.all(Colors.grey.withOpacity(0.6)),
+              thumbColor: WidgetStateProperty.all(
+                  theme.colorScheme.secondary.withOpacity(0.6)),
               radius: Radius.zero),
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -556,6 +565,11 @@ class _CodeEditorState extends State<CodeEditor> {
                                             horizontalController
                                                 .position.maxScrollExtent)
                                         : 0,
+                                textStyle: theme.textTheme.bodyMedium!
+                                    .copyWith(fontFamily: 'Courier'),
+                                selectionColor:
+                                    theme.colorScheme.primary.withOpacity(0.3),
+                                cursorColor: theme.colorScheme.primary,
                               ),
                             ),
                           ),

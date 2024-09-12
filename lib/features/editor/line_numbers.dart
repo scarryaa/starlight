@@ -6,6 +6,7 @@ class LineNumbers extends StatelessWidget {
   final double lineNumberWidth;
   final int firstVisibleLine;
   final int visibleLineCount;
+  final TextStyle? textStyle;
 
   const LineNumbers({
     super.key,
@@ -14,10 +15,12 @@ class LineNumbers extends StatelessWidget {
     required this.lineNumberWidth,
     required this.firstVisibleLine,
     required this.visibleLineCount,
+    this.textStyle,
   });
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return SizedBox(
       width: lineNumberWidth,
       child: CustomPaint(
@@ -27,6 +30,11 @@ class LineNumbers extends StatelessWidget {
           lineNumberWidth: lineNumberWidth,
           firstVisibleLine: firstVisibleLine,
           visibleLineCount: visibleLineCount,
+          textStyle: textStyle ??
+              theme.textTheme.bodySmall?.copyWith(
+                color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
+                fontFamily: 'Courier',
+              ),
         ),
       ),
     );
@@ -39,6 +47,7 @@ class LineNumberPainter extends CustomPainter {
   final double lineNumberWidth;
   final int firstVisibleLine;
   final int visibleLineCount;
+  final TextStyle? textStyle;
 
   LineNumberPainter({
     required this.lineCount,
@@ -46,6 +55,7 @@ class LineNumberPainter extends CustomPainter {
     required this.lineNumberWidth,
     required this.firstVisibleLine,
     required this.visibleLineCount,
+    required this.textStyle,
   });
 
   @override
@@ -60,11 +70,7 @@ class LineNumberPainter extends CustomPainter {
         i++) {
       textPainter.text = TextSpan(
         text: '${i + 1}',
-        style: const TextStyle(
-          color: Colors.grey,
-          fontSize: 14,
-          fontFamily: 'Courier',
-        ),
+        style: textStyle,
       );
 
       textPainter.layout(maxWidth: lineNumberWidth);
@@ -80,5 +86,12 @@ class LineNumberPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+  bool shouldRepaint(covariant LineNumberPainter oldDelegate) {
+    return lineCount != oldDelegate.lineCount ||
+        lineHeight != oldDelegate.lineHeight ||
+        lineNumberWidth != oldDelegate.lineNumberWidth ||
+        firstVisibleLine != oldDelegate.firstVisibleLine ||
+        visibleLineCount != oldDelegate.visibleLineCount ||
+        textStyle != oldDelegate.textStyle;
+  }
 }

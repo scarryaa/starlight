@@ -1,6 +1,5 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:starlight/utils/constants.dart';
 
 class FileTreeItem extends StatefulWidget {
   final FileSystemEntity entity;
@@ -40,6 +39,7 @@ class FileTreeItemState extends State<FileTreeItem>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final theme = Theme.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -54,14 +54,17 @@ class FileTreeItemState extends State<FileTreeItem>
             future: _getChildren(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Padding(
-                  padding: EdgeInsets.only(left: 24.0),
-                  child: CircularProgressIndicator(strokeWidth: 2),
+                return Padding(
+                  padding: const EdgeInsets.only(left: 24.0),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: theme.primaryColor,
+                  ),
                 );
               }
               if (snapshot.hasError) {
                 return Text('Error: ${snapshot.error}',
-                    style: const TextStyle(color: Colors.red));
+                    style: TextStyle(color: theme.colorScheme.error));
               }
               return Column(children: _buildChildren(snapshot.data ?? []));
             },
@@ -117,6 +120,7 @@ class _FileTreeItemContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return InkWell(
       onTap: onTap,
       child: Container(
@@ -124,15 +128,12 @@ class _FileTreeItemContent extends StatelessWidget {
         height: 24,
         child: Row(
           children: [
-            _buildIcon(),
+            _buildIcon(theme),
             const SizedBox(width: 4),
             Expanded(
               child: Text(
                 entity.path.split('/').last,
-                style: const TextStyle(
-                  color: textColor,
-                  fontSize: 14,
-                ),
+                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -142,19 +143,19 @@ class _FileTreeItemContent extends StatelessWidget {
     );
   }
 
-  Widget _buildIcon() {
+  Widget _buildIcon(ThemeData theme) {
     const iconSize = 14.0;
     if (entity is Directory) {
       return Icon(
         isExpanded ? Icons.folder_open : Icons.folder,
         size: iconSize,
-        color: Colors.blue[300],
+        color: theme.colorScheme.primary,
       );
     } else {
       return Icon(
         Icons.insert_drive_file,
         size: iconSize,
-        color: Colors.grey[400],
+        color: theme.iconTheme.color?.withOpacity(0.7),
       );
     }
   }

@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:starlight/features/file_explorer/services/file_service.dart';
-import 'package:starlight/utils/constants.dart';
 import 'file_tree_item.dart';
 
 class FileExplorer extends StatefulWidget {
@@ -40,22 +39,24 @@ class FileExplorerState extends State<FileExplorer>
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final theme = Theme.of(context);
     return Container(
-      color: backgroundColor,
+      color: theme.scaffoldBackgroundColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
-            child: _buildFileExplorer(),
+            child: _buildFileExplorer(theme),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFileExplorer() {
+  Widget _buildFileExplorer(ThemeData theme) {
     if (_isLoading) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+          child: CircularProgressIndicator(color: theme.primaryColor));
     }
     if (_currentDirectory == null) {
       return Center(
@@ -65,7 +66,7 @@ class FileExplorerState extends State<FileExplorer>
             Icon(
               Icons.folder_open,
               size: 64,
-              color: textColor.withOpacity(0.7),
+              color: theme.iconTheme.color?.withOpacity(0.7),
             ),
             const SizedBox(height: 16),
             TextButton(
@@ -75,9 +76,9 @@ class FileExplorerState extends State<FileExplorer>
                 elevation: 0,
                 shadowColor: Colors.transparent,
               ),
-              child: const Text(
+              child: Text(
                 'Select Directory',
-                style: TextStyle(color: textColor),
+                style: TextStyle(color: theme.textTheme.bodyLarge?.color),
               ),
             ),
           ],
@@ -85,9 +86,10 @@ class FileExplorerState extends State<FileExplorer>
       );
     }
     return Theme(
-      data: Theme.of(context).copyWith(
+      data: theme.copyWith(
         scrollbarTheme: ScrollbarThemeData(
-          thumbColor: WidgetStateProperty.all(Colors.grey[600]),
+          thumbColor: WidgetStateProperty.all(
+              theme.colorScheme.secondary.withOpacity(0.6)),
           thickness: WidgetStateProperty.all(6.0),
           radius: const Radius.circular(0),
         ),

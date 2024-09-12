@@ -38,13 +38,14 @@ class TabBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Container(
       height: 36,
-      decoration: const BoxDecoration(
-        color: Colors.white,
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
         border: Border(
           bottom: BorderSide(
-            color: Color(0xFFE0E0E0),
+            color: theme.dividerColor,
             width: 1,
           ),
         ),
@@ -84,16 +85,17 @@ class Tab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return GestureDetector(
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12),
         margin: const EdgeInsets.only(left: 4, top: 4, right: 4),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFFF5F5F5) : Colors.transparent,
+          color: isSelected ? theme.hoverColor : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
-            color: isSelected ? const Color(0xFFE0E0E0) : Colors.transparent,
+            color: isSelected ? theme.dividerColor : Colors.transparent,
             width: 1,
           ),
         ),
@@ -104,15 +106,17 @@ class Tab extends StatelessWidget {
                 width: 6,
                 height: 6,
                 margin: const EdgeInsets.only(right: 6),
-                decoration: const BoxDecoration(
-                  color: Colors.blue,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
                   shape: BoxShape.circle,
                 ),
               ),
             Text(
               text,
-              style: TextStyle(
-                color: isSelected ? Colors.black87 : Colors.black54,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: isSelected
+                    ? theme.textTheme.bodyLarge?.color
+                    : theme.textTheme.bodyMedium?.color,
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
               ),
@@ -127,7 +131,9 @@ class Tab extends StatelessWidget {
                   child: Icon(
                     Icons.close,
                     size: 14,
-                    color: isSelected ? Colors.black54 : Colors.black38,
+                    color: isSelected
+                        ? theme.iconTheme.color
+                        : theme.iconTheme.color?.withOpacity(0.5),
                   ),
                 ),
               ),

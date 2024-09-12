@@ -38,10 +38,11 @@ class ResizableWidgetState extends State<ResizableWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final dividerColor = Theme.of(context).dividerTheme.color ?? Colors.grey;
+    final theme = Theme.of(context);
+    final dividerColor = theme.dividerColor;
     double maxWidth =
         MediaQuery.of(context).size.width * widget.maxWidthPercentage;
-    final dividerWidth = Theme.of(context).dividerTheme.thickness ?? 1;
+    final dividerWidth = theme.dividerTheme.thickness ?? 1;
 
     return Row(
       children: [
@@ -62,6 +63,11 @@ class ResizableWidgetState extends State<ResizableWidget> {
             child: Container(
               width: dividerWidth,
               color: dividerColor,
+              child: VerticalDivider(
+                width: dividerWidth,
+                thickness: dividerWidth,
+                color: dividerColor,
+              ),
             ),
           ),
         ),
