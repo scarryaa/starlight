@@ -1,14 +1,29 @@
 import 'package:flutter/material.dart' hide TabBar;
-import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/tabs/tab.dart';
 import 'dart:io';
 import 'package:starlight/utils/widgets/resizable_widget.dart';
+import 'package:window_manager/window_manager.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  SystemChannels.platform.invokeMethod<void>('setPreferredOrientations', []);
+  await windowManager.ensureInitialized();
+
+  WindowOptions windowOptions = const WindowOptions(
+    size: Size(700, 600),
+    minimumSize: Size(700, 600),
+    center: true,
+    backgroundColor: Colors.transparent,
+    skipTaskbar: false,
+    titleBarStyle: TitleBarStyle.normal,
+  );
+
+  windowManager.waitUntilReadyToShow(windowOptions, () async {
+    await windowManager.show();
+    await windowManager.focus();
+  });
+
   runApp(const MyApp());
 }
 
@@ -140,8 +155,11 @@ class _MyHomePageState extends State<MyHomePage> {
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              FlutterLogo(size: 100),
-                              SizedBox(height: 20),
+                              Image(
+                                image: AssetImage(
+                                    'assets/starlight_logo_grey.png'),
+                                height: 500,
+                              ),
                             ],
                           ),
                         );
