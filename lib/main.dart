@@ -153,36 +153,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       body: Column(
         children: [
-          Container(
-            height: 30,
-            color: Theme.of(context).appBarTheme.backgroundColor,
-            child: Row(
-              children: [
-                const SizedBox(width: 70), // Space for traffic lights
-                Expanded(
-                  child: GestureDetector(
-                    onPanStart: (_) => windowManager.startDragging(),
-                    child: Center(
-                      child: Text(
-                        'starlight',
-                        style: Theme.of(context).appBarTheme.titleTextStyle,
-                      ),
-                    ),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(
-                    isDarkMode ? Icons.light_mode : Icons.dark_mode,
-                    color: Theme.of(context).appBarTheme.iconTheme?.color,
-                    size: 14,
-                  ),
-                  onPressed: () => themeProvider.toggleTheme(),
-                ),
-                const SizedBox(width: 8),
-              ],
-            ),
-          ),
-          // Main content
+          _buildAppBar(context, themeProvider, isDarkMode),
           Expanded(
             child: Row(
               children: [
@@ -191,58 +162,95 @@ class _MyHomePageState extends State<MyHomePage> {
                   child: _fileExplorer,
                 ),
                 Expanded(
-                  child: Column(
-                    children: [
-                      ValueListenableBuilder<int>(
-                        valueListenable: _selectedTabIndex,
-                        builder: (context, selectedIndex, child) {
-                          return TabBar(
-                            tabs: _tabs,
-                            selectedIndex: selectedIndex,
-                            onTabSelected: _selectTab,
-                            onTabClosed: _closeTab,
-                          );
-                        },
-                      ),
-                      Expanded(
-                        child: ValueListenableBuilder<int>(
-                          valueListenable: _selectedTabIndex,
-                          builder: (context, selectedIndex, child) {
-                            if (selectedIndex != -1) {
-                              return CodeEditor(
-                                key: ValueKey(_tabs[selectedIndex].filePath),
-                                initialCode: _tabs[selectedIndex].content,
-                                filePath: _tabs[selectedIndex].filePath,
-                                onModified: (isModified) =>
-                                    _onFileModified(selectedIndex, isModified),
-                              );
-                            } else {
-                              return Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Image(
-                                      image: AssetImage(
-                                        isDarkMode
-                                            ? 'assets/starlight_logo_white.png'
-                                            : 'assets/starlight_logo_grey.png',
-                                      ),
-                                      height: 500,
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }
-                          },
-                        ),
-                      ),
-                    ],
-                  ),
+                  child: _buildMainContent(isDarkMode),
                 ),
               ],
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAppBar(
+      BuildContext context, ThemeProvider themeProvider, bool isDarkMode) {
+    return Container(
+      height: 30,
+      color: Theme.of(context).appBarTheme.backgroundColor,
+      child: Row(
+        children: [
+          const SizedBox(width: 70),
+          Expanded(
+            child: GestureDetector(
+              onPanStart: (_) => windowManager.startDragging(),
+              child: Center(
+                child: Text(
+                  'starlight',
+                  style: Theme.of(context).appBarTheme.titleTextStyle,
+                ),
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(
+              isDarkMode ? Icons.light_mode : Icons.dark_mode,
+              color: Theme.of(context).appBarTheme.iconTheme?.color,
+              size: 14,
+            ),
+            onPressed: () => themeProvider.toggleTheme(),
+          ),
+          const SizedBox(width: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMainContent(bool isDarkMode) {
+    return Column(
+      children: [
+        ValueListenableBuilder<int>(
+          valueListenable: _selectedTabIndex,
+          builder: (context, selectedIndex, child) {
+            return TabBar(
+              tabs: _tabs,
+              selectedIndex: selectedIndex,
+              onTabSelected: _selectTab,
+              onTabClosed: _closeTab,
+            );
+          },
+        ),
+        Expanded(
+          child: ValueListenableBuilder<int>(
+            valueListenable: _selectedTabIndex,
+            builder: (context, selectedIndex, child) {
+              return selectedIndex != -1
+                  ? _buildCodeEditor(selectedIndex)
+                  : _buildWelcomeScreen(isDarkMode);
+            },
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildCodeEditor(int selectedIndex) {
+    return CodeEditor(
+      key: ValueKey(_tabs[selectedIndex].filePath),
+      initialCode: _tabs[selectedIndex].content,
+      filePath: _tabs[selectedIndex].filePath,
+      onModified: (isModified) => _onFileModified(selectedIndex, isModified),
+    );
+  }
+
+  Widget _buildWelcomeScreen(bool isDarkMode) {
+    return Center(
+      child: Image(
+        image: AssetImage(
+          isDarkMode
+              ? 'assets/starlight_logo_white.png'
+              : 'assets/starlight_logo_grey.png',
+        ),
+        height: 500,
       ),
     );
   }

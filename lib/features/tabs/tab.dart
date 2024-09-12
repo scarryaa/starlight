@@ -25,8 +25,8 @@ class FileTab {
 class TabBar extends StatelessWidget {
   final List<FileTab> tabs;
   final int selectedIndex;
-  final Function(int) onTabSelected;
-  final Function(int) onTabClosed;
+  final ValueChanged<int> onTabSelected;
+  final ValueChanged<int> onTabClosed;
 
   const TabBar({
     super.key,
@@ -43,25 +43,18 @@ class TabBar extends StatelessWidget {
       height: 36,
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
-        border: Border(
-          bottom: BorderSide(
-            color: theme.dividerColor,
-            width: 1,
-          ),
-        ),
+        border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
       child: ListView.builder(
         scrollDirection: Axis.horizontal,
         itemCount: tabs.length,
-        itemBuilder: (context, index) {
-          return Tab(
-            text: tabs[index].fileName,
-            isSelected: selectedIndex == index,
-            isModified: tabs[index].isModified,
-            onTap: () => onTabSelected(index),
-            onClose: () => onTabClosed(index),
-          );
-        },
+        itemBuilder: (context, index) => Tab(
+          text: tabs[index].fileName,
+          isSelected: selectedIndex == index,
+          isModified: tabs[index].isModified,
+          onTap: () => onTabSelected(index),
+          onClose: () => onTabClosed(index),
+        ),
       ),
     );
   }
@@ -90,13 +83,12 @@ class Tab extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12),
-        margin: const EdgeInsets.only(left: 4, top: 4, right: 4),
+        margin: const EdgeInsets.fromLTRB(4, 4, 4, 0),
         decoration: BoxDecoration(
           color: isSelected ? theme.hoverColor : Colors.transparent,
           borderRadius: BorderRadius.circular(6),
           border: Border.all(
             color: isSelected ? theme.dividerColor : Colors.transparent,
-            width: 1,
           ),
         ),
         child: Row(
@@ -114,31 +106,40 @@ class Tab extends StatelessWidget {
             Text(
               text,
               style: theme.textTheme.bodyMedium?.copyWith(
-                color: isSelected
-                    ? theme.textTheme.bodyLarge?.color
-                    : theme.textTheme.bodyMedium?.color,
+                color: isSelected ? theme.textTheme.bodyLarge?.color : null,
                 fontSize: 13,
                 fontWeight: isSelected ? FontWeight.w500 : FontWeight.normal,
               ),
             ),
             const SizedBox(width: 8),
-            MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: GestureDetector(
-                onTap: onClose,
-                child: Container(
-                  padding: const EdgeInsets.all(2),
-                  child: Icon(
-                    Icons.close,
-                    size: 14,
-                    color: isSelected
-                        ? theme.iconTheme.color
-                        : theme.iconTheme.color?.withOpacity(0.5),
-                  ),
-                ),
-              ),
+            _CloseButton(
+              onTap: onClose,
+              color: isSelected
+                  ? theme.iconTheme.color
+                  : theme.iconTheme.color?.withOpacity(0.5),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CloseButton extends StatelessWidget {
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _CloseButton({required this.onTap, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.all(2),
+          child: Icon(Icons.close, size: 14, color: color),
         ),
       ),
     );
