@@ -10,11 +10,13 @@ import 'line_numbers.dart';
 class CodeEditor extends StatefulWidget {
   final String initialCode;
   final String filePath;
+  final Function(bool) onModified;
 
   const CodeEditor({
     super.key,
     required this.initialCode,
     required this.filePath,
+    required this.onModified,
   });
 
   @override
@@ -23,6 +25,7 @@ class CodeEditor extends StatefulWidget {
 
 class _CodeEditorState extends State<CodeEditor> {
   late TextEditingCore editingCore;
+  bool _isModified = false;
   late ScrollController codeScrollController;
   late ScrollController lineNumberScrollController;
   late ScrollController horizontalController;
@@ -157,6 +160,10 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _onTextChanged() {
     if (_lastKnownVersion != editingCore.version) {
+      setState(() {
+        _isModified = true;
+      });
+      widget.onModified(_isModified);
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recalculateEditor();
       });
@@ -596,7 +603,9 @@ class _CodeEditorState extends State<CodeEditor> {
   void didUpdateWidget(CodeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.filePath != oldWidget.filePath) {
-      _loadFile();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadFile();
+      });
     }
   }
 
@@ -609,7 +618,9 @@ class _CodeEditorState extends State<CodeEditor> {
           editingCore.setText(content);
           editingCore.cursorPosition = 1;
           editingCore.clearSelection();
+          _isModified = false;
         });
+        widget.onModified(_isModified);
 
         SchedulerBinding.instance.addPostFrameCallback((_) {
           setState(() {
