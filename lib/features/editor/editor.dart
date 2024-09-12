@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/models/text_editing_core.dart';
 import 'editor_painter.dart';
@@ -606,6 +607,26 @@ class _CodeEditorState extends State<CodeEditor> {
         final content = file.readAsStringSync();
         setState(() {
           editingCore.setText(content);
+          editingCore.cursorPosition = 0;
+          editingCore.clearSelection();
+        });
+
+        SchedulerBinding.instance.addPostFrameCallback((_) {
+          setState(() {
+            if (codeScrollController.hasClients) {
+              codeScrollController.jumpTo(0);
+            }
+            if (lineNumberScrollController.hasClients) {
+              lineNumberScrollController.jumpTo(0);
+            }
+            if (horizontalController.hasClients) {
+              horizontalController.jumpTo(0);
+            }
+            if (horizontalScrollbarController.hasClients) {
+              horizontalScrollbarController.jumpTo(0);
+            }
+          });
+          _recalculateEditor();
         });
       } catch (e, stackTrace) {
         print('Error loading file: $e');

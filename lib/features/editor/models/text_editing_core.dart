@@ -19,6 +19,12 @@ class TextEditingCore extends ChangeNotifier {
   int get length => rope.length;
   int get lastModifiedLine => _lastModifiedLine;
 
+  void setCursorToStart() {
+    cursorPosition = 0;
+    clearSelection();
+    notifyListeners();
+  }
+
   void setText(String newText) {
     // Dumb workaround for incorrect formatting if we set the text directly
     if (rope.length > 0) {
