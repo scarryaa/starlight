@@ -9,18 +9,18 @@ final ThemeData lightTheme = ThemeData(
     secondary: Colors.blueAccent,
     surface: Colors.white,
   ),
-  appBarTheme: AppBarTheme(
-    backgroundColor: Colors.grey[500],
-    foregroundColor: Colors.white,
+  appBarTheme: const AppBarTheme(
+    backgroundColor: Colors.white,
+    foregroundColor: Colors.black,
     elevation: 2,
     centerTitle: true,
-    titleTextStyle: const TextStyle(
+    titleTextStyle: TextStyle(
       fontSize: 12,
       fontWeight: FontWeight.bold,
       letterSpacing: 1,
     ),
-    iconTheme: const IconThemeData(color: Colors.white),
-    actionsIconTheme: const IconThemeData(color: Colors.white),
+    iconTheme: IconThemeData(color: Colors.black),
+    actionsIconTheme: IconThemeData(color: Colors.white),
   ),
   textTheme: const TextTheme(
     bodyLarge: TextStyle(color: Colors.black87),

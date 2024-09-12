@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:io';
 
 class FileTab {
-  final String filePath;
+  String filePath;
   String content;
   bool isModified;
 

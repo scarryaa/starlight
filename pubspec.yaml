@@ -18,6 +18,7 @@ dependencies:
   file_picker: ^8.1.2
   window_manager: ^0.4.2
   provider: ^6.1.2
+  macos_ui: ^2.0.9
 
 dev_dependencies:
   flutter_test:

@@ -39,7 +39,6 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
   Future<void> _pickDirectory() async {
     final controller = context.read<FileExplorerController>();
     try {
-      controller.setLoading(true);
       String? selectedDirectory = await FileService.pickDirectory();
       controller.setDirectory(Directory(selectedDirectory ?? "./"));
     } catch (e) {
