@@ -4,6 +4,8 @@ import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'dart:io';
 
+import 'package:starlight/utils/widgets/resizable_widget.dart';
+
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   SystemChannels.platform.invokeMethod<void>('setPreferredOrientations', []);
@@ -20,6 +22,10 @@ class MyApp extends StatelessWidget {
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
+        dividerTheme: const DividerThemeData(
+          color: Colors.grey,
+          thickness: 1,
+        ),
       ),
       home: const MyHomePage(),
     );
@@ -75,8 +81,11 @@ class _MyHomePageState extends State<MyHomePage> {
     return Scaffold(
       body: Row(
         children: [
-          FileExplorer(
-            onFileSelected: _openFile,
+          ResizableWidget(
+            maxWidthPercentage: 0.9,
+            child: FileExplorer(
+              onFileSelected: _openFile,
+            ),
           ),
           Expanded(
             child: CodeEditor(

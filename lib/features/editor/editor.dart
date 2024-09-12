@@ -607,7 +607,7 @@ class _CodeEditorState extends State<CodeEditor> {
         final content = file.readAsStringSync();
         setState(() {
           editingCore.setText(content);
-          editingCore.cursorPosition = 0;
+          editingCore.cursorPosition = 1;
           editingCore.clearSelection();
         });
 

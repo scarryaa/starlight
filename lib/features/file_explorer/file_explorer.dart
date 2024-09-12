@@ -41,7 +41,6 @@ class FileExplorerState extends State<FileExplorer>
   Widget build(BuildContext context) {
     super.build(context);
     return Container(
-      width: 250,
       color: backgroundColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
