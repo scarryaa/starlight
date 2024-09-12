@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide TabBar;
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
+import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/tabs/tab.dart';
 import 'package:starlight/themes/dark.dart';
@@ -28,8 +29,11 @@ void main() async {
   });
 
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => ThemeProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => ThemeProvider()),
+        ChangeNotifierProvider(create: (context) => FileExplorerController()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -76,6 +80,16 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   final List<FileTab> _tabs = [];
   final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
+  late final FileExplorer _fileExplorer;
+
+  @override
+  void initState() {
+    super.initState();
+    _fileExplorer = FileExplorer(
+      key: const ValueKey('file_explorer'),
+      onFileSelected: _openFile,
+    );
+  }
 
   void _showErrorDialog(File file, dynamic error) {
     showDialog(
@@ -174,10 +188,7 @@ class _MyHomePageState extends State<MyHomePage> {
               children: [
                 ResizableWidget(
                   maxWidthPercentage: 0.9,
-                  child: FileExplorer(
-                    key: const ValueKey('file_explorer'),
-                    onFileSelected: _openFile,
-                  ),
+                  child: _fileExplorer,
                 ),
                 Expanded(
                   child: Column(
