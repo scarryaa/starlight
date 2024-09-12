@@ -51,7 +51,13 @@ class _CodeEditorState extends State<CodeEditor> {
   @override
   void initState() {
     super.initState();
-    editingCore = TextEditingCore(widget.initialCode);
+    try {
+      editingCore = TextEditingCore(widget.initialCode);
+    } catch (e) {
+      print('Error initializing TextEditingCore: $e');
+      editingCore = TextEditingCore('\n');
+    }
+
     editingCore.addListener(_onTextChanged);
 
     codeScrollController = ScrollController()..addListener(_onCodeScroll);
@@ -140,7 +146,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
     firstVisibleLine = (codeScrollController.offset / lineHeight)
         .floor()
-        .clamp(0, totalLines - 1);
+        .clamp(0, totalLines == 0 ? 0 : totalLines - 1);
     visibleLineCount = (viewportHeight / lineHeight).ceil() + 1;
 
     if (firstVisibleLine + visibleLineCount > totalLines) {
@@ -601,8 +607,9 @@ class _CodeEditorState extends State<CodeEditor> {
         setState(() {
           editingCore.setText(content);
         });
-      } catch (e) {
+      } catch (e, stackTrace) {
         print('Error loading file: $e');
+        print("Stack trace: $stackTrace");
       }
     }
   }

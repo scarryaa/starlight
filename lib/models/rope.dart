@@ -4,11 +4,11 @@ class Rope {
   Node? root;
 
   Rope(String s) {
-    root = _buildTree(s.isEmpty ? "\n" : s);
+    root = _buildTree(s.isEmpty ? '\n' : s);
   }
 
   static Node? _buildTree(String s) {
-    if (s.isEmpty) return null;
+    if (s.isEmpty) return Leaf('\n');
     if (s.length <= 64) return Leaf(s);
     int mid = s.length ~/ 2;
     return Branch(
@@ -60,55 +60,36 @@ class Rope {
   int get length => root?.length ?? 1;
 
   String slice(int start, int end) {
+    if (start < 0) start = 0;
+    if (end > length) end = length;
     if (start > end) {
+      print('Start is greater than end, swapping values');
+      int temp = start;
       start = end;
-    }
-
-    if (start < 0 || end > length || start > end) {
-      throw RangeError(
-          'Invalid range: start=$start, end=$end. Valid range is 0 to $length. '
-          'Ensure that start >= 0, end <= $length, and start <= end.');
+      end = temp;
     }
     return root?.slice(start, end) ?? '\n';
   }
 
   List<String> sliceLines(int startLine, int endLine) {
-    if (startLine < 0 || endLine > lineCount || startLine > endLine) {
-      throw RangeError('Invalid line range');
-    }
-
-    if (startLine == lineCount) {
-      return List.filled(endLine - startLine, '');
-    }
-
-    List<String> result =
-        root?.sliceLines(startLine, min(endLine, lineCount)) ?? [];
-
-    if (endLine > lineCount) {
-      result.addAll(List.filled(endLine - lineCount, ''));
-    }
-
-    return result;
+    if (root == null) return ['\n'];
+    return root!.sliceLines(startLine, endLine);
   }
 
   int get lineCount => root?.lineCount ?? 1;
 
   int findLine(int index) {
-    if (index < 0 || index >= length) {
-      throw RangeError('Index out of bounds');
-    }
+    if (length == 0) return 0;
+    index = index.clamp(0, length - 1);
     return root?.findLine(index) ?? 0;
   }
 
   int findLineStart(int line) {
     if (line < 0 || line >= lineCount) {
-      throw RangeError(
-          'Invalid line number: $line. Valid range is 0 to ${lineCount - 1}');
+      print("Warning: Invalid line number $line. Clamping to valid range.");
+      return root?.findLineStart(line.clamp(0, lineCount - 1)) ?? 0;
     }
-    if (root == null) {
-      return 0;
-    }
-    return root!.findLineStart(line);
+    return root?.findLineStart(line) ?? 0;
   }
 
   int findLineEnd(int line) {
@@ -164,7 +145,12 @@ class Leaf extends Node {
   List<int> get lineStarts => _lineStarts;
 
   @override
-  String charAt(int index) => value[index];
+  String charAt(int index) {
+    if (index < 0 || index >= value.length) {
+      throw RangeError('Index out of bounds');
+    }
+    return value[index];
+  }
 
   @override
   Node insert(int index, String s) {
@@ -184,7 +170,8 @@ class Leaf extends Node {
 
   @override
   String slice(int start, int end) {
-    return value.substring(start, end);
+    if (start >= value.length) return "";
+    return value.substring(start, min(end, value.length));
   }
 
   @override
@@ -210,8 +197,8 @@ class Leaf extends Node {
 
   @override
   int findLineStart(int line) {
-    if (line < 0 || line >= _lineStarts.length) {
-      throw RangeError('Invalid line number');
+    if (line < 0 || line >= lineCount) {
+      return 0;
     }
     return _lineStarts[line];
   }
@@ -239,18 +226,26 @@ class Branch extends Node {
     _lineStarts = List<int>.from(leftLineStarts);
 
     // Check if we need to join lines at the boundary
-    if (left != null && right != null) {
+    if (left != null &&
+        right != null &&
+        leftLineStarts.isNotEmpty &&
+        rightLineStarts.isNotEmpty) {
       String leftLastChar = left!.charAt(left!.length - 1);
       String rightFirstChar = right!.charAt(0);
 
       if (leftLastChar != '\n' && rightFirstChar != '\n') {
         // Remove the first line start of the right node (which is always 0)
-        rightLineStarts = rightLineStarts.sublist(1);
+        if (rightLineStarts.length > 1) {
+          rightLineStarts = rightLineStarts.sublist(1);
+        } else {
+          rightLineStarts = [];
+        }
       }
     }
 
     if (rightLineStarts.isNotEmpty) {
-      int rightOffset = leftLength - leftLineStarts.last;
+      int rightOffset =
+          leftLength - (leftLineStarts.isNotEmpty ? leftLineStarts.last : 0);
       _lineStarts.addAll(rightLineStarts.map((index) => index + rightOffset));
     }
 

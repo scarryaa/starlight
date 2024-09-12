@@ -38,10 +38,36 @@ class _MyHomePageState extends State<MyHomePage> {
   String currentFileContent = '';
 
   void _openFile(File file) {
-    setState(() {
-      currentFilePath = file.path;
-      currentFileContent = file.readAsStringSync();
-    });
+    try {
+      String content = file.readAsStringSync();
+      setState(() {
+        currentFilePath = file.path;
+        currentFileContent = content.isEmpty ? '\n' : content;
+      });
+    } catch (e) {
+      print('Error reading file: $e');
+      setState(() {
+        currentFilePath = file.path;
+        currentFileContent = '\n'; // Set a default content
+      });
+      showDialog(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Error'),
+            content: Text('Failed to open file: ${file.path}\n\nError: $e'),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('OK'),
+                onPressed: () {
+                  Navigator.of(context).pop();
+                },
+              ),
+            ],
+          );
+        },
+      );
+    }
   }
 
   @override

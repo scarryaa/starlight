@@ -9,7 +9,10 @@ class TextEditingCore extends ChangeNotifier {
   int _version = 0;
   int _lastModifiedLine = -1;
 
-  TextEditingCore(String initialText) : rope = Rope(initialText);
+  TextEditingCore(String initialText)
+      : rope = Rope(initialText.isEmpty ? '\n' : initialText) {
+    cursorPosition = rope.length > 0 ? rope.length - 1 : 0;
+  }
 
   int get version => _version;
   int get lineCount => rope.lineCount;
@@ -17,9 +20,21 @@ class TextEditingCore extends ChangeNotifier {
   int get lastModifiedLine => _lastModifiedLine;
 
   void setText(String newText) {
-    rope = Rope(newText);
-    cursorPosition = 0;
-    _lastModifiedLine = 0;
+    // Dumb workaround for incorrect formatting if we set the text directly
+    if (rope.length > 0) {
+      rope = rope.delete(0, rope.length);
+    }
+
+    if (newText.isEmpty) {
+      rope = rope.insert(0, "\n");
+      cursorPosition = 0;
+    } else {
+      rope = rope.insert(1, newText);
+
+      cursorPosition = newText.length;
+    }
+
+    _lastModifiedLine = rope.lineCount - 1;
     clearSelection();
     incrementVersion();
   }
@@ -30,7 +45,11 @@ class TextEditingCore extends ChangeNotifier {
   }
 
   void _updateLastModifiedLine(int position) {
-    _lastModifiedLine = rope.findLine(position);
+    if (rope.length == 0) {
+      _lastModifiedLine = 0;
+    } else {
+      _lastModifiedLine = rope.findLine(position.clamp(0, rope.length - 1));
+    }
   }
 
   String getLineContent(int line) {
@@ -80,9 +99,14 @@ class TextEditingCore extends ChangeNotifier {
 
   void insertText(String text) {
     if (hasSelection()) deleteSelection();
-    rope = rope.insert(cursorPosition, text);
+    if (rope.length == 0) {
+      rope = Rope(text);
+      cursorPosition = text.length;
+    } else {
+      rope = rope.insert(cursorPosition.clamp(0, rope.length), text);
+      cursorPosition += text.length;
+    }
     _updateLastModifiedLine(cursorPosition);
-    cursorPosition += text.length;
     incrementVersion();
     clearSelection();
   }
@@ -133,6 +157,7 @@ class TextEditingCore extends ChangeNotifier {
   }
 
   int getLineStartIndex(int lineIndex) {
+    if (lineIndex < 0) lineIndex = 0;
     return rope.findLineStart(lineIndex);
   }
 
