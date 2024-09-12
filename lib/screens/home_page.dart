@@ -4,9 +4,9 @@ import 'package:flutter/material.dart' hide TabBar;
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
-import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/file_menu/file_menu_actions.dart';
 import 'package:starlight/features/file_menu/menu_actions.dart';
+import 'package:starlight/features/sidebar_switcher/sidebar_switcher.dart';
 import 'package:starlight/features/tabs/tab.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:starlight/utils/widgets/resizable_widget.dart';
@@ -40,15 +40,11 @@ class _MyHomePageState extends State<MyHomePage> {
             child: Row(
               children: [
                 ResizableWidget(
-                  maxWidthPercentage: 0.9,
-                  child: ChangeNotifierProvider.value(
-                    value: _fileExplorerController,
-                    child: FileExplorer(
-                      key: ValueKey(_selectedDirectory),
-                      onFileSelected: _openFile,
-                      onDirectorySelected: _onDirectorySelected,
-                      controller: _fileExplorerController,
-                    ),
+                  maxWidthPercentage: 0.3,
+                  child: SidebarSwitcher(
+                    onFileSelected: _openFile,
+                    onDirectorySelected: _onDirectorySelected,
+                    fileExplorerController: _fileExplorerController,
                   ),
                 ),
                 Expanded(
