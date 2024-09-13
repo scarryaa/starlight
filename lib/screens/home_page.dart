@@ -8,6 +8,7 @@ import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/file_menu/file_menu_actions.dart';
 import 'package:starlight/features/file_menu/menu_actions.dart';
+import 'package:starlight/features/sidebar_switcher/sidebar_switcher.dart';
 import 'package:starlight/features/tabs/tab.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:starlight/utils/widgets/resizable_widget.dart';
@@ -55,10 +56,10 @@ class _MyHomePageState extends State<MyHomePage> {
         ResizableWidget(
           maxWidthPercentage: 0.9,
           child: RepaintBoundary(
-            child: FileExplorerWidget(
-              controller: _fileExplorerController,
+            child: SidebarSwitcher(
               onFileSelected: _handleOpenFile,
               onDirectorySelected: _handleDirectorySelected,
+              fileExplorerController: _fileExplorerController,
             ),
           ),
         ),
@@ -67,8 +68,8 @@ class _MyHomePageState extends State<MyHomePage> {
           key: _editorKey,
           fileMenuActions: _fileMenuActions,
         )),
-        _buildStatusBar(),
-      ]))
+      ])),
+      _buildStatusBar()
     ]));
   }
 
@@ -402,7 +403,7 @@ class _EditorWidgetState extends State<EditorWidget> {
       child: Image(
         image: AssetImage(
           isDarkMode
-              ? 'assets/starlight_logo_white.png'
+              ? 'assets/starlight_logo_grey.png'
               : 'assets/starlight_logo_grey.png',
         ),
         height: 500,

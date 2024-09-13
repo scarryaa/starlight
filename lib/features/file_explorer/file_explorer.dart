@@ -103,10 +103,6 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
 
   Widget _buildFileExplorer(
       ThemeData theme, FileExplorerController controller) {
-    if (controller.isLoading) {
-      return Center(
-          child: CircularProgressIndicator(color: theme.primaryColor));
-    }
     if (controller.currentDirectory == null) {
       return Center(
         child: Column(
@@ -147,7 +143,6 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
         controller: _scrollController,
         child: ListView(
           controller: _scrollController,
-          padding: const EdgeInsets.symmetric(horizontal: 8.0),
           children: [
             FileTreeItem(
               key: ValueKey(controller.currentDirectory?.path),
@@ -156,6 +151,7 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
               level: 0,
               isInitiallyExpanded: true,
             ),
+            Container(height: 24)
           ],
         ),
       ),

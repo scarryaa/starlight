@@ -27,6 +27,7 @@ class TextEditingCore extends ChangeNotifier {
 
   void setText(String newText) {
     // Dumb workaround for incorrect formatting if we set the text directly
+    // TODO fix this
     if (rope.length > 0) {
       rope = rope.delete(0, rope.length);
     }

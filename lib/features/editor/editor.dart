@@ -584,13 +584,13 @@ class _CodeEditorState extends State<CodeEditor> {
                       ),
                     ),
                   ),
-                  const Positioned(
+                  Positioned(
                     right: 0,
                     bottom: 0,
                     child: SizedBox(
-                      width: scrollbarWidth,
+                      width: scrollbarWidth + 2,
                       height: scrollbarWidth,
-                      child: ColoredBox(color: Colors.white),
+                      child: ColoredBox(color: theme.colorScheme.surface),
                     ),
                   ),
                   Positioned(

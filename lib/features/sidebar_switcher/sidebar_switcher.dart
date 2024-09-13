@@ -1,10 +1,9 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
 
-enum SidebarOption { fileExplorer, settings }
+enum SidebarOption { fileExplorer, search, settings }
 
 class SidebarSwitcher extends StatefulWidget {
   final Function(File) onFileSelected;
@@ -24,6 +23,7 @@ class SidebarSwitcher extends StatefulWidget {
 
 class _SidebarSwitcherState extends State<SidebarSwitcher> {
   SidebarOption _selectedOption = SidebarOption.fileExplorer;
+  bool _isSidebarExpanded = true;
 
   Widget _buildSidebarContent() {
     switch (_selectedOption) {
@@ -33,9 +33,10 @@ class _SidebarSwitcherState extends State<SidebarSwitcher> {
           onDirectorySelected: widget.onDirectorySelected,
           controller: widget.fileExplorerController,
         );
+      case SidebarOption.search:
+        return const Center(child: Text('Search'));
       case SidebarOption.settings:
-        return const Center(
-            child: Text('Settings')); // Placeholder for settings
+        return const Center(child: Text('Settings'));
       default:
         return const SizedBox.shrink();
     }
@@ -43,36 +44,79 @@ class _SidebarSwitcherState extends State<SidebarSwitcher> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return Row(
       children: [
-        _buildSidebarHeader(),
-        Expanded(child: _buildSidebarContent()),
+        _buildSidebarIcons(),
+        if (_isSidebarExpanded)
+          Expanded(
+            child: Container(
+              color: Theme.of(context).colorScheme.surface,
+              child: _buildSidebarContent(),
+            ),
+          ),
       ],
     );
   }
 
-  Widget _buildSidebarHeader() {
+  Widget _buildSidebarIcons() {
     return Container(
-      height: 40,
-      color: Theme.of(context).colorScheme.surface,
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+        border: Border(
+          right: BorderSide(
+            width: 1,
+            color: Theme.of(context).dividerColor,
+          ),
+        ),
+      ),
+      width: 48,
+      child: Column(
         children: [
-          _buildSidebarButton(SidebarOption.fileExplorer, Icons.folder),
-          _buildSidebarButton(SidebarOption.settings, Icons.settings),
+          const SizedBox(height: 8),
+          _buildSidebarIconButton(
+              SidebarOption.fileExplorer, Icons.folder_outlined),
+          _buildSidebarIconButton(SidebarOption.search, Icons.search),
+          const Spacer(),
+          _buildSidebarIconButton(
+              SidebarOption.settings, Icons.settings_outlined),
+          const SizedBox(height: 8),
         ],
       ),
     );
   }
 
-  Widget _buildSidebarButton(SidebarOption option, IconData icon) {
+  Widget _buildSidebarIconButton(SidebarOption option, IconData icon) {
     final isSelected = _selectedOption == option;
+    return Container(
+      width: double.infinity,
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Colors.transparent,
+            width: 2,
+          ),
+        ),
+      ),
+      child: IconButton(
+        icon: Icon(icon),
+        color: isSelected
+            ? Theme.of(context).colorScheme.primary
+            : Theme.of(context).iconTheme.color,
+        onPressed: () => setState(() {
+          _selectedOption = option;
+          _isSidebarExpanded = true;
+        }),
+      ),
+    );
+  }
+
+  Widget _buildSidebarToggleButton() {
     return IconButton(
-      icon: Icon(icon),
-      color: isSelected
-          ? Theme.of(context).colorScheme.primary
-          : Theme.of(context).iconTheme.color,
-      onPressed: () => setState(() => _selectedOption = option),
+      icon: Icon(_isSidebarExpanded ? Icons.chevron_left : Icons.chevron_right),
+      onPressed: () => setState(() => _isSidebarExpanded = !_isSidebarExpanded),
     );
   }
 }

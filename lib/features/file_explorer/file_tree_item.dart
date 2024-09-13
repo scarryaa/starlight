@@ -53,15 +53,6 @@ class FileTreeItemState extends State<FileTreeItem>
           FutureBuilder<List<FileSystemEntity>>(
             future: _getChildren(),
             builder: (context, snapshot) {
-              if (snapshot.connectionState == ConnectionState.waiting) {
-                return Padding(
-                  padding: const EdgeInsets.only(left: 24.0),
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: theme.primaryColor,
-                  ),
-                );
-              }
               if (snapshot.hasError) {
                 return Text('Error: ${snapshot.error}',
                     style: TextStyle(color: theme.colorScheme.error));
@@ -105,7 +96,7 @@ class FileTreeItemState extends State<FileTreeItem>
   }
 }
 
-class _FileTreeItemContent extends StatelessWidget {
+class _FileTreeItemContent extends StatefulWidget {
   final FileSystemEntity entity;
   final int level;
   final bool isExpanded;
@@ -119,25 +110,37 @@ class _FileTreeItemContent extends StatelessWidget {
   });
 
   @override
+  _FileTreeItemContentState createState() => _FileTreeItemContentState();
+}
+
+class _FileTreeItemContentState extends State<_FileTreeItemContent> {
+  bool _isHovering = false;
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
-      child: Container(
-        padding: EdgeInsets.only(left: 8.0 * level),
-        height: 24,
-        child: Row(
-          children: [
-            _buildIcon(theme),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text(
-                entity.path.split('/').last,
-                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
-                overflow: TextOverflow.ellipsis,
+    return MouseRegion(
+      onEnter: (_) => setState(() => _isHovering = true),
+      onExit: (_) => setState(() => _isHovering = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          padding: EdgeInsets.only(left: 8.0 * (widget.level + 1)),
+          height: 24,
+          color: _isHovering ? theme.hoverColor : Colors.transparent,
+          child: Row(
+            children: [
+              _buildIcon(theme),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  widget.entity.path.split('/').last,
+                  style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+                  overflow: TextOverflow.ellipsis,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -145,9 +148,9 @@ class _FileTreeItemContent extends StatelessWidget {
 
   Widget _buildIcon(ThemeData theme) {
     const iconSize = 14.0;
-    if (entity is Directory) {
+    if (widget.entity is Directory) {
       return Icon(
-        isExpanded ? Icons.folder_open : Icons.folder,
+        widget.isExpanded ? Icons.folder_open : Icons.folder,
         size: iconSize,
         color: theme.colorScheme.primary,
       );
