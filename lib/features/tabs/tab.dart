@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
+import 'package:flutter/services.dart';
 import 'dart:io';
+import 'package:uuid/uuid.dart';
 
 class FileTab {
+  static const Uuid _uuid = Uuid();
+  final String id;
   String filePath;
   String content;
   bool isModified;
@@ -11,7 +15,7 @@ class FileTab {
     required this.filePath,
     required this.content,
     this.isModified = false,
-  });
+  }) : id = _uuid.v4();
 
   String get fileName => filePath.split(Platform.pathSeparator).last;
 
@@ -28,6 +32,7 @@ class TabBar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onTabSelected;
   final ValueChanged<int> onTabClosed;
+  final void Function(int oldIndex, int newIndex) onTabsReordered;
 
   const TabBar({
     super.key,
@@ -35,6 +40,7 @@ class TabBar extends StatefulWidget {
     required this.selectedIndex,
     required this.onTabSelected,
     required this.onTabClosed,
+    required this.onTabsReordered,
   });
 
   @override
@@ -43,6 +49,7 @@ class TabBar extends StatefulWidget {
 
 class _TabBarState extends State<TabBar> {
   late ScrollController _scrollController;
+  final Map<String, GlobalKey> _tabKeys = {};
 
   @override
   void initState() {
@@ -56,6 +63,75 @@ class _TabBarState extends State<TabBar> {
     super.dispose();
   }
 
+  void _handlePointerSignal(PointerSignalEvent pointerSignal) {
+    if (pointerSignal is PointerScrollEvent) {
+      // Check if Shift key is pressed
+      bool isShiftPressed = RawKeyboard.instance.keysPressed.any((key) =>
+          key == LogicalKeyboardKey.shiftLeft ||
+          key == LogicalKeyboardKey.shiftRight);
+
+      if (isShiftPressed) {
+        // Switch tabs instead of scrolling
+        if (pointerSignal.scrollDelta.dy > 0) {
+          // Scroll down, move to the next tab
+          int newIndex = (widget.selectedIndex + 1) % widget.tabs.length;
+          widget.onTabSelected(newIndex);
+        } else if (pointerSignal.scrollDelta.dy < 0) {
+          // Scroll up, move to the previous tab
+          int newIndex = (widget.selectedIndex - 1 + widget.tabs.length) %
+              widget.tabs.length;
+          widget.onTabSelected(newIndex);
+        }
+        // Ensure the selected tab is visible
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _ensureSelectedTabVisible();
+        });
+      } else {
+        // Scroll the TabBar horizontally
+        _scrollController.jumpTo(
+          (_scrollController.offset + pointerSignal.scrollDelta.dy).clamp(
+            0.0,
+            _scrollController.position.maxScrollExtent,
+          ),
+        );
+      }
+    }
+  }
+
+  void _ensureSelectedTabVisible() {
+    final tabId = widget.tabs[widget.selectedIndex].id;
+    final tabKey = _tabKeys[tabId];
+    if (tabKey != null && tabKey.currentContext != null) {
+      RenderBox tabRenderBox =
+          tabKey.currentContext!.findRenderObject() as RenderBox;
+      RenderBox listViewRenderBox = context.findRenderObject() as RenderBox;
+
+      final tabPosition =
+          tabRenderBox.localToGlobal(Offset.zero, ancestor: listViewRenderBox);
+      final tabLeft = tabPosition.dx;
+      final tabRight = tabLeft + tabRenderBox.size.width;
+
+      final scrollOffset = _scrollController.offset;
+      final viewportWidth = _scrollController.position.viewportDimension;
+
+      if (tabLeft < scrollOffset) {
+        // Tab is to the left of the viewport, scroll to it
+        _scrollController.animateTo(
+          tabLeft,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+      } else if (tabRight > scrollOffset + viewportWidth) {
+        // Tab is to the right of the viewport, scroll to it
+        _scrollController.animateTo(
+          tabRight - viewportWidth,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -66,51 +142,71 @@ class _TabBarState extends State<TabBar> {
         border: Border(bottom: BorderSide(color: theme.dividerColor)),
       ),
       child: Listener(
-        onPointerSignal: (pointerSignal) {
-          if (pointerSignal is PointerScrollEvent) {
-            _scrollController.jumpTo(
-              (_scrollController.offset + pointerSignal.scrollDelta.dy)
-                  .clamp(0.0, _scrollController.position.maxScrollExtent),
-            );
-          }
-        },
-        child: Scrollbar(
+        onPointerSignal: _handlePointerSignal,
+        child: NotificationListener<ScrollNotification>(
+          onNotification: (scrollNotification) {
+            bool isShiftPressed = RawKeyboard.instance.keysPressed.any((key) =>
+                key == LogicalKeyboardKey.shiftLeft ||
+                key == LogicalKeyboardKey.shiftRight);
+            if (isShiftPressed) {
+              // Prevent the scroll
+              return true;
+            }
+            return false;
+          },
+          child: Scrollbar(
             controller: _scrollController,
             thickness: 5,
             radius: const Radius.circular(0),
-            child: Center(
-                child: ListView.builder(
-              controller: _scrollController,
+            child: ReorderableListView(
+              physics: const ClampingScrollPhysics(),
+              scrollController: _scrollController,
               scrollDirection: Axis.horizontal,
-              itemCount: widget.tabs.length,
-              itemBuilder: (context, index) => Tab(
-                text: widget.tabs[index].fileName,
-                isSelected: widget.selectedIndex == index,
-                isModified: widget.tabs[index].isModified,
-                onTap: () => widget.onTabSelected(index),
-                onClose: () => widget.onTabClosed(index),
-              ),
-            ))),
+              onReorder: widget.onTabsReordered,
+              buildDefaultDragHandles: false,
+              children: [
+                for (int index = 0; index < widget.tabs.length; index++)
+                  KeyedSubtree(
+                    key: ValueKey(widget.tabs[index].id),
+                    child: Tab(
+                      tabKey: _tabKeys.putIfAbsent(
+                          widget.tabs[index].id, () => GlobalKey()),
+                      index: index,
+                      text: widget.tabs[index].fileName,
+                      isSelected: widget.selectedIndex == index,
+                      isModified: widget.tabs[index].isModified,
+                      onTap: () => widget.onTabSelected(index),
+                      onClose: () => widget.onTabClosed(index),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
 }
 
 class Tab extends StatefulWidget {
+  final int index;
   final String text;
   final bool isSelected;
   final bool isModified;
   final VoidCallback onTap;
   final VoidCallback onClose;
+  final GlobalKey tabKey;
 
   const Tab({
-    super.key,
+    Key? key,
+    required this.tabKey,
+    required this.index,
     required this.text,
     required this.isSelected,
     required this.isModified,
     required this.onTap,
     required this.onClose,
-  });
+  }) : super(key: key);
 
   @override
   State<Tab> createState() => _TabState();
@@ -122,19 +218,22 @@ class _TabState extends State<Tab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Listener(
+    return ReorderableDragStartListener(
+      index: widget.index,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _isHovered = true),
+        onExit: (_) => setState(() => _isHovered = false),
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Listener(
             onPointerDown: (PointerDownEvent event) {
               if (event.buttons == kMiddleMouseButton) {
                 widget.onClose();
               }
             },
             child: Container(
+              key: widget.tabKey,
               padding: const EdgeInsets.symmetric(horizontal: 8),
               decoration: BoxDecoration(
                 color: widget.isSelected
@@ -163,8 +262,8 @@ class _TabState extends State<Tab> {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      textAlign: TextAlign.center,
                       widget.text,
+                      textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.textTheme.bodyMedium?.color,
                         fontSize: 13,
@@ -173,13 +272,17 @@ class _TabState extends State<Tab> {
                     const SizedBox(width: 4),
                     if (_isHovered)
                       _CloseButton(
-                          onTap: widget.onClose, color: theme.iconTheme.color)
+                        onTap: widget.onClose,
+                        color: theme.iconTheme.color,
+                      )
                     else
-                      Container(width: 18)
+                      Container(width: 18),
                   ],
                 ),
               ),
-            )),
+            ),
+          ),
+        ),
       ),
     );
   }

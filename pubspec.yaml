@@ -20,6 +20,7 @@ dependencies:
   provider: ^6.1.2
   macos_ui: ^2.0.9
   async: ^2.11.0
+  uuid: ^4.5.0
 
 dev_dependencies:
   flutter_test:

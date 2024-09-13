@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/material.dart' hide TabBar;
+import 'package:flutter/material.dart' hide TabBar, Tab;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
@@ -286,7 +286,8 @@ class FileExplorerWidget extends StatelessWidget {
 class EditorWidget extends StatefulWidget {
   final FileMenuActions fileMenuActions;
 
-  const EditorWidget({super.key, required this.fileMenuActions});
+  const EditorWidget({Key? key, required this.fileMenuActions})
+      : super(key: key);
 
   @override
   _EditorWidgetState createState() => _EditorWidgetState();
@@ -355,6 +356,26 @@ class _EditorWidgetState extends State<EditorWidget> {
     }
   }
 
+  void _onTabsReordered(int oldIndex, int newIndex) {
+    setState(() {
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+      final FileTab movedTab = _tabs.removeAt(oldIndex);
+      _tabs.insert(newIndex, movedTab);
+
+      if (_selectedTabIndex.value == oldIndex) {
+        _selectedTabIndex.value = newIndex;
+      } else if (_selectedTabIndex.value > oldIndex &&
+          _selectedTabIndex.value <= newIndex) {
+        _selectedTabIndex.value -= 1;
+      } else if (_selectedTabIndex.value < oldIndex &&
+          _selectedTabIndex.value >= newIndex) {
+        _selectedTabIndex.value += 1;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -376,6 +397,7 @@ class _EditorWidgetState extends State<EditorWidget> {
               selectedIndex: selectedIndex,
               onTabSelected: _selectTab,
               onTabClosed: _closeTab,
+              onTabsReordered: _onTabsReordered,
             ),
           );
         } else {

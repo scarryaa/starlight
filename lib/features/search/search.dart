@@ -32,6 +32,8 @@ class _SearchPaneState extends State<SearchPane> {
   Isolate? _indexingIsolate;
   ReceivePort? _receivePort;
   final Set<int> _collapsedItems = {};
+  Timer? _debounce;
+  bool _hasStartedTyping = false;
 
   @override
   void initState() {
@@ -123,16 +125,16 @@ class _SearchPaneState extends State<SearchPane> {
   }
 
   void _onSearchChanged() {
-    _cancelCurrentSearch();
     if (_searchController.text.isNotEmpty) {
-      _performSearch(_searchController.text);
-    } else {
-      setState(() {
-        _searchResults = [];
-        _isSearching = false;
-        _errorMessage = null;
-      });
+      _hasStartedTyping = true;
     }
+
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
+      if (_hasStartedTyping) {
+        _performSearch(_searchController.text);
+      }
+    });
   }
 
   void _cancelCurrentSearch() {
@@ -141,6 +143,15 @@ class _SearchPaneState extends State<SearchPane> {
   }
 
   Future<void> _performSearch(String query) async {
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _isSearching = false;
+        _errorMessage = null;
+      });
+      return;
+    }
+
     setState(() {
       _isSearching = true;
       _errorMessage = null;
@@ -382,6 +393,7 @@ class _SearchPaneState extends State<SearchPane> {
     _cancelCurrentSearch();
     _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 }
