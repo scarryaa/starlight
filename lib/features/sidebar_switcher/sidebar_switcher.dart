@@ -1,7 +1,8 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
+import 'package:starlight/features/file_explorer/file_explorer.dart';
+import 'package:starlight/features/search/search.dart';
 
 enum SidebarOption { fileExplorer, search, settings }
 
@@ -34,7 +35,11 @@ class _SidebarSwitcherState extends State<SidebarSwitcher> {
           controller: widget.fileExplorerController,
         );
       case SidebarOption.search:
-        return const Center(child: Text('Search'));
+        return SearchPane(
+          onFileSelected: widget.onFileSelected,
+          rootDirectory:
+              widget.fileExplorerController.currentDirectory?.path ?? '/',
+        );
       case SidebarOption.settings:
         return const Center(child: Text('Settings'));
       default:
