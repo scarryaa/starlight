@@ -1,12 +1,5 @@
 import 'package:flutter/material.dart';
 
-class ContextMenuItem {
-  final String title;
-  final VoidCallback onTap;
-
-  ContextMenuItem({required this.title, required this.onTap});
-}
-
 class ContextMenu extends StatelessWidget {
   final List<ContextMenuItem> items;
 
@@ -55,4 +48,11 @@ class ContextMenu extends StatelessWidget {
       ),
     );
   }
+}
+
+class ContextMenuItem {
+  final String title;
+  final VoidCallback onTap;
+
+  ContextMenuItem({required this.title, required this.onTap});
 }

@@ -1,9 +1,10 @@
-import 'package:flutter/material.dart';
+import 'dart:io';
+
 import 'package:flutter/gestures.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/context_menu/context_menu.dart';
-import 'package:starlight/features/tabs/pin_button.dart';
-import 'dart:io';
+import 'package:starlight/features/tabs/presentation/pin_button.dart';
 import 'package:uuid/uuid.dart';
 
 class FileTab {
@@ -45,6 +46,34 @@ class FileTab {
   }
 }
 
+class Tab extends StatefulWidget {
+  final int index;
+  final String text;
+  final bool isSelected;
+  final bool isModified;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+  final void Function(String action, int index) onContextMenuAction;
+  final GlobalKey tabKey;
+  final bool isPinned;
+
+  const Tab({
+    super.key,
+    required this.tabKey,
+    required this.index,
+    required this.text,
+    required this.isSelected,
+    required this.isModified,
+    required this.onTap,
+    required this.onClose,
+    required this.onContextMenuAction,
+    required this.isPinned,
+  });
+
+  @override
+  State<Tab> createState() => _TabState();
+}
+
 class TabBar extends StatefulWidget {
   final List<FileTab> tabs;
   final int selectedIndex;
@@ -71,90 +100,49 @@ class TabBar extends StatefulWidget {
   State<TabBar> createState() => _TabBarState();
 }
 
+class _CloseButton extends StatefulWidget {
+  final VoidCallback onTap;
+  final Color? color;
+
+  const _CloseButton({required this.onTap, this.color});
+
+  @override
+  State<_CloseButton> createState() => _CloseButtonState();
+}
+
+class _CloseButtonState extends State<_CloseButton> {
+  bool _isHovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _isHovered = true),
+      onExit: (_) => setState(() => _isHovered = false),
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: Container(
+          width: 18,
+          height: 18,
+          decoration: BoxDecoration(
+            color: _isHovered ? theme.hoverColor : Colors.transparent,
+            shape: BoxShape.rectangle,
+          ),
+          child: Icon(
+            Icons.close,
+            size: 14,
+            color: widget.color,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TabBarState extends State<TabBar> {
   late ScrollController _scrollController;
   final Map<String, GlobalKey> _tabKeys = {};
-
-  @override
-  void initState() {
-    super.initState();
-    _scrollController = ScrollController();
-  }
-
-  @override
-  void dispose() {
-    _scrollController.dispose();
-    super.dispose();
-  }
-
-  void _handlePointerSignal(PointerSignalEvent pointerSignal) {
-    if (pointerSignal is PointerScrollEvent) {
-      // Check if Shift key is pressed
-      bool isShiftPressed = RawKeyboard.instance.keysPressed.any((key) =>
-          key == LogicalKeyboardKey.shiftLeft ||
-          key == LogicalKeyboardKey.shiftRight);
-
-      if (isShiftPressed) {
-        // Switch tabs instead of scrolling
-        if (pointerSignal.scrollDelta.dy > 0) {
-          // Scroll down, move to the next tab
-          int newIndex = (widget.selectedIndex + 1) % widget.tabs.length;
-          widget.onTabSelected(newIndex);
-        } else if (pointerSignal.scrollDelta.dy < 0) {
-          // Scroll up, move to the previous tab
-          int newIndex = (widget.selectedIndex - 1 + widget.tabs.length) %
-              widget.tabs.length;
-          widget.onTabSelected(newIndex);
-        }
-        // Ensure the selected tab is visible
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _ensureSelectedTabVisible();
-        });
-      } else {
-        // Scroll the TabBar horizontally
-        _scrollController.jumpTo(
-          (_scrollController.offset + pointerSignal.scrollDelta.dy).clamp(
-            0.0,
-            _scrollController.position.maxScrollExtent,
-          ),
-        );
-      }
-    }
-  }
-
-  void _ensureSelectedTabVisible() {
-    final tabId = widget.tabs[widget.selectedIndex].id;
-    final tabKey = _tabKeys[tabId];
-    if (tabKey != null && tabKey.currentContext != null) {
-      RenderBox tabRenderBox =
-          tabKey.currentContext!.findRenderObject() as RenderBox;
-      RenderBox listViewRenderBox = context.findRenderObject() as RenderBox;
-
-      final tabPosition =
-          tabRenderBox.localToGlobal(Offset.zero, ancestor: listViewRenderBox);
-      final tabLeft = tabPosition.dx;
-      final tabRight = tabLeft + tabRenderBox.size.width;
-
-      final scrollOffset = _scrollController.offset;
-      final viewportWidth = _scrollController.position.viewportDimension;
-
-      if (tabLeft < scrollOffset) {
-        // Tab is to the left of the viewport, scroll to it
-        _scrollController.animateTo(
-          tabLeft,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-        );
-      } else if (tabRight > scrollOffset + viewportWidth) {
-        // Tab is to the right of the viewport, scroll to it
-        _scrollController.animateTo(
-          tabRight - viewportWidth,
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeInOut,
-        );
-      }
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -213,6 +201,52 @@ class _TabBarState extends State<TabBar> {
     );
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+  }
+
+  void _ensureSelectedTabVisible() {
+    final tabId = widget.tabs[widget.selectedIndex].id;
+    final tabKey = _tabKeys[tabId];
+    if (tabKey != null && tabKey.currentContext != null) {
+      RenderBox tabRenderBox =
+          tabKey.currentContext!.findRenderObject() as RenderBox;
+      RenderBox listViewRenderBox = context.findRenderObject() as RenderBox;
+
+      final tabPosition =
+          tabRenderBox.localToGlobal(Offset.zero, ancestor: listViewRenderBox);
+      final tabLeft = tabPosition.dx;
+      final tabRight = tabLeft + tabRenderBox.size.width;
+
+      final scrollOffset = _scrollController.offset;
+      final viewportWidth = _scrollController.position.viewportDimension;
+
+      if (tabLeft < scrollOffset) {
+        // Tab is to the left of the viewport, scroll to it
+        _scrollController.animateTo(
+          tabLeft,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+      } else if (tabRight > scrollOffset + viewportWidth) {
+        // Tab is to the right of the viewport, scroll to it
+        _scrollController.animateTo(
+          tabRight - viewportWidth,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+      }
+    }
+  }
+
   void _handleContextMenuAction(String action, int index) {
     switch (action) {
       case 'pin':
@@ -236,6 +270,41 @@ class _TabBarState extends State<TabBar> {
     }
   }
 
+  void _handlePointerSignal(PointerSignalEvent pointerSignal) {
+    if (pointerSignal is PointerScrollEvent) {
+      // Check if Shift key is pressed
+      bool isShiftPressed = RawKeyboard.instance.keysPressed.any((key) =>
+          key == LogicalKeyboardKey.shiftLeft ||
+          key == LogicalKeyboardKey.shiftRight);
+
+      if (isShiftPressed) {
+        // Switch tabs instead of scrolling
+        if (pointerSignal.scrollDelta.dy > 0) {
+          // Scroll down, move to the next tab
+          int newIndex = (widget.selectedIndex + 1) % widget.tabs.length;
+          widget.onTabSelected(newIndex);
+        } else if (pointerSignal.scrollDelta.dy < 0) {
+          // Scroll up, move to the previous tab
+          int newIndex = (widget.selectedIndex - 1 + widget.tabs.length) %
+              widget.tabs.length;
+          widget.onTabSelected(newIndex);
+        }
+        // Ensure the selected tab is visible
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _ensureSelectedTabVisible();
+        });
+      } else {
+        // Scroll the TabBar horizontally
+        _scrollController.jumpTo(
+          (_scrollController.offset + pointerSignal.scrollDelta.dy).clamp(
+            0.0,
+            _scrollController.position.maxScrollExtent,
+          ),
+        );
+      }
+    }
+  }
+
   void _sortTabs() {
     widget.tabs.sort((a, b) {
       if (a.isPinned && !b.isPinned) return -1;
@@ -250,78 +319,8 @@ class _TabBarState extends State<TabBar> {
   }
 }
 
-class Tab extends StatefulWidget {
-  final int index;
-  final String text;
-  final bool isSelected;
-  final bool isModified;
-  final VoidCallback onTap;
-  final VoidCallback onClose;
-  final void Function(String action, int index) onContextMenuAction;
-  final GlobalKey tabKey;
-  final bool isPinned;
-
-  const Tab({
-    super.key,
-    required this.tabKey,
-    required this.index,
-    required this.text,
-    required this.isSelected,
-    required this.isModified,
-    required this.onTap,
-    required this.onClose,
-    required this.onContextMenuAction,
-    required this.isPinned,
-  });
-
-  @override
-  State<Tab> createState() => _TabState();
-}
-
 class _TabState extends State<Tab> {
   bool _isHovered = false;
-
-  void _showContextMenu(BuildContext context, Offset position) {
-    final List<ContextMenuItem> menuItems = [
-      ContextMenuItem(
-        title: widget.isPinned ? 'Unpin Tab' : 'Pin Tab',
-        onTap: () => widget.onContextMenuAction('pin', widget.index),
-      ),
-      ContextMenuItem(
-        title: 'Close Tab',
-        onTap: () => widget.onContextMenuAction('close', widget.index),
-      ),
-      ContextMenuItem(
-        title: 'Close Tabs to the Right',
-        onTap: () => widget.onContextMenuAction('closeToRight', widget.index),
-      ),
-      ContextMenuItem(
-        title: 'Close Other Tabs',
-        onTap: () => widget.onContextMenuAction('closeOthers', widget.index),
-      ),
-      ContextMenuItem(
-        title: 'Close All Tabs',
-        onTap: () => widget.onContextMenuAction('closeAll', widget.index),
-      ),
-    ];
-
-    showDialog(
-      context: context,
-      barrierColor: Colors.transparent,
-      barrierDismissible: true,
-      builder: (BuildContext context) {
-        return Stack(
-          children: [
-            Positioned(
-              left: position.dx,
-              top: position.dy,
-              child: ContextMenu(items: menuItems),
-            ),
-          ],
-        );
-      },
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -399,47 +398,49 @@ class _TabState extends State<Tab> {
     );
   }
 
+  void _showContextMenu(BuildContext context, Offset position) {
+    final List<ContextMenuItem> menuItems = [
+      ContextMenuItem(
+        title: widget.isPinned ? 'Unpin Tab' : 'Pin Tab',
+        onTap: () => widget.onContextMenuAction('pin', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close Tab',
+        onTap: () => widget.onContextMenuAction('close', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close Tabs to the Right',
+        onTap: () => widget.onContextMenuAction('closeToRight', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close Other Tabs',
+        onTap: () => widget.onContextMenuAction('closeOthers', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close All Tabs',
+        onTap: () => widget.onContextMenuAction('closeAll', widget.index),
+      ),
+    ];
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Stack(
+          children: [
+            Positioned(
+              left: position.dx,
+              top: position.dy,
+              child: ContextMenu(items: menuItems),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   void _togglePin() {
     widget.onContextMenuAction('pin', widget.index);
-  }
-}
-
-class _CloseButton extends StatefulWidget {
-  final VoidCallback onTap;
-  final Color? color;
-
-  const _CloseButton({required this.onTap, this.color});
-
-  @override
-  State<_CloseButton> createState() => _CloseButtonState();
-}
-
-class _CloseButtonState extends State<_CloseButton> {
-  bool _isHovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: GestureDetector(
-        onTap: widget.onTap,
-        child: Container(
-          width: 18,
-          height: 18,
-          decoration: BoxDecoration(
-            color: _isHovered ? theme.hoverColor : Colors.transparent,
-            shape: BoxShape.rectangle,
-          ),
-          child: Icon(
-            Icons.close,
-            size: 14,
-            color: widget.color,
-          ),
-        ),
-      ),
-    );
   }
 }

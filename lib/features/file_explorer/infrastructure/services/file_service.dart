@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:file_picker/file_picker.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:starlight/utils/constants.dart';
@@ -6,10 +7,6 @@ import 'package:starlight/utils/constants.dart';
 class FileService {
   static Future<Directory> getInitialDirectory() async {
     return await getApplicationDocumentsDirectory();
-  }
-
-  static Future<String?> pickDirectory() async {
-    return await FilePicker.platform.getDirectoryPath();
   }
 
   static Future<List<FileSystemEntity>> listDirectory(String path) async {
@@ -27,5 +24,9 @@ class FileService {
         });
     }
     throw Exception('Unexpected result type');
+  }
+
+  static Future<String?> pickDirectory() async {
+    return await FilePicker.platform.getDirectoryPath();
   }
 }

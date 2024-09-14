@@ -1,12 +1,12 @@
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide TabBar, Tab;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
-import 'package:starlight/features/editor/editor_painter.dart';
-import 'package:starlight/features/editor/line_numbers.dart';
-import 'package:starlight/features/editor/models/text_editing_core.dart';
+import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
+import 'package:starlight/features/editor/presentation/editor_painter.dart';
+import 'package:starlight/features/editor/presentation/line_numbers.dart';
 
 class CodeEditor extends StatefulWidget {
   final String initialCode;

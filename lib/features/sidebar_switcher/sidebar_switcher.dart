@@ -1,7 +1,8 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
-import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
-import 'package:starlight/features/file_explorer/file_explorer.dart';
+import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
+import 'package:starlight/features/file_explorer/presentation/file_explorer.dart';
 import 'package:starlight/features/search/search.dart';
 
 enum SidebarOption { fileExplorer, search, settings }
@@ -26,6 +27,22 @@ class _SidebarSwitcherState extends State<SidebarSwitcher> {
   SidebarOption _selectedOption = SidebarOption.fileExplorer;
   bool _isSidebarExpanded = true;
 
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _buildSidebarIcons(),
+        if (_isSidebarExpanded)
+          Expanded(
+            child: Container(
+              color: Theme.of(context).colorScheme.surface,
+              child: _buildSidebarContent(),
+            ),
+          ),
+      ],
+    );
+  }
+
   Widget _buildSidebarContent() {
     switch (_selectedOption) {
       case SidebarOption.fileExplorer:
@@ -45,49 +62,6 @@ class _SidebarSwitcherState extends State<SidebarSwitcher> {
       default:
         return const SizedBox.shrink();
     }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        _buildSidebarIcons(),
-        if (_isSidebarExpanded)
-          Expanded(
-            child: Container(
-              color: Theme.of(context).colorScheme.surface,
-              child: _buildSidebarContent(),
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildSidebarIcons() {
-    return Container(
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
-        border: Border(
-          right: BorderSide(
-            width: 1,
-            color: Theme.of(context).dividerColor,
-          ),
-        ),
-      ),
-      width: 48,
-      child: Column(
-        children: [
-          const SizedBox(height: 8),
-          _buildSidebarIconButton(
-              SidebarOption.fileExplorer, Icons.folder_outlined),
-          _buildSidebarIconButton(SidebarOption.search, Icons.search),
-          const Spacer(),
-          _buildSidebarIconButton(
-              SidebarOption.settings, Icons.settings_outlined),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
   }
 
   Widget _buildSidebarIconButton(SidebarOption option, IconData icon) {
@@ -120,6 +94,33 @@ class _SidebarSwitcherState extends State<SidebarSwitcher> {
                 : Theme.of(context).iconTheme.color,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildSidebarIcons() {
+    return Container(
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface.withOpacity(0.9),
+        border: Border(
+          right: BorderSide(
+            width: 1,
+            color: Theme.of(context).dividerColor,
+          ),
+        ),
+      ),
+      width: 48,
+      child: Column(
+        children: [
+          const SizedBox(height: 8),
+          _buildSidebarIconButton(
+              SidebarOption.fileExplorer, Icons.folder_outlined),
+          _buildSidebarIconButton(SidebarOption.search, Icons.search),
+          const Spacer(),
+          _buildSidebarIconButton(
+              SidebarOption.settings, Icons.settings_outlined),
+          const SizedBox(height: 8),
+        ],
       ),
     );
   }

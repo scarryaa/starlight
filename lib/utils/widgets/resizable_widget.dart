@@ -22,21 +22,6 @@ class ResizableWidgetState extends State<ResizableWidget> {
   late double _width;
 
   @override
-  void initState() {
-    super.initState();
-    _width = widget.initialWidth;
-  }
-
-  void _handleDrag(DragUpdateDetails details) {
-    setState(() {
-      _width += details.delta.dx;
-      double maxWidth =
-          MediaQuery.of(context).size.width * widget.maxWidthPercentage;
-      _width = _width.clamp(widget.minWidth, maxWidth);
-    });
-  }
-
-  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final dividerColor = theme.dividerColor;
@@ -73,5 +58,20 @@ class ResizableWidgetState extends State<ResizableWidget> {
         ),
       ],
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _width = widget.initialWidth;
+  }
+
+  void _handleDrag(DragUpdateDetails details) {
+    setState(() {
+      _width += details.delta.dx;
+      double maxWidth =
+          MediaQuery.of(context).size.width * widget.maxWidthPercentage;
+      _width = _width.clamp(widget.minWidth, maxWidth);
+    });
   }
 }

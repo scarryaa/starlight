@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 class FileTreeItem extends StatefulWidget {
@@ -28,15 +29,6 @@ class FileTreeItemState extends State<FileTreeItem>
   bool get wantKeepAlive => true;
 
   @override
-  void initState() {
-    super.initState();
-    _isExpanded = widget.isInitiallyExpanded;
-    if (_isExpanded && widget.entity is Directory) {
-      _getChildren();
-    }
-  }
-
-  @override
   Widget build(BuildContext context) {
     super.build(context);
     final theme = Theme.of(context);
@@ -64,12 +56,24 @@ class FileTreeItemState extends State<FileTreeItem>
     );
   }
 
-  void _handleTap() {
-    if (widget.entity is Directory) {
-      setState(() => _isExpanded = !_isExpanded);
-    } else if (widget.entity is File) {
-      widget.onFileSelected(widget.entity as File);
+  @override
+  void initState() {
+    super.initState();
+    _isExpanded = widget.isInitiallyExpanded;
+    if (_isExpanded && widget.entity is Directory) {
+      _getChildren();
     }
+  }
+
+  List<Widget> _buildChildren(List<FileSystemEntity> children) {
+    return children.map((child) {
+      return FileTreeItem(
+        key: ValueKey(child.path),
+        entity: child,
+        onFileSelected: widget.onFileSelected,
+        level: widget.level + 1,
+      );
+    }).toList();
   }
 
   Future<List<FileSystemEntity>> _getChildren() async {
@@ -84,15 +88,12 @@ class FileTreeItemState extends State<FileTreeItem>
     return _children!;
   }
 
-  List<Widget> _buildChildren(List<FileSystemEntity> children) {
-    return children.map((child) {
-      return FileTreeItem(
-        key: ValueKey(child.path),
-        entity: child,
-        onFileSelected: widget.onFileSelected,
-        level: widget.level + 1,
-      );
-    }).toList();
+  void _handleTap() {
+    if (widget.entity is Directory) {
+      setState(() => _isExpanded = !_isExpanded);
+    } else if (widget.entity is File) {
+      widget.onFileSelected(widget.entity as File);
+    }
   }
 }
 

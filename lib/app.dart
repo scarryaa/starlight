@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:starlight/screens/home_page.dart';
+import 'package:starlight/presentation/screens/home_page.dart';
+import 'package:starlight/themes/dark.dart';
+import 'package:starlight/themes/light.dart';
 import 'package:starlight/themes/theme_provider.dart';
-import 'themes/dark.dart';
-import 'themes/light.dart';
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+class App extends StatelessWidget {
+  const App({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +17,7 @@ class MyApp extends StatelessWidget {
           theme: lightTheme,
           darkTheme: darkTheme,
           themeMode: themeProvider.themeMode,
-          home: const MyHomePage(),
+          home: const MainLayout(),
         );
       },
     );

@@ -1,6 +1,7 @@
 import 'dart:math';
+
 import 'package:flutter/material.dart';
-import 'package:starlight/features/editor/models/text_editing_core.dart';
+import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 
 class CodeEditorPainter extends CustomPainter {
   static const double lineHeight = 24.0;
@@ -41,14 +42,6 @@ class CodeEditorPainter extends CustomPainter {
     _calculateCharWidth();
   }
 
-  void _calculateCharWidth() {
-    final textPainter = TextPainter(
-      text: TextSpan(text: 'X', style: textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout();
-    charWidth = textPainter.width;
-  }
-
   @override
   void paint(Canvas canvas, Size size) {
     final lineCount = editingCore.lineCount;
@@ -79,6 +72,100 @@ class CodeEditorPainter extends CustomPainter {
     if (editingCore.cursorPosition == editingCore.length) {
       _paintCursorAtEnd(canvas, lineCount - 1);
     }
+  }
+
+  @override
+  bool shouldRepaint(CodeEditorPainter oldDelegate) {
+    return editingCore != oldDelegate.editingCore ||
+        firstVisibleLine != oldDelegate.firstVisibleLine ||
+        visibleLineCount != oldDelegate.visibleLineCount ||
+        horizontalOffset != oldDelegate.horizontalOffset ||
+        version != oldDelegate.version ||
+        viewportWidth != oldDelegate.viewportWidth ||
+        matchPositions != oldDelegate.matchPositions ||
+        searchTerm != oldDelegate.searchTerm;
+  }
+
+  void _calculateCharWidth() {
+    final textPainter = TextPainter(
+      text: TextSpan(text: 'X', style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    charWidth = textPainter.width;
+  }
+
+  int _getCursorPositionInLine(int line) {
+    int lineStart = editingCore.getLineStartIndex(line);
+    return editingCore.cursorPosition - lineStart;
+  }
+
+  String _getLineContent(int lineIndex) {
+    if (lineIndex < 0 || lineIndex >= editingCore.lineCount) {
+      return '';
+    }
+    return editingCore.getLineContent(lineIndex);
+  }
+
+  int _getSelectionEndForLine(int line) {
+    if (!editingCore.hasSelection()) return 0;
+    int selectionEnd =
+        max(editingCore.selectionStart!, editingCore.selectionEnd!);
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
+    return min(lineEnd - lineStart, selectionEnd - lineStart);
+  }
+
+  int _getSelectionStartForLine(int line) {
+    if (!editingCore.hasSelection()) return 0;
+    int selectionStart =
+        min(editingCore.selectionStart!, editingCore.selectionEnd!);
+    int lineStart = editingCore.getLineStartIndex(line);
+    return max(0, selectionStart - lineStart);
+  }
+
+  bool _isCursorOnLine(int line) {
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
+    return editingCore.cursorPosition >= lineStart &&
+        editingCore.cursorPosition <= lineEnd;
+  }
+
+  bool _isLineSelected(int line) {
+    if (!editingCore.hasSelection()) return false;
+    int selectionStart =
+        min(editingCore.selectionStart ?? 0, editingCore.selectionEnd ?? 0);
+    int selectionEnd =
+        max(editingCore.selectionStart ?? 0, editingCore.selectionEnd ?? 0);
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
+    return (selectionStart < lineEnd && selectionEnd > lineStart);
+  }
+
+  void _paintCursor(Canvas canvas, int line, String lineContent) {
+    int cursorPositionInLine = _getCursorPositionInLine(line);
+    final cursorOffset = cursorPositionInLine * charWidth;
+
+    final topY = line * lineHeight + (lineHeight - fontSize) / 2;
+    final bottomY = topY + fontSize;
+
+    canvas.drawLine(
+      Offset(cursorOffset, topY),
+      Offset(cursorOffset, bottomY),
+      Paint()..color = cursorColor,
+    );
+  }
+
+  void _paintCursorAtEnd(Canvas canvas, int lastLine) {
+    final cursorOffset = _getLineContent(lastLine).length * charWidth;
+
+    final topY = lastLine * lineHeight + (lineHeight - fontSize) / 2;
+    final bottomY = topY + fontSize;
+
+    canvas.drawLine(
+      Offset(cursorOffset, topY),
+      Offset(cursorOffset, bottomY),
+      Paint()..color = cursorColor,
+    );
   }
 
   void _paintSearchHighlights(Canvas canvas, int line, String lineContent) {
@@ -115,23 +202,6 @@ class CodeEditorPainter extends CustomPainter {
     }
   }
 
-  String _getLineContent(int lineIndex) {
-    if (lineIndex < 0 || lineIndex >= editingCore.lineCount) {
-      return '';
-    }
-    return editingCore.getLineContent(lineIndex);
-  }
-
-  void _paintText(Canvas canvas, String text, Offset offset) {
-    final textPainter = TextPainter(
-      text: TextSpan(text: text, style: textStyle),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: double.infinity);
-
-    final yOffset = offset.dy + (lineHeight - textPainter.height) / 2;
-    textPainter.paint(canvas, Offset(offset.dx, yOffset));
-  }
-
   void _paintSelection(Canvas canvas, int line, String lineContent) {
     if (!editingCore.hasSelection()) return;
 
@@ -158,82 +228,13 @@ class CodeEditorPainter extends CustomPainter {
     );
   }
 
-  void _paintCursor(Canvas canvas, int line, String lineContent) {
-    int cursorPositionInLine = _getCursorPositionInLine(line);
-    final cursorOffset = cursorPositionInLine * charWidth;
+  void _paintText(Canvas canvas, String text, Offset offset) {
+    final textPainter = TextPainter(
+      text: TextSpan(text: text, style: textStyle),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: double.infinity);
 
-    final topY = line * lineHeight + (lineHeight - fontSize) / 2;
-    final bottomY = topY + fontSize;
-
-    canvas.drawLine(
-      Offset(cursorOffset, topY),
-      Offset(cursorOffset, bottomY),
-      Paint()..color = cursorColor,
-    );
-  }
-
-  void _paintCursorAtEnd(Canvas canvas, int lastLine) {
-    final cursorOffset = _getLineContent(lastLine).length * charWidth;
-
-    final topY = lastLine * lineHeight + (lineHeight - fontSize) / 2;
-    final bottomY = topY + fontSize;
-
-    canvas.drawLine(
-      Offset(cursorOffset, topY),
-      Offset(cursorOffset, bottomY),
-      Paint()..color = cursorColor,
-    );
-  }
-
-  bool _isLineSelected(int line) {
-    if (!editingCore.hasSelection()) return false;
-    int selectionStart =
-        min(editingCore.selectionStart ?? 0, editingCore.selectionEnd ?? 0);
-    int selectionEnd =
-        max(editingCore.selectionStart ?? 0, editingCore.selectionEnd ?? 0);
-    int lineStart = editingCore.getLineStartIndex(line);
-    int lineEnd = editingCore.getLineEndIndex(line);
-    return (selectionStart < lineEnd && selectionEnd > lineStart);
-  }
-
-  int _getSelectionStartForLine(int line) {
-    if (!editingCore.hasSelection()) return 0;
-    int selectionStart =
-        min(editingCore.selectionStart!, editingCore.selectionEnd!);
-    int lineStart = editingCore.getLineStartIndex(line);
-    return max(0, selectionStart - lineStart);
-  }
-
-  int _getSelectionEndForLine(int line) {
-    if (!editingCore.hasSelection()) return 0;
-    int selectionEnd =
-        max(editingCore.selectionStart!, editingCore.selectionEnd!);
-    int lineStart = editingCore.getLineStartIndex(line);
-    int lineEnd = editingCore.getLineEndIndex(line);
-    return min(lineEnd - lineStart, selectionEnd - lineStart);
-  }
-
-  bool _isCursorOnLine(int line) {
-    int lineStart = editingCore.getLineStartIndex(line);
-    int lineEnd = editingCore.getLineEndIndex(line);
-    return editingCore.cursorPosition >= lineStart &&
-        editingCore.cursorPosition <= lineEnd;
-  }
-
-  int _getCursorPositionInLine(int line) {
-    int lineStart = editingCore.getLineStartIndex(line);
-    return editingCore.cursorPosition - lineStart;
-  }
-
-  @override
-  bool shouldRepaint(CodeEditorPainter oldDelegate) {
-    return editingCore != oldDelegate.editingCore ||
-        firstVisibleLine != oldDelegate.firstVisibleLine ||
-        visibleLineCount != oldDelegate.visibleLineCount ||
-        horizontalOffset != oldDelegate.horizontalOffset ||
-        version != oldDelegate.version ||
-        viewportWidth != oldDelegate.viewportWidth ||
-        matchPositions != oldDelegate.matchPositions ||
-        searchTerm != oldDelegate.searchTerm;
+    final yOffset = offset.dy + (lineHeight - textPainter.height) / 2;
+    textPainter.paint(canvas, Offset(offset.dx, yOffset));
   }
 }

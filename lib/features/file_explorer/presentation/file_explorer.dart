@@ -1,10 +1,11 @@
 import 'dart:io';
-import 'package:flutter/material.dart';
-import 'package:starlight/features/file_explorer/file_Explorer_controller.dart';
-import 'package:starlight/features/file_explorer/services/file_service.dart';
-import 'file_tree_item.dart';
 
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
+import 'package:starlight/features/file_explorer/infrastructure/services/file_service.dart';
+
+import 'file_tree_item.dart';
 
 class FileExplorer extends StatefulWidget {
   final Function(File) onFileSelected;
@@ -62,24 +63,6 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
 
   @override
   bool get wantKeepAlive => true;
-
-  Future<void> _pickDirectory() async {
-    final controller = context.read<FileExplorerController>();
-    try {
-      String? selectedDirectory = await FileService.pickDirectory();
-      if (selectedDirectory != null) {
-        controller.setDirectory(Directory(selectedDirectory));
-        widget.onDirectorySelected(selectedDirectory);
-      }
-    } catch (e) {
-      print('Error picking directory: $e');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error selecting directory: $e')),
-      );
-    } finally {
-      controller.setLoading(false);
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -156,5 +139,23 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
         ),
       ),
     );
+  }
+
+  Future<void> _pickDirectory() async {
+    final controller = context.read<FileExplorerController>();
+    try {
+      String? selectedDirectory = await FileService.pickDirectory();
+      if (selectedDirectory != null) {
+        controller.setDirectory(Directory(selectedDirectory));
+        widget.onDirectorySelected(selectedDirectory);
+      }
+    } catch (e) {
+      print('Error picking directory: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error selecting directory: $e')),
+      );
+    } finally {
+      controller.setLoading(false);
+    }
   }
 }
