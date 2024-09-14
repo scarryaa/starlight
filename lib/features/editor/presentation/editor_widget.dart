@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide TabBar;
 import 'package:starlight/features/editor/presentation/editor.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
 import 'package:starlight/features/tabs/presentation/tab.dart';
+import 'package:starlight/features/toasts/error_toast.dart';
 import 'package:starlight/presentation/screens/search_all_files.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
 
@@ -25,6 +26,7 @@ class EditorWidget extends StatefulWidget {
 }
 
 class EditorWidgetState extends State<EditorWidget> {
+  late ErrorToastManager _toastManager;
   final List<FileTab> _tabs = [];
   final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
   bool _isSearchVisible = false;
@@ -93,6 +95,7 @@ class EditorWidgetState extends State<EditorWidget> {
   @override
   void initState() {
     super.initState();
+    _toastManager = ErrorToastManager(context);
     widget.fileMenuActions.newFile = addEmptyTab;
     widget.fileMenuActions.openFile = openFile;
     widget.fileMenuActions.save = saveCurrentFile;
@@ -108,7 +111,7 @@ class EditorWidgetState extends State<EditorWidget> {
       });
     } catch (e) {
       print('Error reading file: $e');
-      _showErrorDialog(file, e);
+      _toastManager.showErrorToast(file.path, e.toString());
     }
   }
 
@@ -583,6 +586,13 @@ class EditorWidgetState extends State<EditorWidget> {
     return positions;
   }
 
+  bool _isCurrentTabModified() {
+    if (_selectedTabIndex.value != -1) {
+      return _tabs[_selectedTabIndex.value].isModified;
+    }
+    return false;
+  }
+
   bool _isSearchAllFilesTabOpen() {
     return _selectedTabIndex.value != -1 &&
         _tabs[_selectedTabIndex.value].filePath == 'Project Search';
@@ -653,13 +663,6 @@ class EditorWidgetState extends State<EditorWidget> {
     }
   }
 
-  bool _isCurrentTabModified() {
-    if (_selectedTabIndex.value != -1) {
-      return _tabs[_selectedTabIndex.value].isModified;
-    }
-    return false;
-  }
-
   Future<void> _saveTab(int index) async {
     if (index >= 0 && index < _tabs.length) {
       final currentTab = _tabs[index];
@@ -707,28 +710,89 @@ class EditorWidgetState extends State<EditorWidget> {
     _selectedTabIndex.value = index;
   }
 
-  void _showErrorDialog(File file, dynamic error) {
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8.0),
-              side: BorderSide(
-                  width: 1.0, color: Theme.of(context).dividerColor)),
-          title: const Text('Error'),
-          content: Text('Failed to open file: ${file.path}\n\nError: $error'),
-          actions: <Widget>[
-            TextButton(
-              child: const Text('OK'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+  void _showErrorToast(File file, dynamic error) {
+    final overlay = Overlay.of(context);
+    OverlayEntry? entry;
+
+    entry = OverlayEntry(
+      builder: (context) => Positioned(
+        bottom: 50,
+        right: 20,
+        child: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.red[700],
+              borderRadius: BorderRadius.circular(8),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.15),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
+                ),
+              ],
             ),
-          ],
-        );
-      },
+            constraints: const BoxConstraints(maxWidth: 300),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.error_outline,
+                            color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          'Error',
+                          style: TextStyle(
+                              color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        entry?.remove();
+                      },
+                      child: const Icon(Icons.close,
+                          color: Colors.white, size: 20),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Failed to open file:',
+                  style: TextStyle(color: Colors.white),
+                ),
+                Text(
+                  file.path,
+                  style: const TextStyle(
+                      color: Colors.white, fontWeight: FontWeight.bold),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Error: $error',
+                  style: const TextStyle(color: Colors.white),
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 2,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
+
+    overlay.insert(entry);
+
+    // Automatically remove the toast after 6 seconds if not closed manually
+    Future.delayed(const Duration(seconds: 6), () {
+      entry?.remove();
+    });
   }
 
   void _updateCodeEditorHighlights() {

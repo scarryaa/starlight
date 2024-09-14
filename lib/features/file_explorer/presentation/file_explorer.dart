@@ -117,9 +117,9 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
     return Theme(
       data: theme.copyWith(
         scrollbarTheme: ScrollbarThemeData(
-          thumbColor: WidgetStateProperty.all(
+          thumbColor: MaterialStateProperty.all(
               theme.colorScheme.secondary.withOpacity(0.6)),
-          thickness: WidgetStateProperty.all(6.0),
+          thickness: MaterialStateProperty.all(6.0),
           radius: const Radius.circular(0),
         ),
       ),
