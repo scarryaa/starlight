@@ -712,6 +712,10 @@ class EditorWidgetState extends State<EditorWidget> {
       context: context,
       builder: (BuildContext context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8.0),
+              side: BorderSide(
+                  width: 1.0, color: Theme.of(context).dividerColor)),
           title: const Text('Error'),
           content: Text('Failed to open file: ${file.path}\n\nError: $error'),
           actions: <Widget>[

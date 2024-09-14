@@ -477,6 +477,10 @@ class _TabState extends State<Tab> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8.0),
+              side: BorderSide(
+                  width: 1.0, color: Theme.of(context).dividerColor)),
           title: const Text('Unsaved Changes'),
           content: const Text(
               'You have unsaved changes. What would you like to do?'),
