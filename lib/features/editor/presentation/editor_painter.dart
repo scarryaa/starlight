@@ -22,6 +22,10 @@ class CodeEditorPainter extends CustomPainter {
   final String searchTerm;
   final Color highlightColor;
 
+  final int cursorPosition;
+  final int? selectionStart;
+  final int? selectionEnd;
+
   late double charWidth;
 
   CodeEditorPainter({
@@ -38,6 +42,9 @@ class CodeEditorPainter extends CustomPainter {
     required this.matchPositions,
     required this.searchTerm,
     required this.highlightColor,
+    required this.cursorPosition,
+    required this.selectionStart,
+    required this.selectionEnd,
   }) {
     _calculateCharWidth();
   }
@@ -83,7 +90,10 @@ class CodeEditorPainter extends CustomPainter {
         version != oldDelegate.version ||
         viewportWidth != oldDelegate.viewportWidth ||
         matchPositions != oldDelegate.matchPositions ||
-        searchTerm != oldDelegate.searchTerm;
+        searchTerm != oldDelegate.searchTerm ||
+        cursorPosition != oldDelegate.cursorPosition ||
+        selectionStart != oldDelegate.selectionStart ||
+        selectionEnd != oldDelegate.selectionEnd;
   }
 
   void _calculateCharWidth() {

@@ -11,8 +11,8 @@ class FileTab {
   static const Uuid _uuid = Uuid();
   final String id;
   String filePath;
-  String content;
-  bool isModified;
+  String _content;
+  String _originalContent;
   bool isPinned;
   int? selectionStart;
   int? selectionEnd;
@@ -21,22 +21,32 @@ class FileTab {
 
   FileTab({
     required this.filePath,
-    required this.content,
-    this.isModified = false,
+    required String content,
     this.isPinned = false,
     this.selectionStart,
     this.selectionEnd,
     this.cursorPosition,
     this.customWidget,
-  }) : id = _uuid.v4();
+  })  : id = _uuid.v4(),
+        _content = content,
+        _originalContent = content;
+
+  String get content => _content;
 
   String get fileName => filePath.split(Platform.pathSeparator).last;
 
+  bool get isModified => _content != _originalContent;
+
+  void markAsSaved() {
+    _originalContent = _content;
+  }
+
+  void resetToOriginal() {
+    _content = _originalContent;
+  }
+
   void updateContent(String newContent) {
-    if (content != newContent) {
-      content = newContent;
-      isModified = true;
-    }
+    _content = newContent;
   }
 
   void updateSelection(int? start, int? end, int? cursor) {

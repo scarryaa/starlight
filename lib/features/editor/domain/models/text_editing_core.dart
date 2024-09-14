@@ -3,25 +3,37 @@ import 'package:starlight/features/editor/domain/models/rope.dart';
 
 class TextEditingCore extends ChangeNotifier {
   Rope rope;
+  String originalContent;
   int cursorPosition = 0;
   int? selectionStart;
   int? selectionEnd;
   int _version = 0;
   int _lastModifiedLine = -1;
+  bool _isModified = false;
 
   TextEditingCore(String initialText)
-      : rope = Rope(initialText.isEmpty ? '\n' : initialText) {
+      : originalContent = initialText,
+        rope = Rope(initialText.isEmpty ? '\n' : initialText) {
     cursorPosition = rope.length > 0 ? rope.length - 1 : 0;
   }
+
+  bool get isModified => _isModified;
 
   int get lastModifiedLine => _lastModifiedLine;
   int get length => rope.length;
   int get lineCount => rope.lineCount;
   int get version => _version;
 
+  void checkModificationStatus() {
+    bool currentStatus = getText() != originalContent;
+    if (_isModified != currentStatus) {
+      _isModified = currentStatus;
+      notifyListeners();
+    }
+  }
+
   void clearSelection() {
     selectionStart = selectionEnd = null;
-    incrementVersion();
   }
 
   void deleteSelection() {
@@ -34,6 +46,8 @@ class TextEditingCore extends ChangeNotifier {
     cursorPosition = start <= 0 ? start + 1 : start;
     incrementVersion();
     clearSelection();
+    checkModificationStatus();
+    notifyListeners();
   }
 
   List<int> findAllOccurrences(String searchTerm) {
@@ -87,6 +101,8 @@ class TextEditingCore extends ChangeNotifier {
       incrementVersion();
     }
     clearSelection();
+    checkModificationStatus();
+    notifyListeners();
   }
 
   void handleDelete() {
@@ -98,6 +114,8 @@ class TextEditingCore extends ChangeNotifier {
       incrementVersion();
     }
     clearSelection();
+    checkModificationStatus();
+    notifyListeners();
   }
 
   bool hasSelection() => selectionStart != null && selectionEnd != null;
@@ -119,6 +137,13 @@ class TextEditingCore extends ChangeNotifier {
     _updateLastModifiedLine(cursorPosition);
     incrementVersion();
     clearSelection();
+    checkModificationStatus();
+    notifyListeners();
+  }
+
+  void markAsModified() {
+    _isModified = getText() != originalContent;
+    notifyListeners();
   }
 
   void moveCursor(int horizontalMove, int verticalMove) {
@@ -133,15 +158,12 @@ class TextEditingCore extends ChangeNotifier {
     int lineStart = rope.findLineStart(currentLine);
     int currentColumn = cursorPosition - lineStart;
 
-    // Apply vertical movement
     currentLine = (currentLine + verticalMove).clamp(0, rope.lineCount - 1);
 
-    // Check if the new line is valid before proceeding
     if (currentLine < 0 || currentLine >= rope.lineCount) {
-      return; // Exit the method if the new line is invalid
+      return;
     }
 
-    // Apply horizontal movement
     int newLineStart = rope.findLineStart(currentLine);
     int newLineEnd = currentLine < rope.lineCount - 1
         ? rope.findLineStart(currentLine + 1) - 1
@@ -155,12 +177,13 @@ class TextEditingCore extends ChangeNotifier {
     }
 
     cursorPosition = (newLineStart + currentColumn).clamp(0, rope.length);
-    incrementVersion();
   }
 
   void replaceRange(int start, int end, String replacement) {
     rope = rope.delete(start, end - start);
     rope = rope.insert(start, replacement);
+    incrementVersion();
+    checkModificationStatus();
     notifyListeners();
   }
 
@@ -173,23 +196,20 @@ class TextEditingCore extends ChangeNotifier {
   void setSelection(int start, int end) {
     selectionStart = start;
     selectionEnd = end;
-    incrementVersion();
   }
 
   void setText(String newText) {
-    // Dumb workaround for incorrect formatting if we set the text directly
-    // TODO fix this
     if (rope.length > 0) {
       rope = rope.delete(0, rope.length);
     }
 
     rope = rope.insert(1, newText);
-
     cursorPosition = 1;
-
     _lastModifiedLine = rope.lineCount - 1;
-    clearSelection();
     incrementVersion();
+    _isModified = newText != originalContent;
+    clearSelection();
+    notifyListeners();
   }
 
   void _updateLastModifiedLine(int position) {

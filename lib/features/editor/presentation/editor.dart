@@ -12,7 +12,6 @@ import 'package:starlight/services/keyboard_shortcut_service.dart';
 class CodeEditor extends StatefulWidget {
   final String initialCode;
   final String filePath;
-  final Function(bool) onModified;
   final List<int> matchPositions;
   final String searchTerm;
   final int currentMatchIndex;
@@ -32,7 +31,6 @@ class CodeEditor extends StatefulWidget {
     super.key,
     required this.initialCode,
     required this.filePath,
-    required this.onModified,
     required this.matchPositions,
     required this.searchTerm,
     required this.currentMatchIndex,
@@ -136,8 +134,6 @@ class _CodeEditorState extends State<CodeEditor> {
   void initState() {
     super.initState();
     try {
-      // Again, dumb way to avoid formatting bug when initializing rope for now
-      // TODO fix this
       editingCore = TextEditingCore("\n");
       editingCore.setText(widget.initialCode);
       if (widget.initialCode.isEmpty) {
@@ -254,6 +250,9 @@ class _CodeEditorState extends State<CodeEditor> {
                                 selectionColor:
                                     theme.colorScheme.primary.withOpacity(0.3),
                                 cursorColor: theme.colorScheme.primary,
+                                cursorPosition: editingCore.cursorPosition,
+                                selectionStart: editingCore.selectionStart,
+                                selectionEnd: editingCore.selectionEnd,
                               ),
                             ),
                           ),
@@ -584,7 +583,6 @@ class _CodeEditorState extends State<CodeEditor> {
           editingCore.clearSelection();
           _isModified = false;
         });
-        widget.onModified(_isModified);
 
         SchedulerBinding.instance.addPostFrameCallback((_) {
           setState(() {
@@ -646,7 +644,6 @@ class _CodeEditorState extends State<CodeEditor> {
       setState(() {
         _isModified = true;
       });
-      widget.onModified(_isModified);
       widget.onContentChanged(editingCore.getText());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recalculateEditor();

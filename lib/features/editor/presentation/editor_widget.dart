@@ -130,7 +130,7 @@ class EditorWidgetState extends State<EditorWidget> {
         await File(outputFile).writeAsString(currentTab.content);
         setState(() {
           currentTab.filePath = outputFile;
-          currentTab.isModified = false;
+          currentTab.markAsSaved();
         });
       }
     }
@@ -146,7 +146,6 @@ class EditorWidgetState extends State<EditorWidget> {
       key: ValueKey(currentTab.filePath),
       initialCode: currentTab.content,
       filePath: currentTab.filePath,
-      onModified: (isModified) => _onFileModified(selectedIndex, isModified),
       onContentChanged: _onCodeEditorContentChanged,
       matchPositions: _matchPositions,
       searchTerm: _searchTerm,
@@ -594,16 +593,10 @@ class EditorWidgetState extends State<EditorWidget> {
       final currentTab = _tabs[_selectedTabIndex.value];
       if (currentTab.content != newContent) {
         setState(() {
-          // TODO remove this when the rope content bug is fixed
-          currentTab.content = newContent.replaceFirst('\n', '');
-          currentTab.isModified = true;
+          currentTab.updateContent(newContent.replaceFirst('\n', ''));
         });
       }
     }
-  }
-
-  void _onFileModified(int index, bool isModified) {
-    _tabs[index].isModified = isModified;
   }
 
   void _onTabsReordered(int oldIndex, int newIndex) {
@@ -641,7 +634,7 @@ class EditorWidgetState extends State<EditorWidget> {
           newContent = newContent.replaceRange(
               start, start + _searchTerm.length, _replaceTerm);
         }
-        currentTab.content = newContent;
+        currentTab.updateContent(newContent);
         _updateMatchesAfterReplace();
       });
     }
@@ -654,10 +647,17 @@ class EditorWidgetState extends State<EditorWidget> {
         int start = _matchPositions[_currentMatchIndex];
         String newContent = currentTab.content
             .replaceRange(start, start + _searchTerm.length, _replaceTerm);
-        currentTab.content = newContent;
+        currentTab.updateContent(newContent);
         _updateMatchesAfterReplace();
       });
     }
+  }
+
+  bool _isCurrentTabModified() {
+    if (_selectedTabIndex.value != -1) {
+      return _tabs[_selectedTabIndex.value].isModified;
+    }
+    return false;
   }
 
   Future<void> _saveTab(int index) async {
@@ -666,7 +666,7 @@ class EditorWidgetState extends State<EditorWidget> {
       if (currentTab.filePath != 'Untitled') {
         await File(currentTab.filePath).writeAsString(currentTab.content);
         setState(() {
-          currentTab.isModified = false;
+          currentTab.markAsSaved();
         });
       } else {
         await saveFileAs();
