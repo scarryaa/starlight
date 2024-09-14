@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
 import 'package:starlight/features/file_explorer/infrastructure/services/file_service.dart';
-
-import 'file_tree_item.dart';
+import 'package:starlight/features/file_explorer/presentation/file_tree_item.dart';
 
 class FileExplorer extends StatefulWidget {
   final Function(File) onFileSelected;
@@ -34,14 +33,6 @@ class FileExplorerState extends State<FileExplorer> {
       ),
     );
   }
-
-  @override
-  void didUpdateWidget(FileExplorer oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.controller != oldWidget.controller) {
-      setState(() {});
-    }
-  }
 }
 
 class _FileExplorerContent extends StatefulWidget {
@@ -60,6 +51,7 @@ class _FileExplorerContent extends StatefulWidget {
 class _FileExplorerContentState extends State<_FileExplorerContent>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
+  final GlobalKey _listViewKey = GlobalKey();
 
   @override
   bool get wantKeepAlive => true;
@@ -84,34 +76,44 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
     );
   }
 
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  Widget _buildDirectorySelectionPrompt(ThemeData theme) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.folder_open,
+            size: 64,
+            color: theme.iconTheme.color?.withOpacity(0.7),
+          ),
+          const SizedBox(height: 16),
+          TextButton(
+            onPressed: _pickDirectory,
+            style: TextButton.styleFrom(
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              shadowColor: Colors.transparent,
+            ),
+            child: Text(
+              'Select Directory',
+              style: TextStyle(color: theme.textTheme.bodyLarge?.color),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFileExplorer(
       ThemeData theme, FileExplorerController controller) {
     if (controller.currentDirectory == null) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.folder_open,
-              size: 64,
-              color: theme.iconTheme.color?.withOpacity(0.7),
-            ),
-            const SizedBox(height: 16),
-            TextButton(
-              onPressed: _pickDirectory,
-              style: TextButton.styleFrom(
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-                shadowColor: Colors.transparent,
-              ),
-              child: Text(
-                'Select Directory',
-                style: TextStyle(color: theme.textTheme.bodyLarge?.color),
-              ),
-            ),
-          ],
-        ),
-      );
+      return _buildDirectorySelectionPrompt(theme);
     }
     return Theme(
       data: theme.copyWith(
@@ -124,18 +126,23 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       ),
       child: Scrollbar(
         controller: _scrollController,
-        child: ListView(
+        child: ListView.builder(
+          key: _listViewKey,
           controller: _scrollController,
-          children: [
-            FileTreeItem(
-              key: ValueKey(controller.currentDirectory?.path),
-              entity: controller.currentDirectory!,
+          itemCount: controller.fileTree.length + 1, // +1 for bottom padding
+          itemExtent: 30.0,
+          cacheExtent: 300,
+          itemBuilder: (context, index) {
+            if (index == controller.fileTree.length) {
+              return const SizedBox(height: 24);
+            }
+            final item = controller.fileTree[index];
+            return FileTreeItemWidget(
+              key: ValueKey(item.path),
+              item: item,
               onFileSelected: widget.onFileSelected,
-              level: 0,
-              isInitiallyExpanded: true,
-            ),
-            Container(height: 24)
-          ],
+            );
+          },
         ),
       ),
     );
