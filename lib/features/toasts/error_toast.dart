@@ -1,27 +1,36 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 class ErrorToast {
-  static const double _toastHeight = 120.0;
+  static const double _collapsedToastHeight = 120.0;
+  static const double _maxExpandedToastHeight = 200.0;
   static const double _toastWidth = 300.0;
+  final VoidCallback _onExpand;
   static const Duration _animationDuration = Duration(milliseconds: 300);
   static const Duration _autoRemoveDuration = Duration(seconds: 6);
+  static const Duration _copyFeedbackDuration = Duration(seconds: 1);
   final String filePath;
   final String errorMessage;
 
   late OverlayEntry _entry;
   Timer? _autoRemoveTimer;
+  Timer? _copyFeedbackTimer;
   final VoidCallback _onRemove;
   final BuildContext _context;
+  bool _isExpanded = false;
+  bool _showCopyFeedback = false;
 
   ErrorToast({
     required this.filePath,
     required this.errorMessage,
     required BuildContext context,
     required VoidCallback onRemove,
+    required VoidCallback onExpand,
   })  : _context = context,
-        _onRemove = onRemove {
+        _onRemove = onRemove,
+        _onExpand = onExpand {
     _createOverlayEntry();
     _insertOverlay();
     _startAutoRemoveTimer();
@@ -29,6 +38,7 @@ class ErrorToast {
 
   void remove() {
     _autoRemoveTimer?.cancel();
+    _copyFeedbackTimer?.cancel();
     _entry.remove();
     _onRemove();
   }
@@ -36,8 +46,11 @@ class ErrorToast {
   Widget _buildToastWidget() {
     return Material(
       color: Colors.transparent,
-      child: Container(
+      child: AnimatedContainer(
+        duration: _animationDuration,
+        curve: Curves.easeInOut,
         width: _toastWidth,
+        height: _isExpanded ? _maxExpandedToastHeight : _collapsedToastHeight,
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
         decoration: BoxDecoration(
           color: Colors.red[700],
@@ -52,7 +65,6 @@ class ErrorToast {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -68,34 +80,83 @@ class ErrorToast {
                     ),
                   ],
                 ),
-                GestureDetector(
-                  onTap: remove,
-                  child: const Icon(Icons.close, color: Colors.white, size: 20),
+                Row(
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        _showCopyFeedback ? Icons.check : Icons.copy,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      onPressed: _copyToClipboard,
+                      tooltip: 'Copy error to clipboard',
+                    ),
+                    IconButton(
+                      icon: AnimatedSwitcher(
+                        duration: _animationDuration,
+                        child: Icon(
+                          _isExpanded ? Icons.expand_less : Icons.expand_more,
+                          color: Colors.white,
+                          size: 20,
+                          key: ValueKey<bool>(_isExpanded),
+                        ),
+                      ),
+                      onPressed: _toggleExpand,
+                      tooltip: _isExpanded ? 'Collapse' : 'Expand',
+                    ),
+                    GestureDetector(
+                      onTap: remove,
+                      child: const Icon(Icons.close,
+                          color: Colors.white, size: 20),
+                    ),
+                  ],
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            const Text(
-              'Failed to open file:',
-              style: TextStyle(color: Colors.white),
-            ),
             Text(
-              filePath,
-              style: const TextStyle(
-                  color: Colors.white, fontWeight: FontWeight.bold),
+              'Failed to open file: $filePath',
+              style: const TextStyle(color: Colors.white),
               overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
-            Text(
-              'Error: $errorMessage',
-              style: const TextStyle(color: Colors.white),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 2,
+            Expanded(
+              child: AnimatedSwitcher(
+                duration: _animationDuration,
+                switchInCurve: Curves.easeInOut,
+                switchOutCurve: Curves.easeInOut,
+                child: _isExpanded
+                    ? SingleChildScrollView(
+                        key: const ValueKey<bool>(true),
+                        child: Text(
+                          'Error: $errorMessage',
+                          style: const TextStyle(color: Colors.white),
+                        ),
+                      )
+                    : Text(
+                        'Error: ${errorMessage.split('\n').first}',
+                        key: const ValueKey<bool>(false),
+                        style: const TextStyle(color: Colors.white),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+              ),
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _copyToClipboard() {
+    final errorText = 'File: $filePath\nError: $errorMessage';
+    Clipboard.setData(ClipboardData(text: errorText));
+    _showCopyFeedback = true;
+    _updateOverlay();
+    _copyFeedbackTimer?.cancel();
+    _copyFeedbackTimer = Timer(_copyFeedbackDuration, () {
+      _showCopyFeedback = false;
+      _updateOverlay();
+    });
   }
 
   void _createOverlayEntry() {
@@ -110,6 +171,16 @@ class ErrorToast {
 
   void _startAutoRemoveTimer() {
     _autoRemoveTimer = Timer(_autoRemoveDuration, remove);
+  }
+
+  void _toggleExpand() {
+    _isExpanded = !_isExpanded;
+    _updateOverlay();
+    _onExpand();
+  }
+
+  void _updateOverlay() {
+    _entry.markNeedsBuild();
   }
 }
 
@@ -135,10 +206,10 @@ class ErrorToastManager {
       errorMessage: errorMessage,
       context: _context,
       onRemove: removeToast,
+      onExpand: _updateToastPositions,
     );
 
-    _activeToasts.insert(
-        0, newToast); // Add new toast at the beginning of the list
+    _activeToasts.insert(0, newToast);
     _updateToastPositions();
   }
 
@@ -148,11 +219,12 @@ class ErrorToastManager {
   }
 
   void _updateToastPositions() {
+    double totalHeight = 0;
     for (int i = 0; i < _activeToasts.length; i++) {
-      final bottomOffset =
-          _bottomMargin + (i * (ErrorToast._toastHeight + _toastSpacing));
-      _activeToasts[i]._entry.remove(); // Remove the old entry
-      _activeToasts[i]._entry = OverlayEntry(
+      final toast = _activeToasts[i];
+      final bottomOffset = _bottomMargin + totalHeight;
+      toast._entry.remove();
+      toast._entry = OverlayEntry(
         builder: (context) => AnimatedPositioned(
           duration: ErrorToast._animationDuration,
           curve: Curves.easeInOut,
@@ -161,11 +233,15 @@ class ErrorToastManager {
           child: AnimatedOpacity(
             duration: ErrorToast._animationDuration,
             opacity: 1.0,
-            child: _activeToasts[i]._buildToastWidget(),
+            child: toast._buildToastWidget(),
           ),
         ),
       );
-      Overlay.of(_context).insert(_activeToasts[i]._entry);
+      Overlay.of(_context).insert(toast._entry);
+      totalHeight += (toast._isExpanded
+              ? ErrorToast._maxExpandedToastHeight
+              : ErrorToast._collapsedToastHeight) +
+          _toastSpacing;
     }
   }
 }
