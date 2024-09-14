@@ -10,7 +10,6 @@ Follow the steps below to set up the project and run it on your desired platform
 ### Prerequisites
 
 - [Flutter SDK](https://flutter.dev/docs/get-started/install)
-- A working installation of [Android Studio](https://developer.android.com/studio), [Xcode](https://developer.apple.com/xcode/), or [Visual Studio Code](https://code.visualstudio.com/) (with the Flutter plugin installed).
 - Platform-specific prerequisites (e.g., Android SDK, iOS simulator, etc.).
 
 ### Installation
