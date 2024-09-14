@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
+import 'package:starlight/services/keyboard_shortcut_service.dart';
 
 class CodeEditor extends StatefulWidget {
   final String initialCode;
@@ -24,6 +25,8 @@ class CodeEditor extends StatefulWidget {
   final int? selectionStart;
   final int? selectionEnd;
   final int? cursorPosition;
+  final KeyboardShortcutService keyboardShortcutService;
+  final Function(String) onContentChanged;
 
   const CodeEditor({
     super.key,
@@ -39,6 +42,8 @@ class CodeEditor extends StatefulWidget {
     required this.onReplaceAll,
     required this.onUpdateSearchTerm,
     required this.onUpdateReplaceTerm,
+    required this.keyboardShortcutService,
+    required this.onContentChanged,
     this.selectionStart,
     this.selectionEnd,
     this.cursorPosition,
@@ -447,6 +452,13 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
+    // First, check if the KeyboardShortcutService wants to handle this event
+    KeyEventResult shortcutResult =
+        widget.keyboardShortcutService.handleKeyEvent(event);
+    if (shortcutResult == KeyEventResult.handled) {
+      return KeyEventResult.handled;
+    }
+
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
@@ -635,6 +647,7 @@ class _CodeEditorState extends State<CodeEditor> {
         _isModified = true;
       });
       widget.onModified(_isModified);
+      widget.onContentChanged(editingCore.getText());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recalculateEditor();
       });

@@ -7,16 +7,18 @@ import 'package:starlight/features/editor/presentation/editor.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
 import 'package:starlight/features/tabs/presentation/tab.dart';
 import 'package:starlight/presentation/screens/search_all_files.dart';
+import 'package:starlight/services/keyboard_shortcut_service.dart';
 
 class EditorWidget extends StatefulWidget {
+  final KeyboardShortcutService keyboardShortcutService;
   final FileMenuActions fileMenuActions;
   final ValueNotifier<String?> rootDirectory;
 
-  const EditorWidget({
-    super.key,
-    required this.fileMenuActions,
-    required this.rootDirectory,
-  });
+  const EditorWidget(
+      {super.key,
+      required this.fileMenuActions,
+      required this.rootDirectory,
+      required this.keyboardShortcutService});
 
   @override
   EditorWidgetState createState() => EditorWidgetState();
@@ -112,13 +114,7 @@ class EditorWidgetState extends State<EditorWidget> {
 
   void saveCurrentFile() {
     if (_selectedTabIndex.value != -1) {
-      final currentTab = _tabs[_selectedTabIndex.value];
-      if (currentTab.filePath != 'Untitled') {
-        File(currentTab.filePath).writeAsStringSync(currentTab.content);
-        currentTab.isModified = false;
-      } else {
-        saveFileAs();
-      }
+      _saveTab(_selectedTabIndex.value);
     }
   }
 
@@ -131,7 +127,7 @@ class EditorWidgetState extends State<EditorWidget> {
 
       if (outputFile != null) {
         final currentTab = _tabs[_selectedTabIndex.value];
-        File(outputFile).writeAsStringSync(currentTab.content);
+        await File(outputFile).writeAsString(currentTab.content);
         setState(() {
           currentTab.filePath = outputFile;
           currentTab.isModified = false;
@@ -147,10 +143,11 @@ class EditorWidgetState extends State<EditorWidget> {
     }
 
     return CodeEditor(
-      key: ValueKey(currentTab.content),
+      key: ValueKey(currentTab.filePath),
       initialCode: currentTab.content,
       filePath: currentTab.filePath,
       onModified: (isModified) => _onFileModified(selectedIndex, isModified),
+      onContentChanged: _onCodeEditorContentChanged,
       matchPositions: _matchPositions,
       searchTerm: _searchTerm,
       currentMatchIndex: _currentMatchIndex,
@@ -163,6 +160,7 @@ class EditorWidgetState extends State<EditorWidget> {
       selectionStart: currentTab.selectionStart,
       selectionEnd: currentTab.selectionEnd,
       cursorPosition: currentTab.cursorPosition,
+      keyboardShortcutService: widget.keyboardShortcutService,
     );
   }
 
@@ -460,6 +458,7 @@ class EditorWidgetState extends State<EditorWidget> {
               onCloseOtherTabs: _closeOtherTabs,
               onCloseAllTabs: _closeAllTabs,
               onCloseTabsToRight: _closeTabsToRight,
+              onTabSaved: _saveTab,
             ),
           );
         } else {
@@ -590,6 +589,19 @@ class EditorWidgetState extends State<EditorWidget> {
         _tabs[_selectedTabIndex.value].filePath == 'Project Search';
   }
 
+  void _onCodeEditorContentChanged(String newContent) {
+    if (_selectedTabIndex.value != -1) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      if (currentTab.content != newContent) {
+        setState(() {
+          // TODO remove this when the rope content bug is fixed
+          currentTab.content = newContent.replaceFirst('\n', '');
+          currentTab.isModified = true;
+        });
+      }
+    }
+  }
+
   void _onFileModified(int index, bool isModified) {
     _tabs[index].isModified = isModified;
   }
@@ -645,6 +657,20 @@ class EditorWidgetState extends State<EditorWidget> {
         currentTab.content = newContent;
         _updateMatchesAfterReplace();
       });
+    }
+  }
+
+  Future<void> _saveTab(int index) async {
+    if (index >= 0 && index < _tabs.length) {
+      final currentTab = _tabs[index];
+      if (currentTab.filePath != 'Untitled') {
+        await File(currentTab.filePath).writeAsString(currentTab.content);
+        setState(() {
+          currentTab.isModified = false;
+        });
+      } else {
+        await saveFileAs();
+      }
     }
   }
 
@@ -735,15 +761,18 @@ class EditorWidgetState extends State<EditorWidget> {
   }
 
   void _updateSearchTerm(String term) {
-    setState(() {
-      _searchTerm = term;
-      if (term.isEmpty) {
-        _matchPositions = [];
-        _currentMatchIndex = -1;
-      } else {
-        _selectAllMatches();
-      }
+    if (_debounceTimer?.isActive ?? false) _debounceTimer!.cancel();
+    _debounceTimer = Timer(const Duration(milliseconds: 300), () {
+      setState(() {
+        _searchTerm = term;
+        if (term.isEmpty) {
+          _matchPositions = [];
+          _currentMatchIndex = -1;
+        } else {
+          _selectAllMatches();
+        }
+        _updateCodeEditorHighlights();
+      });
     });
-    _updateCodeEditorHighlights();
   }
 }

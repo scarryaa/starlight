@@ -53,6 +53,7 @@ class Tab extends StatefulWidget {
   final bool isModified;
   final VoidCallback onTap;
   final VoidCallback onClose;
+  final Future<void> Function() onSave;
   final void Function(String action, int index) onContextMenuAction;
   final GlobalKey tabKey;
   final bool isPinned;
@@ -66,6 +67,7 @@ class Tab extends StatefulWidget {
     required this.isModified,
     required this.onTap,
     required this.onClose,
+    required this.onSave,
     required this.onContextMenuAction,
     required this.isPinned,
   });
@@ -82,6 +84,7 @@ class TabBar extends StatefulWidget {
   final void Function(int oldIndex, int newIndex) onTabsReordered;
   final void Function(int index) onCloseOtherTabs;
   final VoidCallback onCloseAllTabs;
+  final Future<void> Function(int index) onTabSaved;
   final void Function(int index) onCloseTabsToRight;
 
   const TabBar({
@@ -93,6 +96,7 @@ class TabBar extends StatefulWidget {
     required this.onTabsReordered,
     required this.onCloseOtherTabs,
     required this.onCloseAllTabs,
+    required this.onTabSaved,
     required this.onCloseTabsToRight,
   });
 
@@ -190,6 +194,7 @@ class _TabBarState extends State<TabBar> {
                       isPinned: widget.tabs[index].isPinned,
                       onTap: () => widget.onTabSelected(index),
                       onClose: () => widget.onTabClosed(index),
+                      onSave: () => widget.onTabSaved(index),
                       onContextMenuAction: _handleContextMenuAction,
                     ),
                   )
@@ -319,6 +324,8 @@ class _TabBarState extends State<TabBar> {
   }
 }
 
+// ... [Previous code remains unchanged]
+
 class _TabState extends State<Tab> {
   bool _isHovered = false;
 
@@ -338,7 +345,7 @@ class _TabState extends State<Tab> {
           child: Listener(
             onPointerDown: (PointerDownEvent event) {
               if (event.buttons == kMiddleMouseButton && !widget.isPinned) {
-                widget.onClose();
+                _handleTabClose(context);
               }
             },
             child: Container(
@@ -383,7 +390,7 @@ class _TabState extends State<Tab> {
                       )
                     else if (_isHovered)
                       _CloseButton(
-                        onTap: widget.onClose,
+                        onTap: () => _handleTabClose(context),
                         color: theme.iconTheme.color,
                       )
                     else
@@ -398,6 +405,20 @@ class _TabState extends State<Tab> {
     );
   }
 
+  void _handleTabClose(BuildContext context) async {
+    if (widget.isModified) {
+      String? action = await _showUnsavedChangesDialog(context);
+      if (action == 'save') {
+        await widget.onSave();
+        widget.onClose();
+      } else if (action == 'close') {
+        widget.onClose();
+      }
+    } else {
+      widget.onClose();
+    }
+  }
+
   void _showContextMenu(BuildContext context, Offset position) {
     final List<ContextMenuItem> menuItems = [
       ContextMenuItem(
@@ -406,7 +427,7 @@ class _TabState extends State<Tab> {
       ),
       ContextMenuItem(
         title: 'Close Tab',
-        onTap: () => widget.onContextMenuAction('close', widget.index),
+        onTap: () => _handleTabClose(context),
       ),
       ContextMenuItem(
         title: 'Close Tabs to the Right',
@@ -433,6 +454,40 @@ class _TabState extends State<Tab> {
               left: position.dx,
               top: position.dy,
               child: ContextMenu(items: menuItems),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<String?> _showUnsavedChangesDialog(BuildContext context) async {
+    return showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: const Text('Unsaved Changes'),
+          content: const Text(
+              'You have unsaved changes. What would you like to do?'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop('cancel');
+              },
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop('save');
+              },
+              child: const Text('Save and Close'),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop('close');
+              },
+              child: const Text('Close Without Saving'),
             ),
           ],
         );

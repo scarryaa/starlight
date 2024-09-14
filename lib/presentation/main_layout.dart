@@ -15,19 +15,28 @@ class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
 
   @override
-  _MainLayoutState createState() => _MainLayoutState();
+  MainLayoutState createState() => MainLayoutState();
 }
 
-class _MainLayoutState extends State<MainLayout> {
+class MainLayoutState extends State<MainLayout> {
   late final FileExplorerService _fileExplorerService;
   late final EditorService _editorService;
-  late final KeyboardShortcutService _keyboardShortcutService;
   late final UIService _uiService;
+
+  @override
+  void initState() {
+    super.initState();
+    _fileExplorerService = context.read<FileExplorerService>();
+    _editorService = context.read<EditorService>();
+    _uiService = context.read<UIService>();
+  }
 
   @override
   Widget build(BuildContext context) {
     final themeProvider = Provider.of<ThemeProvider>(context);
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final keyboardShortcutService =
+        Provider.of<KeyboardShortcutService>(context, listen: false);
 
     return Scaffold(
       body: Column(
@@ -58,6 +67,7 @@ class _MainLayoutState extends State<MainLayout> {
                       exit: (context) => SystemNavigator.pop(),
                     ),
                     rootDirectory: _fileExplorerService.selectedDirectory,
+                    keyboardShortcutService: keyboardShortcutService,
                   ),
                 ),
               ],
@@ -67,16 +77,5 @@ class _MainLayoutState extends State<MainLayout> {
         ],
       ),
     );
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    _fileExplorerService = FileExplorerService();
-    _editorService = EditorService();
-    _keyboardShortcutService = KeyboardShortcutService(_editorService);
-    _uiService = UIService();
-
-    _keyboardShortcutService.initializeKeyboardShortcuts();
   }
 }
