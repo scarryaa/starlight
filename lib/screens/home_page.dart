@@ -11,6 +11,7 @@ import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/file_menu/file_menu_actions.dart';
 import 'package:starlight/features/file_menu/menu_actions.dart';
 import 'package:starlight/features/tabs/tab.dart';
+import 'package:starlight/screens/search_all_files.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:starlight/utils/widgets/resizable_widget.dart';
 import 'package:window_manager/window_manager.dart';
@@ -83,15 +84,39 @@ class _EditorWidgetState extends State<EditorWidget> {
     });
   }
 
+  addSearchAllFilesTab() {
+    setState(() {
+      _tabs.add(FileTab(
+        filePath: 'Project Search',
+        content: '',
+        customWidget: SearchAllFilesTab(
+          rootDirectory: widget.rootDirectory.value ?? '',
+          onFileSelected: openFile,
+        ),
+      ));
+      _selectedTabIndex.value = _tabs.length - 1;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildTabBar(),
-        if (_tabs.isNotEmpty) _buildSearchToggleButton(),
-        if (_isSearchVisible && _tabs.isNotEmpty) _buildCompactSearchBar(),
-        Expanded(child: _buildEditor()),
-      ],
+    return ValueListenableBuilder<int>(
+      valueListenable: _selectedTabIndex,
+      builder: (context, selectedIndex, _) {
+        final bool isSearchAllFilesTabOpen = _isSearchAllFilesTabOpen();
+        return Column(
+          children: [
+            _buildTabBar(),
+            if (_tabs.isNotEmpty && !isSearchAllFilesTabOpen)
+              _buildSearchToggleButton(),
+            if (_isSearchVisible &&
+                _tabs.isNotEmpty &&
+                !isSearchAllFilesTabOpen)
+              _buildCompactSearchBar(),
+            Expanded(child: _buildEditor()),
+          ],
+        );
+      },
     );
   }
 
@@ -155,6 +180,10 @@ class _EditorWidgetState extends State<EditorWidget> {
 
   Widget _buildCodeEditor(int selectedIndex) {
     final currentTab = _tabs[selectedIndex];
+    if (currentTab.customWidget != null) {
+      return currentTab.customWidget!;
+    }
+
     return CodeEditor(
       key: ValueKey(currentTab.content),
       initialCode: currentTab.content,
@@ -176,6 +205,10 @@ class _EditorWidgetState extends State<EditorWidget> {
   }
 
   Widget _buildCompactSearchBar() {
+    if (_isSearchAllFilesTabOpen()) {
+      return const SizedBox.shrink();
+    }
+
     final ThemeData theme = Theme.of(context);
     final bool isDarkMode = theme.brightness == Brightness.dark;
     final Color defaultTextColor = isDarkMode ? Colors.white : Colors.black;
@@ -378,6 +411,10 @@ class _EditorWidgetState extends State<EditorWidget> {
   }
 
   Widget _buildSearchToggleButton() {
+    if (_isSearchAllFilesTabOpen()) {
+      return const SizedBox.shrink();
+    }
+
     final ThemeData theme = Theme.of(context);
     final bool isDarkMode = theme.brightness == Brightness.dark;
     final Color defaultIconColor = isDarkMode ? Colors.white : Colors.black;
@@ -557,6 +594,11 @@ class _EditorWidgetState extends State<EditorWidget> {
       }
     }
     return positions;
+  }
+
+  bool _isSearchAllFilesTabOpen() {
+    return _selectedTabIndex.value != -1 &&
+        _tabs[_selectedTabIndex.value].filePath == 'Project Search';
   }
 
   void _onFileModified(int index, bool isModified) {
@@ -767,6 +809,7 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   void initState() {
     super.initState();
+    _initializeKeyboardShortcuts();
     _fileExplorerController = FileExplorerController();
     _fileMenuActions = FileMenuActions(
       newFile: _handleNewFile,
@@ -939,6 +982,22 @@ class _MyHomePageState extends State<MyHomePage> {
     SystemNavigator.pop();
   }
 
+  bool _handleKeyEvent(KeyEvent event) {
+    if (event is KeyDownEvent) {
+      bool isCommandOrControlPressed = Platform.isMacOS
+          ? HardwareKeyboard.instance.isMetaPressed
+          : HardwareKeyboard.instance.isControlPressed;
+
+      if (isCommandOrControlPressed &&
+          HardwareKeyboard.instance.isShiftPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyF) {
+        _editorKey.currentState?.addSearchAllFilesTab();
+        return true;
+      }
+    }
+    return false;
+  }
+
   void _handleNewFile() {
     _editorKey.currentState?.addEmptyTab();
   }
@@ -953,6 +1012,10 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _handleSaveFileAs() {
     _editorKey.currentState?.saveFileAs();
+  }
+
+  void _initializeKeyboardShortcuts() {
+    HardwareKeyboard.instance.addHandler(_handleKeyEvent);
   }
 
   Future<void> _pickDirectory() async {

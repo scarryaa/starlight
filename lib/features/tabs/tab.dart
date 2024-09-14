@@ -16,6 +16,7 @@ class FileTab {
   int? selectionStart;
   int? selectionEnd;
   int? cursorPosition;
+  Widget? customWidget;
 
   FileTab({
     required this.filePath,
@@ -25,6 +26,7 @@ class FileTab {
     this.selectionStart,
     this.selectionEnd,
     this.cursorPosition,
+    this.customWidget,
   }) : id = _uuid.v4();
 
   String get fileName => filePath.split(Platform.pathSeparator).last;

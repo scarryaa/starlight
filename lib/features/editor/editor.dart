@@ -134,7 +134,6 @@ class _CodeEditorState extends State<CodeEditor> {
       // Again, dumb way to avoid formatting bug when initializing rope for now
       // TODO fix this
       editingCore = TextEditingCore("\n");
-      print(widget.initialCode.isEmpty);
       editingCore.setText(widget.initialCode);
       if (widget.initialCode.isEmpty) {
         editingCore.handleBackspace();
