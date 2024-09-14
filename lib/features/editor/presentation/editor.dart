@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide TabBar, Tab;
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
+import 'package:starlight/features/editor/domain/enums/selection_mode.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
@@ -56,7 +58,6 @@ class _CodeEditorState extends State<CodeEditor> {
   static double charWidth = 8.0;
   static const double scrollbarWidth = 10.0;
   late TextEditingCore editingCore;
-  bool _isModified = false;
   late ScrollController codeScrollController;
   late ScrollController lineNumberScrollController;
 
@@ -78,6 +79,12 @@ class _CodeEditorState extends State<CodeEditor> {
   int _lastLineCount = 0;
   late TextPainter _textPainter;
   int _lastKnownVersion = -1;
+  int _tapCount = 0;
+  Timer? _tapTimer;
+  SelectionMode _selectionMode = SelectionMode.character;
+  int? _selectionAnchor;
+  static const double _clickDistanceThreshold = 10.0; // pixels
+  Offset? _lastTapPosition;
 
   @override
   Widget build(BuildContext context) {
@@ -198,6 +205,10 @@ class _CodeEditorState extends State<CodeEditor> {
       onTapDown: _handleTap,
       onPanStart: _updateSelection,
       onPanUpdate: _updateSelectionOnDrag,
+      onPanEnd: (details) {
+        _selectionAnchor = null;
+        _selectionMode = SelectionMode.character;
+      },
       behavior: HitTestBehavior.deferToChild,
       child: Focus(
         focusNode: focusNode,
@@ -405,6 +416,40 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
+  void _extendSelectionByLineFromAnchor(int anchor, int extent) {
+    int anchorLine = editingCore.rope.findLine(anchor);
+    int extentLine = editingCore.rope.findLine(extent);
+
+    int newStart = editingCore.getLineStartIndex(min(anchorLine, extentLine));
+    int newEnd = editingCore.getLineEndIndex(max(anchorLine, extentLine));
+
+    if (extent >= anchor) {
+      // Dragging forward
+      editingCore.setSelection(anchor, newEnd);
+    } else {
+      // Dragging backward
+      editingCore.setSelection(newStart, anchor);
+    }
+  }
+
+  void _extendSelectionByWordFromAnchor(int anchor, int extent) {
+    int newStart, newEnd;
+
+    if (extent >= anchor) {
+      // Dragging forward
+      _selectWordAtPosition(extent);
+      newStart = anchor;
+      newEnd = editingCore.selectionEnd!;
+    } else {
+      // Dragging backward
+      _selectWordAtPosition(extent);
+      newStart = editingCore.selectionStart!;
+      newEnd = anchor;
+    }
+
+    editingCore.setSelection(newStart, newEnd);
+  }
+
   int _getPositionFromOffset(Offset offset) {
     final adjustedOffset = offset +
         Offset(
@@ -450,6 +495,14 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
+  void _handleDoubleTap(TapDownDetails details) {
+    final position = _getPositionFromOffset(details.localPosition);
+    setState(() {
+      _selectWordAtPosition(position);
+    });
+    focusNode.requestFocus();
+  }
+
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
     // First, check if the KeyboardShortcutService wants to handle this event
     KeyEventResult shortcutResult =
@@ -486,38 +539,44 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     setState(() {
-      switch (event.logicalKey) {
-        case LogicalKeyboardKey.arrowLeft:
-          editingCore.moveCursor(-1, 0);
-          break;
-        case LogicalKeyboardKey.arrowRight:
-          editingCore.moveCursor(1, 0);
-          break;
-        case LogicalKeyboardKey.arrowUp:
-          editingCore.moveCursor(0, -1);
-          break;
-        case LogicalKeyboardKey.arrowDown:
-          editingCore.moveCursor(0, 1);
-          break;
-        case LogicalKeyboardKey.enter:
-          editingCore.insertText('\n');
-          break;
-        case LogicalKeyboardKey.backspace:
-          editingCore.handleBackspace();
-          _recalculateEditor();
-          break;
-        case LogicalKeyboardKey.delete:
-          editingCore.handleDelete();
-          _recalculateEditor();
-          break;
-        case LogicalKeyboardKey.tab:
-          editingCore.insertText('    ');
-          break;
-        default:
-          if (event.character != null) {
-            editingCore.insertText(event.character!);
-            _recalculateEditor();
-          }
+      if (editingCore.hasSelection() && !isShiftPressed) {
+        int selectionStart = editingCore.selectionStart!;
+        int selectionEnd = editingCore.selectionEnd!;
+        int startLine = editingCore.rope.findLine(selectionStart);
+        int endLine = editingCore.rope.findLine(selectionEnd);
+
+        switch (event.logicalKey) {
+          case LogicalKeyboardKey.arrowLeft:
+            editingCore.cursorPosition = selectionStart;
+            editingCore.clearSelection();
+            break;
+          case LogicalKeyboardKey.arrowRight:
+            editingCore.cursorPosition = selectionEnd;
+            editingCore.clearSelection();
+            break;
+          case LogicalKeyboardKey.arrowUp:
+            if (startLine > 0) {
+              int newLine = startLine - 1;
+              int newPosition = getPositionAtColumn(newLine,
+                  selectionStart - editingCore.getLineStartIndex(startLine));
+              editingCore.cursorPosition = newPosition;
+              editingCore.clearSelection();
+            }
+            break;
+          case LogicalKeyboardKey.arrowDown:
+            if (endLine < editingCore.lineCount - 1) {
+              int newLine = endLine + 1;
+              int newPosition = getPositionAtColumn(newLine,
+                  selectionEnd - editingCore.getLineStartIndex(endLine));
+              editingCore.cursorPosition = newPosition;
+              editingCore.clearSelection();
+            }
+            break;
+          default:
+            _handleRegularKeyPress(event);
+        }
+      } else {
+        _handleRegularKeyPress(event);
       }
     });
 
@@ -532,6 +591,42 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     return KeyEventResult.handled;
+  }
+
+  void _handleRegularKeyPress(KeyEvent event) {
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowLeft:
+        editingCore.moveCursor(-1, 0);
+        break;
+      case LogicalKeyboardKey.arrowRight:
+        editingCore.moveCursor(1, 0);
+        break;
+      case LogicalKeyboardKey.arrowUp:
+        editingCore.moveCursor(0, -1);
+        break;
+      case LogicalKeyboardKey.arrowDown:
+        editingCore.moveCursor(0, 1);
+        break;
+      case LogicalKeyboardKey.enter:
+        editingCore.insertText('\n');
+        break;
+      case LogicalKeyboardKey.backspace:
+        editingCore.handleBackspace();
+        _recalculateEditor();
+        break;
+      case LogicalKeyboardKey.delete:
+        editingCore.handleDelete();
+        _recalculateEditor();
+        break;
+      case LogicalKeyboardKey.tab:
+        editingCore.insertText('    ');
+        break;
+      default:
+        if (event.character != null) {
+          editingCore.insertText(event.character!);
+          _recalculateEditor();
+        }
+    }
   }
 
   void _handlePaste() async {
@@ -550,11 +645,54 @@ class _CodeEditorState extends State<CodeEditor> {
     _recalculateEditor();
   }
 
-  void _handleTap(TapDownDetails details) {
+  void _handleSingleTap(TapDownDetails details) {
     final position = _getPositionFromOffset(details.localPosition);
     setState(() {
       editingCore.cursorPosition = position;
       editingCore.clearSelection();
+    });
+    focusNode.requestFocus();
+  }
+
+  int getPositionAtColumn(int line, int column) {
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
+    return min(lineStart + column, lineEnd);
+  }
+
+  void _handleTap(TapDownDetails details) {
+    if (_lastTapPosition != null) {
+      double distance = (details.localPosition - _lastTapPosition!).distance;
+      if (distance > _clickDistanceThreshold) {
+        // If the new tap is too far from the last one, reset the tap count
+        _tapCount = 0;
+      }
+    }
+
+    _tapCount++;
+    _lastTapPosition = details.localPosition;
+    _tapTimer?.cancel();
+    _tapTimer = Timer(const Duration(milliseconds: 500), () {
+      _tapCount = 0;
+      _lastTapPosition = null;
+    });
+
+    if (_tapCount == 1) {
+      _selectionMode = SelectionMode.character;
+      _handleSingleTap(details);
+    } else if (_tapCount == 2) {
+      _selectionMode = SelectionMode.word;
+      _handleDoubleTap(details);
+    } else if (_tapCount == 3) {
+      _selectionMode = SelectionMode.line;
+      _handleTripleTap(details);
+    }
+  }
+
+  void _handleTripleTap(TapDownDetails details) {
+    final position = _getPositionFromOffset(details.localPosition);
+    setState(() {
+      _selectLineAtPosition(position);
     });
     focusNode.requestFocus();
   }
@@ -572,6 +710,34 @@ class _CodeEditorState extends State<CodeEditor> {
     charWidth = _textPainter.width;
   }
 
+  bool _isCompoundOperator(String sequence) {
+    final compoundOperators = [
+      '++;',
+      '--;',
+      '+=',
+      '-=',
+      '*=',
+      '/=',
+      '%=',
+      '&=',
+      '|=',
+      '^=',
+      '>>=',
+      '<<='
+    ];
+    return compoundOperators.any((op) => sequence.endsWith(op));
+  }
+
+  bool _isSpecialCharacter(String char) {
+    return ';}),]'.contains(char);
+  }
+
+  bool _isWordBoundary(String character) {
+    return character.trim().isEmpty ||
+        _isSpecialCharacter(character) ||
+        '+-*/%&|^<>=!'.contains(character);
+  }
+
   void _loadFile() {
     if (widget.filePath.isNotEmpty) {
       try {
@@ -581,7 +747,6 @@ class _CodeEditorState extends State<CodeEditor> {
           editingCore.setText(content);
           editingCore.cursorPosition = 1;
           editingCore.clearSelection();
-          _isModified = false;
         });
 
         SchedulerBinding.instance.addPostFrameCallback((_) {
@@ -641,9 +806,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _onTextChanged() {
     if (_lastKnownVersion != editingCore.version) {
-      setState(() {
-        _isModified = true;
-      });
+      setState(() {});
       widget.onContentChanged(editingCore.getText());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recalculateEditor();
@@ -658,6 +821,118 @@ class _CodeEditorState extends State<CodeEditor> {
     _updateVisibleLines();
     _ensureCursorVisibility();
     setState(() {});
+  }
+
+  void _selectLineAtPosition(int position) {
+    int line = editingCore.rope.findLine(position);
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
+    editingCore.setSelection(lineStart, lineEnd);
+    editingCore.cursorPosition =
+        lineEnd; // Place cursor at the end of selection
+  }
+
+  void _selectWordAtPosition(int position) {
+    String text = editingCore.getText();
+    if (text.isEmpty) return;
+
+    // Find the start and end of the current line
+    int lineStart = position;
+    while (lineStart > 0 && text[lineStart - 1] != '\n') {
+      lineStart--;
+    }
+    int lineEnd = position;
+    while (lineEnd < text.length && text[lineEnd] != '\n') {
+      lineEnd++;
+    }
+
+    // Check if the click is beyond the last non-whitespace character
+    int lastNonWhitespace = lineEnd - 1;
+    while (lastNonWhitespace > lineStart &&
+        text[lastNonWhitespace].trim().isEmpty) {
+      lastNonWhitespace--;
+    }
+
+    if (position > lastNonWhitespace) {
+      // Click is beyond the last word, so select the last word or special characters
+      int wordEnd = lastNonWhitespace + 1;
+      int wordStart = wordEnd;
+
+      // Check for compound operators or special character sequences at the end
+      String endSequence = text.substring(max(lineStart, wordEnd - 3), wordEnd);
+      if (_isCompoundOperator(endSequence)) {
+        wordStart = wordEnd - endSequence.length;
+      } else {
+        // Check if the last characters are special
+        bool lastIsSpecial = _isSpecialCharacter(text[wordStart - 1]);
+
+        if (lastIsSpecial) {
+          // Select only the special characters at the end
+          while (wordStart > lineStart &&
+              _isSpecialCharacter(text[wordStart - 1])) {
+            wordStart--;
+          }
+        } else {
+          // Select the last word
+          while (
+              wordStart > lineStart && !_isWordBoundary(text[wordStart - 1])) {
+            wordStart--;
+          }
+        }
+      }
+      editingCore.setSelection(wordStart, wordEnd);
+    } else {
+      // Normal word or whitespace selection
+      int start = position;
+      int end = position;
+
+      bool isWhitespace = text[position].trim().isEmpty;
+
+      if (isWhitespace) {
+        // Select contiguous whitespace within the same line
+        while (start > lineStart && text[start - 1].trim().isEmpty) {
+          start--;
+        }
+        while (end < lineEnd && text[end].trim().isEmpty) {
+          end++;
+        }
+      } else {
+        // Word or special character sequence selection logic
+        String currentSequence = text.substring(
+            max(lineStart, position - 2), min(lineEnd, position + 1));
+        bool isCompound = _isCompoundOperator(currentSequence);
+        bool isSpecial = _isSpecialCharacter(text[position]);
+
+        if (isCompound) {
+          start = max(lineStart, position - 2);
+          end = min(lineEnd, position + 1);
+          while (start > lineStart &&
+              _isCompoundOperator(text.substring(start - 1, end))) {
+            start--;
+          }
+          while (end < lineEnd &&
+              _isCompoundOperator(text.substring(start, end + 1))) {
+            end++;
+          }
+        } else {
+          while (start > lineStart &&
+              (isSpecial
+                  ? _isSpecialCharacter(text[start - 1])
+                  : !_isWordBoundary(text[start - 1]))) {
+            start--;
+          }
+          while (end < lineEnd &&
+              (isSpecial
+                  ? _isSpecialCharacter(text[end])
+                  : !_isWordBoundary(text[end]))) {
+            end++;
+          }
+        }
+      }
+
+      editingCore.setSelection(start, end);
+      editingCore.cursorPosition = end; // Place cursor at the end of selection
+    }
   }
 
   void _syncHorizontalScrollbar() {
@@ -718,16 +993,30 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _updateSelection(DragStartDetails details) {
     final position = _getPositionFromOffset(details.localPosition);
+    _selectionAnchor = position;
     setState(() {
-      editingCore.setSelection(position, position);
+      if (_selectionMode == SelectionMode.word) {
+        _selectWordAtPosition(position);
+        _selectionAnchor = editingCore.selectionStart;
+      } else if (_selectionMode == SelectionMode.line) {
+        _selectLineAtPosition(position);
+        _selectionAnchor = editingCore.selectionStart;
+      } else {
+        editingCore.setSelection(position, position);
+      }
     });
   }
 
   void _updateSelectionOnDrag(DragUpdateDetails details) {
     final position = _getPositionFromOffset(details.localPosition);
     setState(() {
-      editingCore.setSelection(
-          editingCore.selectionStart ?? position, position);
+      if (_selectionMode == SelectionMode.word) {
+        _extendSelectionByWordFromAnchor(_selectionAnchor!, position);
+      } else if (_selectionMode == SelectionMode.line) {
+        _extendSelectionByLineFromAnchor(_selectionAnchor!, position);
+      } else {
+        editingCore.setSelection(_selectionAnchor!, position);
+      }
     });
     _autoScrollOnDrag(details.localPosition);
   }
