@@ -104,11 +104,23 @@ class EditorWidgetState extends State<EditorWidget> {
 
   void openFile(File file) {
     try {
-      String content = file.readAsStringSync();
-      setState(() {
-        _tabs.add(FileTab(filePath: file.path, content: content));
-        _selectedTabIndex.value = _tabs.length - 1;
-      });
+      // Check if the file is already open in a tab
+      int existingTabIndex =
+          _tabs.indexWhere((tab) => tab.filePath == file.path);
+
+      if (existingTabIndex != -1) {
+        // If the file is already open, switch to that tab
+        setState(() {
+          _selectedTabIndex.value = existingTabIndex;
+        });
+      } else {
+        // If the file is not open, create a new tab
+        String content = file.readAsStringSync();
+        setState(() {
+          _tabs.add(FileTab(filePath: file.path, content: content));
+          _selectedTabIndex.value = _tabs.length - 1;
+        });
+      }
     } catch (e) {
       print('Error reading file: $e');
       _toastManager.showErrorToast(file.path, e.toString());
