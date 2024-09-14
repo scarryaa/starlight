@@ -37,6 +37,7 @@ class EditorWidgetState extends State<EditorWidget> {
   bool _matchCase = false;
   bool _matchWholeWord = false;
   bool _useRegex = false;
+  String _lastSearchTerm = '';
 
   void addEmptyTab() {
     setState(() {
@@ -260,7 +261,16 @@ class EditorWidgetState extends State<EditorWidget> {
                 _buildMatchCountDisplay(),
                 IconButton(
                   icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                  onPressed: () => setState(() => _isSearchVisible = false),
+                  onPressed: () => setState(() {
+                    _isSearchVisible = false;
+                    _lastSearchTerm = _searchTerm;
+
+                    _searchTerm = '';
+                    _matchPositions = [];
+                    _currentMatchIndex = -1;
+
+                    _updateCodeEditorHighlights();
+                  }),
                   tooltip: 'Close search',
                 ),
               ],
@@ -402,12 +412,30 @@ class EditorWidgetState extends State<EditorWidget> {
             icon: Icon(
               Icons.search,
               color: _isSearchVisible
-                  ? theme.colorScheme.primary
+                  ? Theme.of(context).colorScheme.primary
                   : defaultIconColor,
             ),
             onPressed: () {
               setState(() {
                 _isSearchVisible = !_isSearchVisible;
+
+                if (_isSearchVisible) {
+                  // If search bar is becoming visible, restore the last search term if it exists
+                  if (_lastSearchTerm.isNotEmpty) {
+                    _searchTerm = _lastSearchTerm;
+                    _searchController.text = _lastSearchTerm;
+                    _selectAllMatches();
+                  }
+                  // Ensure editor highlights are updated
+                  _updateCodeEditorHighlights();
+                } else {
+                  // If search bar is being closed, save the last search term and clear highlights
+                  _lastSearchTerm = _searchTerm;
+                  _searchTerm = '';
+                  _matchPositions = [];
+                  _currentMatchIndex = -1;
+                  _updateCodeEditorHighlights();
+                }
               });
             },
             tooltip: _isSearchVisible ? 'Close Search' : 'Open Search',

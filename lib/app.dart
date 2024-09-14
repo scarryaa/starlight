@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:starlight/presentation/screens/home_page.dart';
+import 'package:starlight/presentation/main_layout.dart';
 import 'package:starlight/themes/dark.dart';
 import 'package:starlight/themes/light.dart';
 import 'package:starlight/themes/theme_provider.dart';
