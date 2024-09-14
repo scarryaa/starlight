@@ -57,14 +57,15 @@ class _CodeEditorState extends State<CodeEditor> {
   static const double lineHeight = 24.0;
   static double charWidth = 8.0;
   static const double scrollbarWidth = 10.0;
+  static const double _clickDistanceThreshold = 10.0; // pixels
   late TextEditingCore editingCore;
   late ScrollController codeScrollController;
-  late ScrollController lineNumberScrollController;
 
+  late ScrollController lineNumberScrollController;
   late ScrollController horizontalController;
   late ScrollController horizontalScrollbarController;
-  final FocusNode focusNode = FocusNode();
 
+  final FocusNode focusNode = FocusNode();
   bool _scrollingCode = false;
   bool _scrollingLineNumbers = false;
   bool _isHorizontalScrolling = false;
@@ -72,8 +73,8 @@ class _CodeEditorState extends State<CodeEditor> {
   int visibleLineCount = 0;
   double maxLineWidth = 0.0;
   double lineNumberWidth = 0.0;
-  final Map<int, double> _lineWidthCache = {};
 
+  final Map<int, double> _lineWidthCache = {};
   int _lastCalculatedLine = -1;
   double _cachedMaxLineWidth = 0;
   int _lastLineCount = 0;
@@ -83,7 +84,6 @@ class _CodeEditorState extends State<CodeEditor> {
   Timer? _tapTimer;
   SelectionMode _selectionMode = SelectionMode.character;
   int? _selectionAnchor;
-  static const double _clickDistanceThreshold = 10.0; // pixels
   Offset? _lastTapPosition;
 
   @override
@@ -135,6 +135,12 @@ class _CodeEditorState extends State<CodeEditor> {
     focusNode.dispose();
     _textPainter.dispose();
     super.dispose();
+  }
+
+  int getPositionAtColumn(int line, int column) {
+    int lineStart = editingCore.getLineStartIndex(line);
+    int lineEnd = editingCore.getLineEndIndex(line);
+    return min(lineStart + column, lineEnd);
   }
 
   @override
@@ -450,6 +456,38 @@ class _CodeEditorState extends State<CodeEditor> {
     editingCore.setSelection(newStart, newEnd);
   }
 
+  int _findWordOrSymbolGroupEnd(String text, int position, int lineEnd) {
+    bool isSymbol = _isSymbol(text[position]);
+    int end = position;
+
+    while (end < lineEnd) {
+      if (isSymbol) {
+        if (!_isSymbol(text[end])) break;
+      } else {
+        if (_isWordBoundary(text[end])) break;
+      }
+      end++;
+    }
+
+    return end;
+  }
+
+  int _findWordOrSymbolGroupStart(String text, int position, int lineStart) {
+    bool isSymbol = _isSymbol(text[position]);
+    int start = position;
+
+    while (start > lineStart) {
+      if (isSymbol) {
+        if (!_isSymbol(text[start - 1])) break;
+      } else {
+        if (_isWordBoundary(text[start - 1])) break;
+      }
+      start--;
+    }
+
+    return start;
+  }
+
   int _getPositionFromOffset(Offset offset) {
     final adjustedOffset = offset +
         Offset(
@@ -593,6 +631,15 @@ class _CodeEditorState extends State<CodeEditor> {
     return KeyEventResult.handled;
   }
 
+  void _handlePaste() async {
+    ClipboardData? clipboardData =
+        await Clipboard.getData(Clipboard.kTextPlain);
+    if (clipboardData?.text != null) {
+      editingCore.insertText(clipboardData!.text!);
+      _recalculateEditor();
+    }
+  }
+
   void _handleRegularKeyPress(KeyEvent event) {
     switch (event.logicalKey) {
       case LogicalKeyboardKey.arrowLeft:
@@ -629,15 +676,6 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
-  void _handlePaste() async {
-    ClipboardData? clipboardData =
-        await Clipboard.getData(Clipboard.kTextPlain);
-    if (clipboardData?.text != null) {
-      editingCore.insertText(clipboardData!.text!);
-      _recalculateEditor();
-    }
-  }
-
   void _handleSelectAll() {
     setState(() {
       editingCore.setSelection(0, editingCore.length);
@@ -652,12 +690,6 @@ class _CodeEditorState extends State<CodeEditor> {
       editingCore.clearSelection();
     });
     focusNode.requestFocus();
-  }
-
-  int getPositionAtColumn(int line, int column) {
-    int lineStart = editingCore.getLineStartIndex(line);
-    int lineEnd = editingCore.getLineEndIndex(line);
-    return min(lineStart + column, lineEnd);
   }
 
   void _handleTap(TapDownDetails details) {
@@ -728,14 +760,13 @@ class _CodeEditorState extends State<CodeEditor> {
     return compoundOperators.any((op) => sequence.endsWith(op));
   }
 
-  bool _isSpecialCharacter(String char) {
-    return ';}),]'.contains(char);
+  bool _isSymbol(String char) {
+    return char.trim().isNotEmpty && _isWordBoundary(char);
   }
 
   bool _isWordBoundary(String character) {
     return character.trim().isEmpty ||
-        _isSpecialCharacter(character) ||
-        '+-*/%&|^<>=!'.contains(character);
+        '.,;:!?()[]{}+-*/%&|^<>=!~'.contains(character);
   }
 
   void _loadFile() {
@@ -863,32 +894,16 @@ class _CodeEditorState extends State<CodeEditor> {
       if (_isCompoundOperator(endSequence)) {
         wordStart = wordEnd - endSequence.length;
       } else {
-        // Check if the last characters are special
-        bool lastIsSpecial = _isSpecialCharacter(text[wordStart - 1]);
-
-        if (lastIsSpecial) {
-          // Select only the special characters at the end
-          while (wordStart > lineStart &&
-              _isSpecialCharacter(text[wordStart - 1])) {
-            wordStart--;
-          }
-        } else {
-          // Select the last word
-          while (
-              wordStart > lineStart && !_isWordBoundary(text[wordStart - 1])) {
-            wordStart--;
-          }
-        }
+        // Select the last word or symbol group
+        wordStart = _findWordOrSymbolGroupStart(text, wordEnd - 1, lineStart);
       }
       editingCore.setSelection(wordStart, wordEnd);
     } else {
-      // Normal word or whitespace selection
+      // Normal word, symbol, or whitespace selection
       int start = position;
       int end = position;
 
-      bool isWhitespace = text[position].trim().isEmpty;
-
-      if (isWhitespace) {
+      if (text[position].trim().isEmpty) {
         // Select contiguous whitespace within the same line
         while (start > lineStart && text[start - 1].trim().isEmpty) {
           start--;
@@ -897,37 +912,9 @@ class _CodeEditorState extends State<CodeEditor> {
           end++;
         }
       } else {
-        // Word or special character sequence selection logic
-        String currentSequence = text.substring(
-            max(lineStart, position - 2), min(lineEnd, position + 1));
-        bool isCompound = _isCompoundOperator(currentSequence);
-        bool isSpecial = _isSpecialCharacter(text[position]);
-
-        if (isCompound) {
-          start = max(lineStart, position - 2);
-          end = min(lineEnd, position + 1);
-          while (start > lineStart &&
-              _isCompoundOperator(text.substring(start - 1, end))) {
-            start--;
-          }
-          while (end < lineEnd &&
-              _isCompoundOperator(text.substring(start, end + 1))) {
-            end++;
-          }
-        } else {
-          while (start > lineStart &&
-              (isSpecial
-                  ? _isSpecialCharacter(text[start - 1])
-                  : !_isWordBoundary(text[start - 1]))) {
-            start--;
-          }
-          while (end < lineEnd &&
-              (isSpecial
-                  ? _isSpecialCharacter(text[end])
-                  : !_isWordBoundary(text[end]))) {
-            end++;
-          }
-        }
+        // Word or symbol group selection
+        start = _findWordOrSymbolGroupStart(text, position, lineStart);
+        end = _findWordOrSymbolGroupEnd(text, position, lineEnd);
       }
 
       editingCore.setSelection(start, end);
