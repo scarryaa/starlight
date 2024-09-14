@@ -155,26 +155,30 @@ class CodeEditorPainter extends CustomPainter {
     int cursorPositionInLine = _getCursorPositionInLine(line);
     final cursorOffset = cursorPositionInLine * charWidth;
 
-    final topY = line * lineHeight + (lineHeight - fontSize) / 2;
-    final bottomY = topY + fontSize;
+    final topY = line * lineHeight;
+    final bottomY = topY + lineHeight;
 
     canvas.drawLine(
       Offset(cursorOffset, topY),
       Offset(cursorOffset, bottomY),
-      Paint()..color = cursorColor,
+      Paint()
+        ..color = cursorColor
+        ..strokeWidth = 2.0,
     );
   }
 
   void _paintCursorAtEnd(Canvas canvas, int lastLine) {
     final cursorOffset = _getLineContent(lastLine).length * charWidth;
 
-    final topY = lastLine * lineHeight + (lineHeight - fontSize) / 2;
-    final bottomY = topY + fontSize;
+    final topY = lastLine * lineHeight;
+    final bottomY = topY + lineHeight;
 
     canvas.drawLine(
       Offset(cursorOffset, topY),
       Offset(cursorOffset, bottomY),
-      Paint()..color = cursorColor,
+      Paint()
+        ..color = cursorColor
+        ..strokeWidth = 2.0,
     );
   }
 
