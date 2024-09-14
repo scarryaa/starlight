@@ -51,7 +51,6 @@ class _FileExplorerContent extends StatefulWidget {
 class _FileExplorerContentState extends State<_FileExplorerContent>
     with AutomaticKeepAliveClientMixin {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _listViewKey = GlobalKey();
 
   @override
   bool get wantKeepAlive => true;
@@ -126,25 +125,32 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       ),
       child: Scrollbar(
         controller: _scrollController,
-        child: ListView.builder(
-          key: _listViewKey,
+        child: ListView(
           controller: _scrollController,
-          itemCount: controller.fileTree.length + 1, // +1 for bottom padding
-          itemExtent: 30.0,
-          cacheExtent: 300,
-          itemBuilder: (context, index) {
-            if (index == controller.fileTree.length) {
-              return const SizedBox(height: 24);
-            }
-            final item = controller.fileTree[index];
-            return FileTreeItemWidget(
-              key: ValueKey(item.path),
-              item: item,
-              onFileSelected: widget.onFileSelected,
-            );
-          },
+          children: [
+            ...controller.rootItems
+                .map((item) => _buildFileTreeItem(item, controller)),
+            const SizedBox(height: 24),
+          ],
         ),
       ),
+    );
+  }
+
+  Widget _buildFileTreeItem(
+      FileTreeItem item, FileExplorerController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        FileTreeItemWidget(
+          key: ValueKey(item.path),
+          item: item,
+          onFileSelected: widget.onFileSelected,
+        ),
+        if (item.isExpanded)
+          ...item.children
+              .map((child) => _buildFileTreeItem(child, controller)),
+      ],
     );
   }
 
