@@ -577,38 +577,54 @@ class _CodeEditorState extends State<CodeEditor> {
     }
 
     setState(() {
-      if (editingCore.hasSelection() && !isShiftPressed) {
+      if (editingCore.hasSelection()) {
         int selectionStart = editingCore.selectionStart!;
         int selectionEnd = editingCore.selectionEnd!;
-        int startLine = editingCore.rope.findLine(selectionStart);
-        int endLine = editingCore.rope.findLine(selectionEnd);
+        bool isBackwardSelection = selectionEnd < selectionStart;
+
+        int actualStart = selectionStart;
+        int actualEnd = selectionEnd;
 
         switch (event.logicalKey) {
           case LogicalKeyboardKey.arrowLeft:
-            editingCore.cursorPosition = selectionStart;
+            editingCore.cursorPosition =
+                isBackwardSelection ? actualEnd : actualStart;
             editingCore.clearSelection();
             break;
           case LogicalKeyboardKey.arrowRight:
-            editingCore.cursorPosition = selectionEnd;
+            editingCore.cursorPosition =
+                isBackwardSelection ? actualStart : actualEnd;
             editingCore.clearSelection();
             break;
           case LogicalKeyboardKey.arrowUp:
-            if (startLine > 0) {
-              int newLine = startLine - 1;
-              int newPosition = getPositionAtColumn(newLine,
-                  selectionStart - editingCore.getLineStartIndex(startLine));
+            int targetLine = editingCore.rope
+                .findLine(isBackwardSelection ? actualEnd : actualStart);
+            if (targetLine > 0) {
+              int column = (isBackwardSelection ? actualEnd : actualStart) -
+                  editingCore.getLineStartIndex(targetLine);
+              int newLine = targetLine - 1;
+              int newPosition = getPositionAtColumn(newLine, column);
               editingCore.cursorPosition = newPosition;
-              editingCore.clearSelection();
+            } else {
+              editingCore.cursorPosition =
+                  isBackwardSelection ? actualEnd : actualStart;
             }
+            editingCore.clearSelection();
             break;
           case LogicalKeyboardKey.arrowDown:
-            if (endLine < editingCore.lineCount - 1) {
-              int newLine = endLine + 1;
-              int newPosition = getPositionAtColumn(newLine,
-                  selectionEnd - editingCore.getLineStartIndex(endLine));
+            int targetLine = editingCore.rope
+                .findLine(isBackwardSelection ? actualStart : actualEnd);
+            if (targetLine < editingCore.lineCount - 1) {
+              int column = (isBackwardSelection ? actualStart : actualEnd) -
+                  editingCore.getLineStartIndex(targetLine);
+              int newLine = targetLine + 1;
+              int newPosition = getPositionAtColumn(newLine, column);
               editingCore.cursorPosition = newPosition;
-              editingCore.clearSelection();
+            } else {
+              editingCore.cursorPosition =
+                  isBackwardSelection ? actualStart : actualEnd;
             }
+            editingCore.clearSelection();
             break;
           default:
             _handleRegularKeyPress(event);
