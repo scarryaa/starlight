@@ -17,6 +17,9 @@ class CodeEditorPainter extends CustomPainter {
   final TextStyle textStyle;
   final Color selectionColor;
   final Color cursorColor;
+  final List<int> matchPositions;
+  final String searchTerm;
+  final Color highlightColor;
 
   late double charWidth;
 
@@ -31,6 +34,9 @@ class CodeEditorPainter extends CustomPainter {
     required this.textStyle,
     required this.selectionColor,
     required this.cursorColor,
+    required this.matchPositions,
+    required this.searchTerm,
+    required this.highlightColor,
   }) {
     _calculateCharWidth();
   }
@@ -52,13 +58,16 @@ class CodeEditorPainter extends CustomPainter {
     for (int i = firstVisibleLine; i < visibleEndLine; i++) {
       final lineContent = _getLineContent(i);
 
-      // Paint line content
-      _paintText(canvas, lineContent, Offset(0, i * lineHeight));
+      // Paint search highlights
+      _paintSearchHighlights(canvas, i, lineContent);
 
       // Paint selection if needed
       if (_isLineSelected(i)) {
         _paintSelection(canvas, i, lineContent);
       }
+
+      // Paint line content
+      _paintText(canvas, lineContent, Offset(0, i * lineHeight));
 
       // Paint cursor
       if (_isCursorOnLine(i)) {
@@ -69,6 +78,40 @@ class CodeEditorPainter extends CustomPainter {
     // Paint cursor at the end of the document if necessary
     if (editingCore.cursorPosition == editingCore.length) {
       _paintCursorAtEnd(canvas, lineCount - 1);
+    }
+  }
+
+  void _paintSearchHighlights(Canvas canvas, int line, String lineContent) {
+    final highlightPaint = Paint()..color = highlightColor;
+    final lineStart = editingCore.getLineStartIndex(line);
+    final lineEnd = editingCore.getLineEndIndex(line);
+
+    for (int matchPosition in matchPositions) {
+      if (matchPosition >= lineStart - 1 && matchPosition < lineEnd) {
+        final relativeMatchPosition = matchPosition - lineStart + 1;
+        final textBeforeMatch = lineContent.substring(0, relativeMatchPosition);
+        final textPainterBefore = TextPainter(
+          text: TextSpan(text: textBeforeMatch, style: textStyle),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        final highlightStart = textPainterBefore.width;
+        final matchText = lineContent.substring(relativeMatchPosition,
+            min(relativeMatchPosition + searchTerm.length, lineContent.length));
+        final textPainterMatch = TextPainter(
+          text: TextSpan(text: matchText, style: textStyle),
+          textDirection: TextDirection.ltr,
+        )..layout();
+
+        final highlightEnd = highlightStart + textPainterMatch.width;
+        final topY = line * lineHeight;
+        final bottomY = topY + lineHeight;
+
+        canvas.drawRect(
+          Rect.fromLTRB(highlightStart, topY, highlightEnd, bottomY),
+          highlightPaint,
+        );
+      }
     }
   }
 
@@ -189,6 +232,8 @@ class CodeEditorPainter extends CustomPainter {
         visibleLineCount != oldDelegate.visibleLineCount ||
         horizontalOffset != oldDelegate.horizontalOffset ||
         version != oldDelegate.version ||
-        viewportWidth != oldDelegate.viewportWidth;
+        viewportWidth != oldDelegate.viewportWidth ||
+        matchPositions != oldDelegate.matchPositions ||
+        searchTerm != oldDelegate.searchTerm;
   }
 }

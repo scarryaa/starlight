@@ -84,6 +84,24 @@ class Rope {
     return root?.findLine(index) ?? 0;
   }
 
+  int indexOf(String searchTerm, [int start = 0]) {
+    if (searchTerm.isEmpty) return -1;
+    if (start < 0) start = 0;
+    if (start >= length) return -1;
+
+    for (int i = start; i <= length - searchTerm.length; i++) {
+      bool found = true;
+      for (int j = 0; j < searchTerm.length; j++) {
+        if (charAt(i + j) != searchTerm[j]) {
+          found = false;
+          break;
+        }
+      }
+      if (found) return i;
+    }
+    return -1;
+  }
+
   int findLineStart(int line) {
     if (line < 0 || line >= lineCount) {
       print("Warning: Invalid line number $line. Clamping to valid range.");
@@ -115,6 +133,7 @@ abstract class Node {
   int findLineStart(int line);
   List<int> get lineStarts;
   void updateLineStarts();
+  int indexOf(String searchTerm, int start);
 }
 
 class Leaf extends Node {
@@ -150,6 +169,11 @@ class Leaf extends Node {
       throw RangeError('Index out of bounds');
     }
     return value[index];
+  }
+
+  @override
+  int indexOf(String searchTerm, int start) {
+    return value.indexOf(searchTerm, start);
   }
 
   @override
@@ -250,6 +274,28 @@ class Branch extends Node {
     }
 
     _lineCount = _lineStarts.length;
+  }
+
+  @override
+  int indexOf(String searchTerm, int start) {
+    int leftLength = left?.length ?? 0;
+    if (start < leftLength) {
+      int leftIndex = left!.indexOf(searchTerm, start);
+      if (leftIndex != -1) return leftIndex;
+
+      // Check if the search term spans the boundary between left and right
+      int remainingLength = min(searchTerm.length - 1, leftLength - start);
+      String leftPart = left!.slice(leftLength - remainingLength, leftLength);
+      String rightPart = right!.slice(0, searchTerm.length - leftPart.length);
+      if (leftPart + rightPart == searchTerm) {
+        return leftLength - leftPart.length;
+      }
+
+      return right!.indexOf(searchTerm, 0) + leftLength;
+    } else {
+      int rightIndex = right!.indexOf(searchTerm, start - leftLength);
+      return rightIndex == -1 ? -1 : rightIndex + leftLength;
+    }
   }
 
   @override

@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
+import 'package:starlight/features/context_menu/context_menu.dart';
+import 'package:starlight/features/tabs/pin_button.dart';
 import 'dart:io';
 import 'package:uuid/uuid.dart';
 
@@ -10,11 +12,19 @@ class FileTab {
   String filePath;
   String content;
   bool isModified;
+  bool isPinned;
+  int? selectionStart;
+  int? selectionEnd;
+  int? cursorPosition;
 
   FileTab({
     required this.filePath,
     required this.content,
     this.isModified = false,
+    this.isPinned = false,
+    this.selectionStart,
+    this.selectionEnd,
+    this.cursorPosition,
   }) : id = _uuid.v4();
 
   String get fileName => filePath.split(Platform.pathSeparator).last;
@@ -25,6 +35,12 @@ class FileTab {
       isModified = true;
     }
   }
+
+  void updateSelection(int? start, int? end, int? cursor) {
+    selectionStart = start;
+    selectionEnd = end;
+    cursorPosition = cursor;
+  }
 }
 
 class TabBar extends StatefulWidget {
@@ -33,6 +49,9 @@ class TabBar extends StatefulWidget {
   final ValueChanged<int> onTabSelected;
   final ValueChanged<int> onTabClosed;
   final void Function(int oldIndex, int newIndex) onTabsReordered;
+  final void Function(int index) onCloseOtherTabs;
+  final VoidCallback onCloseAllTabs;
+  final void Function(int index) onCloseTabsToRight;
 
   const TabBar({
     super.key,
@@ -41,6 +60,9 @@ class TabBar extends StatefulWidget {
     required this.onTabSelected,
     required this.onTabClosed,
     required this.onTabsReordered,
+    required this.onCloseOtherTabs,
+    required this.onCloseAllTabs,
+    required this.onCloseTabsToRight,
   });
 
   @override
@@ -175,16 +197,54 @@ class _TabBarState extends State<TabBar> {
                       text: widget.tabs[index].fileName,
                       isSelected: widget.selectedIndex == index,
                       isModified: widget.tabs[index].isModified,
+                      isPinned: widget.tabs[index].isPinned,
                       onTap: () => widget.onTabSelected(index),
                       onClose: () => widget.onTabClosed(index),
+                      onContextMenuAction: _handleContextMenuAction,
                     ),
-                  ),
+                  )
               ],
             ),
           ),
         ),
       ),
     );
+  }
+
+  void _handleContextMenuAction(String action, int index) {
+    switch (action) {
+      case 'pin':
+        setState(() {
+          widget.tabs[index].isPinned = !widget.tabs[index].isPinned;
+          _sortTabs();
+        });
+        break;
+      case 'close':
+        widget.onTabClosed(index);
+        break;
+      case 'closeToRight':
+        widget.onCloseTabsToRight(index);
+        break;
+      case 'closeOthers':
+        widget.onCloseOtherTabs(index);
+        break;
+      case 'closeAll':
+        widget.onCloseAllTabs();
+        break;
+    }
+  }
+
+  void _sortTabs() {
+    widget.tabs.sort((a, b) {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return 0;
+    });
+
+    // Update the selected index after sorting
+    int newIndex = widget.tabs
+        .indexWhere((tab) => tab.id == widget.tabs[widget.selectedIndex].id);
+    widget.onTabSelected(newIndex);
   }
 }
 
@@ -195,10 +255,12 @@ class Tab extends StatefulWidget {
   final bool isModified;
   final VoidCallback onTap;
   final VoidCallback onClose;
+  final void Function(String action, int index) onContextMenuAction;
   final GlobalKey tabKey;
+  final bool isPinned;
 
   const Tab({
-    Key? key,
+    super.key,
     required this.tabKey,
     required this.index,
     required this.text,
@@ -206,7 +268,9 @@ class Tab extends StatefulWidget {
     required this.isModified,
     required this.onTap,
     required this.onClose,
-  }) : super(key: key);
+    required this.onContextMenuAction,
+    required this.isPinned,
+  });
 
   @override
   State<Tab> createState() => _TabState();
@@ -214,6 +278,48 @@ class Tab extends StatefulWidget {
 
 class _TabState extends State<Tab> {
   bool _isHovered = false;
+
+  void _showContextMenu(BuildContext context, Offset position) {
+    final List<ContextMenuItem> menuItems = [
+      ContextMenuItem(
+        title: widget.isPinned ? 'Unpin Tab' : 'Pin Tab',
+        onTap: () => widget.onContextMenuAction('pin', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close Tab',
+        onTap: () => widget.onContextMenuAction('close', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close Tabs to the Right',
+        onTap: () => widget.onContextMenuAction('closeToRight', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close Other Tabs',
+        onTap: () => widget.onContextMenuAction('closeOthers', widget.index),
+      ),
+      ContextMenuItem(
+        title: 'Close All Tabs',
+        onTap: () => widget.onContextMenuAction('closeAll', widget.index),
+      ),
+    ];
+
+    showDialog(
+      context: context,
+      barrierColor: Colors.transparent,
+      barrierDismissible: true,
+      builder: (BuildContext context) {
+        return Stack(
+          children: [
+            Positioned(
+              left: position.dx,
+              top: position.dy,
+              child: ContextMenu(items: menuItems),
+            ),
+          ],
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -226,9 +332,11 @@ class _TabState extends State<Tab> {
         onExit: (_) => setState(() => _isHovered = false),
         child: GestureDetector(
           onTap: widget.onTap,
+          onSecondaryTapDown: (details) =>
+              _showContextMenu(context, details.globalPosition),
           child: Listener(
             onPointerDown: (PointerDownEvent event) {
-              if (event.buttons == kMiddleMouseButton) {
+              if (event.buttons == kMiddleMouseButton && !widget.isPinned) {
                 widget.onClose();
               }
             },
@@ -263,14 +371,16 @@ class _TabState extends State<Tab> {
                     const SizedBox(width: 4),
                     Text(
                       widget.text,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.textTheme.bodyMedium?.color,
-                        fontSize: 13,
-                      ),
+                      style: theme.textTheme.bodyMedium?.copyWith(fontSize: 13),
                     ),
                     const SizedBox(width: 4),
-                    if (_isHovered)
+                    if (widget.isPinned)
+                      PinButton(
+                        isPinned: true,
+                        onTap: _togglePin,
+                        color: theme.iconTheme.color,
+                      )
+                    else if (_isHovered)
                       _CloseButton(
                         onTap: widget.onClose,
                         color: theme.iconTheme.color,
@@ -285,6 +395,10 @@ class _TabState extends State<Tab> {
         ),
       ),
     );
+  }
+
+  void _togglePin() {
+    widget.onContextMenuAction('pin', widget.index);
   }
 }
 

@@ -54,6 +54,24 @@ class TextEditingCore extends ChangeNotifier {
     }
   }
 
+  List<int> findAllOccurrences(String searchTerm) {
+    List<int> positions = [];
+    int position = 0;
+    while (true) {
+      position = rope.indexOf(searchTerm, position);
+      if (position == -1) break;
+      positions.add(position);
+      position += searchTerm.length;
+    }
+    return positions;
+  }
+
+  void replaceRange(int start, int end, String replacement) {
+    rope = rope.delete(start, end - start);
+    rope = rope.insert(start, replacement);
+    notifyListeners();
+  }
+
   String getLineContent(int line) {
     int start = rope.findLineStart(line);
     int end = line < rope.lineCount - 1

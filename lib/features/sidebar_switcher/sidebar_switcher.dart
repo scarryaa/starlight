@@ -105,15 +105,21 @@ class _SidebarSwitcherState extends State<SidebarSwitcher> {
           ),
         ),
       ),
-      child: IconButton(
-        icon: Icon(icon),
-        color: isSelected
-            ? Theme.of(context).colorScheme.primary
-            : Theme.of(context).iconTheme.color,
-        onPressed: () => setState(() {
+      child: InkWell(
+        splashFactory: NoSplash.splashFactory,
+        onTap: () => setState(() {
           _selectedOption = option;
           _isSidebarExpanded = true;
         }),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Icon(
+            icon,
+            color: isSelected
+                ? Theme.of(context).colorScheme.primary
+                : Theme.of(context).iconTheme.color,
+          ),
+        ),
       ),
     );
   }
