@@ -184,17 +184,17 @@ class EditorWidgetState extends State<EditorWidget> {
     }
 
     final ThemeData theme = Theme.of(context);
-    final bool isDarkMode = theme.brightness == Brightness.dark;
-    final Color defaultTextColor = isDarkMode ? Colors.white : Colors.black;
+    final ColorScheme colorScheme = theme.colorScheme;
+    final TextTheme textTheme = theme.textTheme;
 
     return Container(
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
+        color: colorScheme.surface,
         border: _isReplaceVisible
             ? null
             : Border(
                 bottom: BorderSide(
-                  color: Theme.of(context).dividerColor,
+                  color: theme.dividerColor,
                   width: 1,
                 ),
               ),
@@ -208,18 +208,18 @@ class EditorWidgetState extends State<EditorWidget> {
                 Expanded(
                   child: TextField(
                     controller: _searchController,
-                    style: TextStyle(
+                    style: textTheme.bodyMedium?.copyWith(
                       color: _matchPositions.isEmpty && _searchTerm.isNotEmpty
-                          ? Colors.red
-                          : Colors.white,
+                          ? colorScheme.error
+                          : colorScheme.onSurface,
                     ),
                     decoration: InputDecoration(
                       hintText: 'Search...',
-                      hintStyle: TextStyle(color: Colors.grey[400]),
-                      prefixIcon: const Icon(Icons.search,
-                          color: Colors.white, size: 20),
+                      hintStyle: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurface.withOpacity(0.6)),
                       border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 8),
                       suffixIcon: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -251,28 +251,29 @@ class EditorWidgetState extends State<EditorWidget> {
                   icon: Icon(
                     Icons.find_replace,
                     color: _isReplaceVisible
-                        ? theme.colorScheme.primary
-                        : defaultTextColor,
+                        ? colorScheme.primary
+                        : colorScheme.onSurface,
                   ),
                   onPressed: () =>
                       setState(() => _isReplaceVisible = !_isReplaceVisible),
                   tooltip: _isReplaceVisible ? 'Hide replace' : 'Show replace',
                 ),
                 IconButton(
-                  icon: const Icon(Icons.chevron_left,
-                      color: Colors.white, size: 20),
+                  icon: Icon(Icons.chevron_left,
+                      color: colorScheme.onSurface, size: 20),
                   onPressed: _selectPreviousMatch,
                   tooltip: 'Previous match',
                 ),
                 IconButton(
-                  icon: const Icon(Icons.chevron_right,
-                      color: Colors.white, size: 20),
+                  icon: Icon(Icons.chevron_right,
+                      color: colorScheme.onSurface, size: 20),
                   onPressed: _selectNextMatch,
                   tooltip: 'Next match',
                 ),
                 _buildMatchCountDisplay(),
                 IconButton(
-                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
+                  icon:
+                      Icon(Icons.close, color: colorScheme.onSurface, size: 20),
                   onPressed: () => setState(() {
                     _isSearchVisible = false;
                     _lastSearchTerm = _searchTerm;
@@ -292,44 +293,44 @@ class EditorWidgetState extends State<EditorWidget> {
             Container(
               height: 40,
               decoration: BoxDecoration(
-                color: Theme.of(context).colorScheme.surface,
+                color: colorScheme.surface,
                 border: Border(
                   bottom: BorderSide(
-                    color: Theme.of(context).dividerColor,
+                    color: theme.dividerColor,
                     width: 1,
                   ),
                 ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _replaceController,
-                      style: const TextStyle(color: Colors.white),
-                      decoration: InputDecoration(
-                        hintText: 'Replace...',
-                        hintStyle: TextStyle(color: Colors.grey[400]),
-                        prefixIcon: const Icon(Icons.find_replace,
-                            color: Colors.white, size: 20),
-                        border: InputBorder.none,
-                        contentPadding:
-                            const EdgeInsets.symmetric(vertical: 10),
-                      ),
-                      onChanged: _updateReplaceTerm,
+              child: Row(children: [
+                Expanded(
+                  child: TextField(
+                    controller: _replaceController,
+                    style: textTheme.bodyMedium
+                        ?.copyWith(color: colorScheme.onSurface),
+                    decoration: InputDecoration(
+                      hintText: 'Replace...',
+                      hintStyle: textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurface.withOpacity(0.6)),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 8),
                     ),
+                    onChanged: _updateReplaceTerm,
                   ),
-                  TextButton(
+                ),
+                IconButton(
                     onPressed: _replaceNext,
-                    child: const Text('Replace',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                  TextButton(
+                    icon: const Icon(Icons.arrow_forward),
+                    color: colorScheme.onSurface,
+                    tooltip: 'Replace Next',
+                    iconSize: 20),
+                IconButton(
                     onPressed: _replaceAll,
-                    child: const Text('Replace All',
-                        style: TextStyle(color: Colors.white)),
-                  ),
-                ],
-              ),
+                    icon: const Icon(Icons.sync),
+                    color: colorScheme.onSurface,
+                    tooltip: 'Replace All',
+                    iconSize: 20),
+              ]),
             ),
         ],
       ),
@@ -360,10 +361,15 @@ class EditorWidgetState extends State<EditorWidget> {
       relativeFilePath = relativeFilePath.substring(1);
     }
 
-    return Text(
-      relativeFilePath,
-      style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color),
-      overflow: TextOverflow.ellipsis,
+    return Padding(
+      padding: const EdgeInsets.only(left: 8.0),
+      child: Text(
+        relativeFilePath,
+        style: TextStyle(
+          color: Theme.of(context).textTheme.bodyMedium?.color,
+        ),
+        overflow: TextOverflow.ellipsis,
+      ),
     );
   }
 
@@ -380,13 +386,17 @@ class EditorWidgetState extends State<EditorWidget> {
   }
 
   Widget _buildMatchCountDisplay() {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+    final TextTheme textTheme = theme.textTheme;
+
     return Container(
       width: 60,
       alignment: Alignment.center,
       child: Text(
         '${_currentMatchIndex + 1}/${_matchPositions.length}',
-        style: const TextStyle(
-          color: Colors.white,
+        style: textTheme.bodySmall?.copyWith(
+          color: colorScheme.onSurface,
           fontSize: 12,
         ),
       ),
@@ -403,7 +413,7 @@ class EditorWidgetState extends State<EditorWidget> {
     final Color defaultIconColor = isDarkMode ? Colors.white : Colors.black;
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 4),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
         border: _isSearchVisible
@@ -421,6 +431,7 @@ class EditorWidgetState extends State<EditorWidget> {
             child: _buildCurrentFilePath(),
           ),
           IconButton(
+            iconSize: 20,
             icon: Icon(
               Icons.search,
               color: _isSearchVisible
@@ -484,6 +495,9 @@ class EditorWidgetState extends State<EditorWidget> {
 
   Widget _buildToggleButton(
       String label, bool isActive, VoidCallback onPressed, String tooltip) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colorScheme = theme.colorScheme;
+
     return Tooltip(
       message: tooltip,
       child: InkWell(
@@ -497,7 +511,7 @@ class EditorWidgetState extends State<EditorWidget> {
           child: Text(
             label,
             style: TextStyle(
-              color: isActive ? Colors.white : Colors.grey[400],
+              color: isActive ? Colors.white : colorScheme.onSurface,
               fontSize: 12,
             ),
           ),
