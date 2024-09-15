@@ -18,13 +18,15 @@ class CodeEditorPainter extends CustomPainter {
   final TextStyle textStyle;
   final Color selectionColor;
   final Color cursorColor;
-  final List<int> matchPositions;
+  final List matchPositions;
   final String searchTerm;
   final Color highlightColor;
-
   final int cursorPosition;
   final int? selectionStart;
   final int? selectionEnd;
+  final double zoomLevel;
+  late double scaledLineNumberWidth;
+  late double textStartX;
 
   late double charWidth;
 
@@ -45,8 +47,11 @@ class CodeEditorPainter extends CustomPainter {
     required this.cursorPosition,
     required this.selectionStart,
     required this.selectionEnd,
+    required this.zoomLevel,
   }) {
     _calculateCharWidth();
+    scaledLineNumberWidth = lineNumberWidth * zoomLevel;
+    textStartX = scaledLineNumberWidth / 8;
   }
 
   @override
@@ -54,21 +59,18 @@ class CodeEditorPainter extends CustomPainter {
     final lineCount = editingCore.lineCount;
     final visibleEndLine =
         min(firstVisibleLine + visibleLineCount + lineBuffer, lineCount);
+    final scaledLineHeight = lineHeight * zoomLevel;
 
     for (int i = firstVisibleLine; i < visibleEndLine; i++) {
       final lineContent = _getLineContent(i);
-
       // Paint search highlights
       _paintSearchHighlights(canvas, i, lineContent);
-
       // Paint selection if needed
       if (_isLineSelected(i)) {
         _paintSelection(canvas, i, lineContent);
       }
-
       // Paint line content
-      _paintText(canvas, lineContent, Offset(0, i * lineHeight));
-
+      _paintText(canvas, lineContent, Offset(textStartX, i * scaledLineHeight));
       // Paint cursor
       if (_isCursorOnLine(i)) {
         _paintCursor(canvas, i, lineContent);
@@ -93,7 +95,8 @@ class CodeEditorPainter extends CustomPainter {
         searchTerm != oldDelegate.searchTerm ||
         cursorPosition != oldDelegate.cursorPosition ||
         selectionStart != oldDelegate.selectionStart ||
-        selectionEnd != oldDelegate.selectionEnd;
+        selectionEnd != oldDelegate.selectionEnd ||
+        zoomLevel != oldDelegate.zoomLevel;
   }
 
   void _calculateCharWidth() {
@@ -101,7 +104,7 @@ class CodeEditorPainter extends CustomPainter {
       text: TextSpan(text: 'X', style: textStyle),
       textDirection: TextDirection.ltr,
     )..layout();
-    charWidth = textPainter.width;
+    charWidth = textPainter.width * zoomLevel;
   }
 
   int _getCursorPositionInLine(int line) {
@@ -153,32 +156,29 @@ class CodeEditorPainter extends CustomPainter {
 
   void _paintCursor(Canvas canvas, int line, String lineContent) {
     int cursorPositionInLine = _getCursorPositionInLine(line);
-    final cursorOffset = cursorPositionInLine * charWidth;
-
-    final topY = line * lineHeight;
-    final bottomY = topY + lineHeight;
-
+    final cursorOffset = textStartX + cursorPositionInLine * charWidth;
+    final topY = line * lineHeight * zoomLevel;
+    final bottomY = topY + lineHeight * zoomLevel;
     canvas.drawLine(
       Offset(cursorOffset, topY),
       Offset(cursorOffset, bottomY),
       Paint()
         ..color = cursorColor
-        ..strokeWidth = 2.0,
+        ..strokeWidth = 2.0 * zoomLevel,
     );
   }
 
   void _paintCursorAtEnd(Canvas canvas, int lastLine) {
-    final cursorOffset = _getLineContent(lastLine).length * charWidth;
-
-    final topY = lastLine * lineHeight;
-    final bottomY = topY + lineHeight;
-
+    final cursorOffset =
+        textStartX + _getLineContent(lastLine).length * charWidth;
+    final topY = lastLine * lineHeight * zoomLevel;
+    final bottomY = topY + lineHeight * zoomLevel;
     canvas.drawLine(
       Offset(cursorOffset, topY),
       Offset(cursorOffset, bottomY),
       Paint()
         ..color = cursorColor
-        ..strokeWidth = 2.0,
+        ..strokeWidth = 2.0 * zoomLevel,
     );
   }
 
@@ -186,28 +186,30 @@ class CodeEditorPainter extends CustomPainter {
     final highlightPaint = Paint()..color = highlightColor;
     final lineStart = editingCore.getLineStartIndex(line);
     final lineEnd = editingCore.getLineEndIndex(line);
-
     for (int matchPosition in matchPositions) {
       if (matchPosition >= lineStart - 1 && matchPosition < lineEnd) {
         final relativeMatchPosition = matchPosition - lineStart + 1;
         final textBeforeMatch = lineContent.substring(0, relativeMatchPosition);
         final textPainterBefore = TextPainter(
-          text: TextSpan(text: textBeforeMatch, style: textStyle),
+          text: TextSpan(
+              text: textBeforeMatch,
+              style: textStyle.copyWith(
+                  fontSize: textStyle.fontSize! * zoomLevel)),
           textDirection: TextDirection.ltr,
         )..layout();
-
-        final highlightStart = textPainterBefore.width;
+        final highlightStart = textStartX + textPainterBefore.width;
         final matchText = lineContent.substring(relativeMatchPosition,
             min(relativeMatchPosition + searchTerm.length, lineContent.length));
         final textPainterMatch = TextPainter(
-          text: TextSpan(text: matchText, style: textStyle),
+          text: TextSpan(
+              text: matchText,
+              style: textStyle.copyWith(
+                  fontSize: textStyle.fontSize! * zoomLevel)),
           textDirection: TextDirection.ltr,
         )..layout();
-
         final highlightEnd = highlightStart + textPainterMatch.width;
-        final topY = line * lineHeight;
-        final bottomY = topY + lineHeight;
-
+        final topY = line * lineHeight * zoomLevel;
+        final bottomY = topY + lineHeight * zoomLevel;
         canvas.drawRect(
           Rect.fromLTRB(highlightStart, topY, highlightEnd, bottomY),
           highlightPaint,
@@ -218,22 +220,18 @@ class CodeEditorPainter extends CustomPainter {
 
   void _paintSelection(Canvas canvas, int line, String lineContent) {
     if (!editingCore.hasSelection()) return;
-
     final selectionPaint = Paint()..color = selectionColor;
     final selectionStart = _getSelectionStartForLine(line);
     final selectionEnd = _getSelectionEndForLine(line);
-
-    final topY = (line * lineHeight);
-    final bottomY = topY + lineHeight;
-
+    final topY = (line * lineHeight * zoomLevel);
+    final bottomY = topY + lineHeight * zoomLevel;
     // For empty lines, draw a selection width of 1 character
     final endX = lineContent.isEmpty
-        ? max(selectionStart, 1) * charWidth
-        : selectionEnd * charWidth;
-
+        ? textStartX + max(selectionStart, 1) * charWidth
+        : textStartX + selectionEnd * charWidth;
     canvas.drawRect(
       Rect.fromLTRB(
-        selectionStart * charWidth,
+        textStartX + selectionStart * charWidth,
         topY,
         endX,
         bottomY,
@@ -244,11 +242,13 @@ class CodeEditorPainter extends CustomPainter {
 
   void _paintText(Canvas canvas, String text, Offset offset) {
     final textPainter = TextPainter(
-      text: TextSpan(text: text, style: textStyle),
+      text: TextSpan(
+          text: text,
+          style: textStyle.copyWith(fontSize: textStyle.fontSize! * zoomLevel)),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: double.infinity);
-
-    final yOffset = offset.dy + (lineHeight - textPainter.height) / 2;
+    final yOffset =
+        offset.dy + (lineHeight * zoomLevel - textPainter.height) / 2;
     textPainter.paint(canvas, Offset(offset.dx, yOffset));
   }
 }

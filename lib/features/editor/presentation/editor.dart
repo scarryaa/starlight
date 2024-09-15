@@ -28,6 +28,7 @@ class CodeEditor extends StatefulWidget {
   final int? cursorPosition;
   final KeyboardShortcutService keyboardShortcutService;
   final Function(String) onContentChanged;
+  final double zoomLevel;
 
   const CodeEditor({
     super.key,
@@ -44,6 +45,7 @@ class CodeEditor extends StatefulWidget {
     required this.onUpdateReplaceTerm,
     required this.keyboardShortcutService,
     required this.onContentChanged,
+    required this.zoomLevel,
     this.selectionStart,
     this.selectionEnd,
     this.cursorPosition,
@@ -179,7 +181,7 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _autoScrollOnDrag(Offset position) {
     const scrollThreshold = 50.0;
-    const scrollStep = 16.0;
+    final scrollStep = 16.0 * widget.zoomLevel;
 
     if (position.dy < scrollThreshold && codeScrollController.offset > 0) {
       codeScrollController
@@ -245,6 +247,7 @@ class _CodeEditorState extends State<CodeEditor> {
                                 constraints.maxHeight),
                             child: CustomPaint(
                               painter: CodeEditorPainter(
+                                zoomLevel: widget.zoomLevel,
                                 matchPositions: widget.matchPositions,
                                 searchTerm: widget.searchTerm,
                                 highlightColor: theme.colorScheme.secondary
@@ -315,28 +318,33 @@ class _CodeEditorState extends State<CodeEditor> {
 
   Widget _buildLineNumbers(BoxConstraints constraints) {
     final theme = Theme.of(context);
+    final scaledLineNumberWidth = lineNumberWidth * widget.zoomLevel;
+    final scaledLineHeight = lineHeight * widget.zoomLevel;
 
     return SizedBox(
-        width: lineNumberWidth,
-        child: ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-          child: SingleChildScrollView(
-            controller: lineNumberScrollController,
-            child: SizedBox(
-              height: max(
-                  editingCore.lineCount * lineHeight, constraints.maxHeight),
-              child: LineNumbers(
-                lineCount: editingCore.lineCount,
-                lineHeight: lineHeight,
-                lineNumberWidth: lineNumberWidth,
-                firstVisibleLine: firstVisibleLine,
-                visibleLineCount: visibleLineCount,
-                textStyle: theme.textTheme.bodySmall?.copyWith(
-                    color: theme.colorScheme.onSurface.withOpacity(0.6)),
+      width: scaledLineNumberWidth,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: SingleChildScrollView(
+          controller: lineNumberScrollController,
+          child: SizedBox(
+            height: max(editingCore.lineCount * scaledLineHeight,
+                constraints.maxHeight),
+            child: LineNumbers(
+              lineCount: editingCore.lineCount,
+              lineHeight: lineHeight,
+              lineNumberWidth: lineNumberWidth,
+              firstVisibleLine: firstVisibleLine,
+              visibleLineCount: visibleLineCount,
+              zoomLevel: widget.zoomLevel,
+              textStyle: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface.withOpacity(0.6),
               ),
             ),
           ),
-        ));
+        ),
+      ),
+    );
   }
 
   void _calculateLineNumberWidth() {
@@ -361,29 +369,31 @@ class _CodeEditorState extends State<CodeEditor> {
     int cursorColumn = cursorPosition - lineStartIndex;
 
     // Vertical scrolling
-    final cursorY = cursorLine * lineHeight;
+    final cursorY = cursorLine * lineHeight * widget.zoomLevel;
     if (cursorY < codeScrollController.offset) {
       codeScrollController.jumpTo(cursorY);
     } else if (cursorY >
         codeScrollController.offset +
             codeScrollController.position.viewportDimension -
-            lineHeight) {
+            lineHeight * widget.zoomLevel) {
       codeScrollController.jumpTo(cursorY -
           codeScrollController.position.viewportDimension +
-          lineHeight);
+          lineHeight * widget.zoomLevel);
     }
 
     // Horizontal scrolling
-    final cursorX = cursorColumn * charWidth + lineNumberWidth;
-    if (cursorX < horizontalController.offset + lineNumberWidth) {
-      horizontalController.jumpTo(cursorX - lineNumberWidth);
+    final cursorX = cursorColumn * charWidth * widget.zoomLevel +
+        lineNumberWidth * widget.zoomLevel;
+    if (cursorX <
+        horizontalController.offset + lineNumberWidth * widget.zoomLevel) {
+      horizontalController.jumpTo(cursorX - lineNumberWidth * widget.zoomLevel);
     } else if (cursorX >
         horizontalController.offset +
             horizontalController.position.viewportDimension -
-            charWidth) {
+            charWidth * widget.zoomLevel) {
       horizontalController.jumpTo(cursorX -
           horizontalController.position.viewportDimension +
-          charWidth);
+          charWidth * widget.zoomLevel);
     }
 
     // Ensure the entire selection is visible
@@ -492,16 +502,26 @@ class _CodeEditorState extends State<CodeEditor> {
     final adjustedOffset = offset +
         Offset(
             max(0, horizontalController.offset), codeScrollController.offset);
-    final tappedLine = (adjustedOffset.dy / lineHeight).floor();
+    final tappedLine =
+        (adjustedOffset.dy / (lineHeight * widget.zoomLevel)).floor();
 
     if (editingCore.lineCount == 0) return 0;
 
     if (tappedLine < editingCore.lineCount) {
-      final tappedOffset = (adjustedOffset.dx).clamp(0, double.infinity);
-      final column =
-          (tappedOffset / charWidth).round().clamp(0, double.infinity).toInt();
+      final scaledLineNumberWidth = lineNumberWidth * widget.zoomLevel;
+      final textStartX = scaledLineNumberWidth / 8;
+
+      // Adjust the tapped offset to account for the text start position
+      final adjustedTappedOffset =
+          (adjustedOffset.dx - textStartX).clamp(0, double.infinity);
+
+      final column = (adjustedTappedOffset / (charWidth * widget.zoomLevel))
+          .round()
+          .clamp(0, double.infinity)
+          .toInt();
 
       if (tappedLine < 0) return 0;
+
       int lineStartIndex = editingCore.getLineStartIndex(tappedLine);
       String line = editingCore.getLineContent(tappedLine);
 
@@ -1026,14 +1046,16 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _updateVisibleLines() {
     if (!mounted || !codeScrollController.hasClients) return;
-
     final totalLines = editingCore.lineCount;
     final viewportHeight = codeScrollController.position.viewportDimension;
 
-    firstVisibleLine = (codeScrollController.offset / lineHeight)
-        .floor()
-        .clamp(0, totalLines == 0 ? 0 : totalLines - 1);
-    visibleLineCount = (viewportHeight / lineHeight).ceil() + 1;
+    firstVisibleLine =
+        (codeScrollController.offset / (lineHeight * widget.zoomLevel))
+            .floor()
+            .clamp(0, totalLines == 0 ? 0 : totalLines - 1);
+
+    visibleLineCount =
+        (viewportHeight / (lineHeight * widget.zoomLevel)).ceil() + 1;
 
     if (firstVisibleLine + visibleLineCount > totalLines) {
       visibleLineCount = totalLines - firstVisibleLine;

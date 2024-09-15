@@ -42,6 +42,12 @@ class EditorWidgetState extends State<EditorWidget> {
   bool _matchWholeWord = false;
   bool _useRegex = false;
   String _lastSearchTerm = '';
+  final List<String> _undoStack = [];
+  final List<String> _redoStack = [];
+  double _zoomLevel = 1.0;
+  final double _zoomStep = 0.1;
+  final double _minZoom = 0.5;
+  final double _maxZoom = 2.0;
 
   void closeCurrentFile() {
     if (_selectedTabIndex.value != -1) {
@@ -49,15 +55,58 @@ class EditorWidgetState extends State<EditorWidget> {
     }
   }
 
-  void undo() {}
+  void zoomIn() {
+    setState(() {
+      _zoomLevel = (_zoomLevel + _zoomStep).clamp(_minZoom, _maxZoom);
+    });
+  }
 
-  void redo() {}
+  void zoomOut() {
+    setState(() {
+      _zoomLevel = (_zoomLevel - _zoomStep).clamp(_minZoom, _maxZoom);
+    });
+  }
 
-  void zoomIn() {}
+  void resetZoom() {
+    setState(() {
+      _zoomLevel = 1.0;
+    });
+  }
 
-  void zoomOut() {}
+  void undo() {
+    if (_undoStack.isNotEmpty) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      _redoStack.add(currentTab.content);
+      final previousContent = _undoStack.removeLast();
+      setState(() {
+        currentTab.updateContent(previousContent);
+      });
+    }
+  }
 
-  void resetZoom() {}
+  void redo() {
+    if (_redoStack.isNotEmpty) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      _undoStack.add(currentTab.content);
+      final nextContent = _redoStack.removeLast();
+      setState(() {
+        currentTab.updateContent(nextContent);
+      });
+    }
+  }
+
+  void _onCodeEditorContentChanged(String newContent) {
+    if (_selectedTabIndex.value != -1) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      if (currentTab.content != newContent) {
+        _undoStack.add(currentTab.content);
+        _redoStack.clear(); // Clear redo stack on new change
+        setState(() {
+          currentTab.updateContent(newContent.replaceFirst('\n', ''));
+        });
+      }
+    }
+  }
 
   void showFindDialog() {
     setState(() {
@@ -186,7 +235,6 @@ class EditorWidgetState extends State<EditorWidget> {
     if (currentTab.customWidget != null) {
       return currentTab.customWidget!;
     }
-
     return CodeEditor(
       key: ValueKey(currentTab.filePath),
       initialCode: currentTab.content,
@@ -205,6 +253,7 @@ class EditorWidgetState extends State<EditorWidget> {
       selectionEnd: currentTab.selectionEnd,
       cursorPosition: currentTab.cursorPosition,
       keyboardShortcutService: widget.keyboardShortcutService,
+      zoomLevel: _zoomLevel,
     );
   }
 
@@ -652,17 +701,6 @@ class EditorWidgetState extends State<EditorWidget> {
   bool _isSearchAllFilesTabOpen() {
     return _selectedTabIndex.value != -1 &&
         _tabs[_selectedTabIndex.value].filePath == 'Project Search';
-  }
-
-  void _onCodeEditorContentChanged(String newContent) {
-    if (_selectedTabIndex.value != -1) {
-      final currentTab = _tabs[_selectedTabIndex.value];
-      if (currentTab.content != newContent) {
-        setState(() {
-          currentTab.updateContent(newContent.replaceFirst('\n', ''));
-        });
-      }
-    }
   }
 
   void _onTabsReordered(int oldIndex, int newIndex) {

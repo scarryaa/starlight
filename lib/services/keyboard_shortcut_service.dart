@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/services/editor_service.dart';
@@ -10,8 +11,8 @@ class KeyboardShortcutService {
 
   KeyboardShortcutService(this._editorService);
 
-  void setToggleCommandPalette(VoidCallback callback) {
-    _toggleCommandPalette = callback;
+  void dispose() {
+    focusNode.dispose();
   }
 
   KeyEventResult handleKeyEvent(KeyEvent event) {
@@ -50,11 +51,51 @@ class KeyboardShortcutService {
         _toggleCommandPalette?.call();
         return KeyEventResult.handled;
       }
+
+      // Undo (Cmd/Ctrl + Z)
+      if (isCommandOrControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyZ &&
+          !HardwareKeyboard.instance.isShiftPressed) {
+        _editorService.editorKey.currentState?.undo();
+        return KeyEventResult.handled;
+      }
+
+      // Redo (Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y)
+      if (isCommandOrControlPressed &&
+          ((HardwareKeyboard.instance.isShiftPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyZ) ||
+              (!HardwareKeyboard.instance.isShiftPressed &&
+                  event.logicalKey == LogicalKeyboardKey.keyY))) {
+        _editorService.editorKey.currentState?.redo();
+        return KeyEventResult.handled;
+      }
+
+      // Zoom In (Cmd/Ctrl + Plus)
+      if (isCommandOrControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.equal) {
+        _editorService.editorKey.currentState?.zoomIn();
+        return KeyEventResult.handled;
+      }
+
+      // Zoom Out (Cmd/Ctrl + Minus)
+      if (isCommandOrControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.minus) {
+        _editorService.editorKey.currentState?.zoomOut();
+        return KeyEventResult.handled;
+      }
+
+      // Reset Zoom (Cmd/Ctrl + 0)
+      if (isCommandOrControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.digit0) {
+        _editorService.editorKey.currentState?.resetZoom();
+        return KeyEventResult.handled;
+      }
     }
+
     return KeyEventResult.ignored;
   }
 
-  void dispose() {
-    focusNode.dispose();
+  void setToggleCommandPalette(VoidCallback callback) {
+    _toggleCommandPalette = callback;
   }
 }
