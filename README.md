@@ -17,7 +17,7 @@ Follow the steps below to set up the project and run it on your desired platform
 1. Clone the repository:
 
     ```bash
-    git clone https://github.com/yourusername/starlight.git
+    git clone https://github.com/scarryaa/starlight.git
     cd starlight
     ```
 
