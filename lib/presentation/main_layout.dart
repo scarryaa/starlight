@@ -64,8 +64,9 @@ class MainLayoutState extends State<MainLayout> {
                           Expanded(
                             child: EditorWidget(
                               key: _editorService.editorKey,
-                              onContentChanged:
-                                  _editorService.handleContentChanged,
+                              onContentChanged: (String newContent) =>
+                                  _editorService
+                                      .handleContentChanged(newContent),
                               fileMenuActions: FileMenuActions(
                                 newFile: _editorService.handleNewFile,
                                 openFile: _editorService.handleOpenFile,

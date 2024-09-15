@@ -5,9 +5,19 @@ import 'package:starlight/features/editor/presentation/editor_widget.dart';
 
 class EditorService {
   final GlobalKey<EditorWidgetState> editorKey = GlobalKey<EditorWidgetState>();
-  final List<String> _undoStack = [];
-  final List<String> _redoStack = [];
-  String _currentContent = '';
+  final List<_EditorState> _undoStack = [];
+  final List<_EditorState> _redoStack = [];
+  _EditorState _currentState = _EditorState('');
+
+  void handleContentChanged(String newContent,
+      {int? cursorPosition, int? selectionStart, int? selectionEnd}) {
+    if (_currentState.content != newContent) {
+      _undoStack.add(_currentState);
+      _redoStack.clear();
+      _currentState = _EditorState(
+          newContent, cursorPosition, selectionStart, selectionEnd);
+    }
+  }
 
   void addSearchAllFilesTab() {
     editorKey.currentState?.addSearchAllFilesTab();
@@ -17,33 +27,33 @@ class EditorService {
     editorKey.currentState?.closeCurrentFile();
   }
 
-  void handleContentChanged(String newContent) {
-    if (_currentContent != newContent) {
-      _undoStack.add(_currentContent);
-      _redoStack.clear();
-      _currentContent = newContent;
-    }
-  }
-
   void undo() {
     if (_undoStack.isNotEmpty) {
-      _redoStack.add(_currentContent);
-      _currentContent = _undoStack.removeLast();
+      _redoStack.add(_currentState);
+      _currentState = _undoStack.removeLast();
       _updateEditor();
     }
   }
 
   void redo() {
     if (_redoStack.isNotEmpty) {
-      _undoStack.add(_currentContent);
-      _currentContent = _redoStack.removeLast();
+      _undoStack.add(_currentState);
+      _currentState = _redoStack.removeLast();
       _updateEditor();
     }
   }
 
   void _updateEditor() {
-    editorKey.currentState
-        ?.updateContent(_currentContent.replaceFirst('\n', ''));
+    final editorState = editorKey.currentState;
+    if (editorState != null) {
+      editorState.updateContent(
+        _currentState.content.replaceFirst('\n', ''),
+        _currentState.cursorPosition,
+        _currentState.selectionStart,
+        _currentState.selectionEnd,
+      );
+      editorState.maintainFocus();
+    }
   }
 
   void handleNewFile() {
@@ -81,4 +91,14 @@ class EditorService {
   void zoomOut() {
     editorKey.currentState?.zoomOut();
   }
+}
+
+class _EditorState {
+  final String content;
+  final int? cursorPosition;
+  final int? selectionStart;
+  final int? selectionEnd;
+
+  _EditorState(this.content,
+      [this.cursorPosition, this.selectionStart, this.selectionEnd]);
 }

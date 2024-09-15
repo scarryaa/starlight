@@ -56,21 +56,25 @@ class KeyboardShortcutService {
         return KeyEventResult.handled;
       }
 
-      // Undo (Cmd/Ctrl + Z)
+// Undo (Cmd/Ctrl + Z)
       if (isCommandOrControlPressed &&
           event.logicalKey == LogicalKeyboardKey.keyZ &&
           !HardwareKeyboard.instance.isShiftPressed) {
         editorService.undo();
+        editorService.editorKey.currentState
+            ?.maintainFocus(); // Ensure focus remains
         return KeyEventResult.handled;
       }
 
-      // Redo (Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y)
+// Redo (Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y)
       if (isCommandOrControlPressed &&
           ((HardwareKeyboard.instance.isShiftPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyZ) ||
               (!HardwareKeyboard.instance.isShiftPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyY))) {
         editorService.redo();
+        editorService.editorKey.currentState
+            ?.maintainFocus(); // Ensure focus remains
         return KeyEventResult.handled;
       }
 

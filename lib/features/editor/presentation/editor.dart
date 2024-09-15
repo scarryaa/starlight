@@ -12,6 +12,7 @@ import 'package:starlight/features/editor/presentation/line_numbers.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
 
 class CodeEditor extends StatefulWidget {
+  final FocusNode focusNode;
   final String initialCode;
   final String filePath;
   final List<int> matchPositions;
@@ -46,6 +47,7 @@ class CodeEditor extends StatefulWidget {
     required this.keyboardShortcutService,
     required this.onContentChanged,
     required this.zoomLevel,
+    required this.focusNode,
     this.selectionStart,
     this.selectionEnd,
     this.cursorPosition,
@@ -67,7 +69,6 @@ class _CodeEditorState extends State<CodeEditor> {
   late ScrollController horizontalController;
   late ScrollController horizontalScrollbarController;
 
-  final FocusNode focusNode = FocusNode();
   bool _scrollingCode = false;
   bool _scrollingLineNumbers = false;
   bool _isHorizontalScrolling = false;
@@ -87,6 +88,10 @@ class _CodeEditorState extends State<CodeEditor> {
   SelectionMode _selectionMode = SelectionMode.character;
   int? _selectionAnchor;
   Offset? _lastTapPosition;
+
+  void maintainFocus() {
+    widget.focusNode.requestFocus();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -134,7 +139,6 @@ class _CodeEditorState extends State<CodeEditor> {
     codeScrollController.dispose();
     horizontalController.dispose();
     lineNumberScrollController.dispose();
-    focusNode.dispose();
     _textPainter.dispose();
     super.dispose();
   }
@@ -219,7 +223,7 @@ class _CodeEditorState extends State<CodeEditor> {
       },
       behavior: HitTestBehavior.deferToChild,
       child: Focus(
-        focusNode: focusNode,
+        focusNode: widget.focusNode,
         onKeyEvent: _handleKeyPress,
         child: ScrollbarTheme(
           data: ScrollbarThemeData(
@@ -558,7 +562,7 @@ class _CodeEditorState extends State<CodeEditor> {
     setState(() {
       _selectWordAtPosition(position);
     });
-    focusNode.requestFocus();
+    widget.focusNode.requestFocus();
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
@@ -725,7 +729,7 @@ class _CodeEditorState extends State<CodeEditor> {
       editingCore.cursorPosition = position;
       editingCore.clearSelection();
     });
-    focusNode.requestFocus();
+    widget.focusNode.requestFocus();
   }
 
   void _handleTap(TapDownDetails details) {
@@ -762,7 +766,7 @@ class _CodeEditorState extends State<CodeEditor> {
     setState(() {
       _selectLineAtPosition(position);
     });
-    focusNode.requestFocus();
+    widget.focusNode.requestFocus();
   }
 
   void _initializeTextPainter(BuildContext context) {
@@ -877,6 +881,7 @@ class _CodeEditorState extends State<CodeEditor> {
       widget.onContentChanged(editingCore.getText());
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _recalculateEditor();
+        widget.focusNode.requestFocus();
       });
       _lastKnownVersion = editingCore.version;
     }

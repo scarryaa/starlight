@@ -10,6 +10,10 @@ import 'package:starlight/features/toasts/error_toast.dart';
 import 'package:starlight/presentation/screens/search_all_files.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
 
+class EditorContentKey extends ValueKey<String> {
+  const EditorContentKey(super.value);
+}
+
 class EditorWidget extends StatefulWidget {
   final KeyboardShortcutService keyboardShortcutService;
   final FileMenuActions fileMenuActions;
@@ -29,8 +33,9 @@ class EditorWidget extends StatefulWidget {
 }
 
 class EditorWidgetState extends State<EditorWidget> {
-  Key _currentEditorKey = UniqueKey();
+  late EditorContentKey _currentEditorKey;
   late ErrorToastManager _toastManager;
+  late FocusNode _editorFocusNode;
   final List<FileTab> _tabs = [];
   final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
   bool _isSearchVisible = false;
@@ -109,11 +114,19 @@ class EditorWidgetState extends State<EditorWidget> {
   @override
   void initState() {
     super.initState();
+    _currentEditorKey = const EditorContentKey('');
+    _editorFocusNode = FocusNode();
     _toastManager = ErrorToastManager(context);
     widget.fileMenuActions.newFile = addEmptyTab;
     widget.fileMenuActions.openFile = openFile;
     widget.fileMenuActions.save = saveCurrentFile;
     widget.fileMenuActions.saveAs = saveFileAs;
+  }
+
+  void maintainFocus() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _editorFocusNode.requestFocus();
+    });
   }
 
   void openFile(File file) {
@@ -193,13 +206,26 @@ class EditorWidgetState extends State<EditorWidget> {
     widget.keyboardShortcutService.editorService.undo();
   }
 
-  void updateContent(String newContent) {
+  void updateContent(String newContent,
+      [int? cursorPosition, int? selectionStart, int? selectionEnd]) {
     setState(() {
       if (_selectedTabIndex.value != -1) {
-        _tabs[_selectedTabIndex.value].updateContent(newContent);
-        // Force a rebuild of the CodeEditor
-        _currentEditorKey = UniqueKey();
+        final currentTab = _tabs[_selectedTabIndex.value];
+        if (currentTab.content != newContent) {
+          currentTab.updateContent(newContent);
+          _currentEditorKey = EditorContentKey(newContent);
+        }
+
+        // Update cursor position and selection if provided
+        if (cursorPosition != null) currentTab.cursorPosition = cursorPosition;
+        if (selectionStart != null) currentTab.selectionStart = selectionStart;
+        if (selectionEnd != null) currentTab.selectionEnd = selectionEnd;
       }
+    });
+
+    // Ensure the editor is focused
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _editorFocusNode.requestFocus();
     });
   }
 
@@ -239,6 +265,7 @@ class EditorWidgetState extends State<EditorWidget> {
       cursorPosition: currentTab.cursorPosition,
       keyboardShortcutService: widget.keyboardShortcutService,
       zoomLevel: _zoomLevel,
+      focusNode: _editorFocusNode,
     );
   }
 
@@ -689,8 +716,12 @@ class EditorWidgetState extends State<EditorWidget> {
           currentTab.updateContent(newContent);
         });
         widget.onContentChanged?.call(newContent);
-        widget.keyboardShortcutService.editorService
-            .handleContentChanged(newContent);
+        widget.keyboardShortcutService.editorService.handleContentChanged(
+          newContent,
+          cursorPosition: currentTab.cursorPosition,
+          selectionStart: currentTab.selectionStart,
+          selectionEnd: currentTab.selectionEnd,
+        );
       }
     }
   }
