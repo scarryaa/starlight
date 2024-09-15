@@ -5,6 +5,9 @@ import 'package:starlight/features/editor/presentation/editor_widget.dart';
 
 class EditorService {
   final GlobalKey<EditorWidgetState> editorKey = GlobalKey<EditorWidgetState>();
+  final List<String> _undoStack = [];
+  final List<String> _redoStack = [];
+  String _currentContent = '';
 
   void addSearchAllFilesTab() {
     editorKey.currentState?.addSearchAllFilesTab();
@@ -12,6 +15,35 @@ class EditorService {
 
   void closeCurrentFile() {
     editorKey.currentState?.closeCurrentFile();
+  }
+
+  void handleContentChanged(String newContent) {
+    if (_currentContent != newContent) {
+      _undoStack.add(_currentContent);
+      _redoStack.clear();
+      _currentContent = newContent;
+    }
+  }
+
+  void undo() {
+    if (_undoStack.isNotEmpty) {
+      _redoStack.add(_currentContent);
+      _currentContent = _undoStack.removeLast();
+      _updateEditor();
+    }
+  }
+
+  void redo() {
+    if (_redoStack.isNotEmpty) {
+      _undoStack.add(_currentContent);
+      _currentContent = _redoStack.removeLast();
+      _updateEditor();
+    }
+  }
+
+  void _updateEditor() {
+    editorKey.currentState
+        ?.updateContent(_currentContent.replaceFirst('\n', ''));
   }
 
   void handleNewFile() {
@@ -30,10 +62,6 @@ class EditorService {
     editorKey.currentState?.saveFileAs();
   }
 
-  void redo() {
-    editorKey.currentState?.redo();
-  }
-
   void resetZoom() {
     editorKey.currentState?.resetZoom();
   }
@@ -44,10 +72,6 @@ class EditorService {
 
   void showReplaceDialog() {
     editorKey.currentState?.showReplaceDialog();
-  }
-
-  void undo() {
-    editorKey.currentState?.undo();
   }
 
   void zoomIn() {

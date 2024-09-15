@@ -28,7 +28,7 @@ class LineNumberPainter extends CustomPainter {
 
     final scaledLineHeight = lineHeight * zoomLevel;
     final scaledLineNumberWidth = lineNumberWidth * zoomLevel;
-    final padding = 8.0 * zoomLevel; // Add padding that scales with zoom
+    final padding = 8.0 * zoomLevel;
 
     for (int i = firstVisibleLine;
         i < firstVisibleLine + visibleLineCount + 5 && i < lineCount;

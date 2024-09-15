@@ -14,18 +14,22 @@ class EditorWidget extends StatefulWidget {
   final KeyboardShortcutService keyboardShortcutService;
   final FileMenuActions fileMenuActions;
   final ValueNotifier<String?> rootDirectory;
+  final Function(String)? onContentChanged;
 
-  const EditorWidget(
-      {super.key,
-      required this.fileMenuActions,
-      required this.rootDirectory,
-      required this.keyboardShortcutService});
+  const EditorWidget({
+    super.key,
+    required this.fileMenuActions,
+    required this.rootDirectory,
+    required this.keyboardShortcutService,
+    required this.onContentChanged,
+  });
 
   @override
   EditorWidgetState createState() => EditorWidgetState();
 }
 
 class EditorWidgetState extends State<EditorWidget> {
+  Key _currentEditorKey = UniqueKey();
   late ErrorToastManager _toastManager;
   final List<FileTab> _tabs = [];
   final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
@@ -42,85 +46,10 @@ class EditorWidgetState extends State<EditorWidget> {
   bool _matchWholeWord = false;
   bool _useRegex = false;
   String _lastSearchTerm = '';
-  final List<String> _undoStack = [];
-  final List<String> _redoStack = [];
   double _zoomLevel = 1.0;
   final double _zoomStep = 0.1;
   final double _minZoom = 0.5;
   final double _maxZoom = 2.0;
-
-  void closeCurrentFile() {
-    if (_selectedTabIndex.value != -1) {
-      _closeTab(_selectedTabIndex.value);
-    }
-  }
-
-  void zoomIn() {
-    setState(() {
-      _zoomLevel = (_zoomLevel + _zoomStep).clamp(_minZoom, _maxZoom);
-    });
-  }
-
-  void zoomOut() {
-    setState(() {
-      _zoomLevel = (_zoomLevel - _zoomStep).clamp(_minZoom, _maxZoom);
-    });
-  }
-
-  void resetZoom() {
-    setState(() {
-      _zoomLevel = 1.0;
-    });
-  }
-
-  void undo() {
-    if (_undoStack.isNotEmpty) {
-      final currentTab = _tabs[_selectedTabIndex.value];
-      _redoStack.add(currentTab.content);
-      final previousContent = _undoStack.removeLast();
-      setState(() {
-        currentTab.updateContent(previousContent);
-      });
-    }
-  }
-
-  void redo() {
-    if (_redoStack.isNotEmpty) {
-      final currentTab = _tabs[_selectedTabIndex.value];
-      _undoStack.add(currentTab.content);
-      final nextContent = _redoStack.removeLast();
-      setState(() {
-        currentTab.updateContent(nextContent);
-      });
-    }
-  }
-
-  void _onCodeEditorContentChanged(String newContent) {
-    if (_selectedTabIndex.value != -1) {
-      final currentTab = _tabs[_selectedTabIndex.value];
-      if (currentTab.content != newContent) {
-        _undoStack.add(currentTab.content);
-        _redoStack.clear(); // Clear redo stack on new change
-        setState(() {
-          currentTab.updateContent(newContent.replaceFirst('\n', ''));
-        });
-      }
-    }
-  }
-
-  void showFindDialog() {
-    setState(() {
-      _isSearchVisible = true;
-      _isReplaceVisible = false;
-    });
-  }
-
-  void showReplaceDialog() {
-    setState(() {
-      _isSearchVisible = true;
-      _isReplaceVisible = true;
-    });
-  }
 
   void addEmptyTab() {
     setState(() {
@@ -165,6 +94,12 @@ class EditorWidgetState extends State<EditorWidget> {
     );
   }
 
+  void closeCurrentFile() {
+    if (_selectedTabIndex.value != -1) {
+      _closeTab(_selectedTabIndex.value);
+    }
+  }
+
   @override
   void dispose() {
     _debounceTimer?.cancel();
@@ -206,6 +141,16 @@ class EditorWidgetState extends State<EditorWidget> {
     }
   }
 
+  void redo() {
+    widget.keyboardShortcutService.editorService.redo();
+  }
+
+  void resetZoom() {
+    setState(() {
+      _zoomLevel = 1.0;
+    });
+  }
+
   void saveCurrentFile() {
     if (_selectedTabIndex.value != -1) {
       _saveTab(_selectedTabIndex.value);
@@ -230,13 +175,53 @@ class EditorWidgetState extends State<EditorWidget> {
     }
   }
 
+  void showFindDialog() {
+    setState(() {
+      _isSearchVisible = true;
+      _isReplaceVisible = false;
+    });
+  }
+
+  void showReplaceDialog() {
+    setState(() {
+      _isSearchVisible = true;
+      _isReplaceVisible = true;
+    });
+  }
+
+  void undo() {
+    widget.keyboardShortcutService.editorService.undo();
+  }
+
+  void updateContent(String newContent) {
+    setState(() {
+      if (_selectedTabIndex.value != -1) {
+        _tabs[_selectedTabIndex.value].updateContent(newContent);
+        // Force a rebuild of the CodeEditor
+        _currentEditorKey = UniqueKey();
+      }
+    });
+  }
+
+  void zoomIn() {
+    setState(() {
+      _zoomLevel = (_zoomLevel + _zoomStep).clamp(_minZoom, _maxZoom);
+    });
+  }
+
+  void zoomOut() {
+    setState(() {
+      _zoomLevel = (_zoomLevel - _zoomStep).clamp(_minZoom, _maxZoom);
+    });
+  }
+
   Widget _buildCodeEditor(int selectedIndex) {
     final currentTab = _tabs[selectedIndex];
     if (currentTab.customWidget != null) {
       return currentTab.customWidget!;
     }
     return CodeEditor(
-      key: ValueKey(currentTab.filePath),
+      key: _currentEditorKey,
       initialCode: currentTab.content,
       filePath: currentTab.filePath,
       onContentChanged: _onCodeEditorContentChanged,
@@ -691,16 +676,23 @@ class EditorWidgetState extends State<EditorWidget> {
     return positions;
   }
 
-  bool _isCurrentTabModified() {
-    if (_selectedTabIndex.value != -1) {
-      return _tabs[_selectedTabIndex.value].isModified;
-    }
-    return false;
-  }
-
   bool _isSearchAllFilesTabOpen() {
     return _selectedTabIndex.value != -1 &&
         _tabs[_selectedTabIndex.value].filePath == 'Project Search';
+  }
+
+  void _onCodeEditorContentChanged(String newContent) {
+    if (_selectedTabIndex.value != -1) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      if (currentTab.content != newContent) {
+        setState(() {
+          currentTab.updateContent(newContent);
+        });
+        widget.onContentChanged?.call(newContent);
+        widget.keyboardShortcutService.editorService
+            .handleContentChanged(newContent);
+      }
+    }
   }
 
   void _onTabsReordered(int oldIndex, int newIndex) {
@@ -802,91 +794,6 @@ class EditorWidgetState extends State<EditorWidget> {
 
   void _selectTab(int index) {
     _selectedTabIndex.value = index;
-  }
-
-  void _showErrorToast(File file, dynamic error) {
-    final overlay = Overlay.of(context);
-    OverlayEntry? entry;
-
-    entry = OverlayEntry(
-      builder: (context) => Positioned(
-        bottom: 50,
-        right: 20,
-        child: Material(
-          color: Colors.transparent,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            decoration: BoxDecoration(
-              color: Colors.red[700],
-              borderRadius: BorderRadius.circular(8),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.15),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            constraints: const BoxConstraints(maxWidth: 300),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.error_outline,
-                            color: Colors.white, size: 20),
-                        SizedBox(width: 8),
-                        Text(
-                          'Error',
-                          style: TextStyle(
-                              color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        entry?.remove();
-                      },
-                      child: const Icon(Icons.close,
-                          color: Colors.white, size: 20),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Failed to open file:',
-                  style: TextStyle(color: Colors.white),
-                ),
-                Text(
-                  file.path,
-                  style: const TextStyle(
-                      color: Colors.white, fontWeight: FontWeight.bold),
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Error: $error',
-                  style: const TextStyle(color: Colors.white),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 2,
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-
-    overlay.insert(entry);
-
-    // Automatically remove the toast after 6 seconds if not closed manually
-    Future.delayed(const Duration(seconds: 6), () {
-      entry?.remove();
-    });
   }
 
   void _updateCodeEditorHighlights() {
