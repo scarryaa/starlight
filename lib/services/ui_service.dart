@@ -4,7 +4,11 @@ import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
-class UIService {
+class UIService extends ChangeNotifier {
+  bool _showFileExplorer = true;
+
+  bool get showFileExplorer => _showFileExplorer;
+
   Widget buildAppBar(
       BuildContext context, ThemeProvider themeProvider, bool isDarkMode) {
     return Container(
@@ -80,5 +84,10 @@ class UIService {
         ),
       ),
     );
+  }
+
+  void toggleFileExplorer() {
+    _showFileExplorer = !_showFileExplorer;
+    notifyListeners();
   }
 }

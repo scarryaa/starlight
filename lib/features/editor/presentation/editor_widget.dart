@@ -43,6 +43,36 @@ class EditorWidgetState extends State<EditorWidget> {
   bool _useRegex = false;
   String _lastSearchTerm = '';
 
+  void closeCurrentFile() {
+    if (_selectedTabIndex.value != -1) {
+      _closeTab(_selectedTabIndex.value);
+    }
+  }
+
+  void undo() {}
+
+  void redo() {}
+
+  void zoomIn() {}
+
+  void zoomOut() {}
+
+  void resetZoom() {}
+
+  void showFindDialog() {
+    setState(() {
+      _isSearchVisible = true;
+      _isReplaceVisible = false;
+    });
+  }
+
+  void showReplaceDialog() {
+    setState(() {
+      _isSearchVisible = true;
+      _isReplaceVisible = true;
+    });
+  }
+
   void addEmptyTab() {
     setState(() {
       _tabs.add(FileTab(filePath: 'Untitled', content: ''));

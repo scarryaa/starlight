@@ -31,6 +31,7 @@ Future<void> main() async {
 
   runApp(MultiProvider(
     providers: [
+      ChangeNotifierProvider(create: (_) => UIService()),
       ChangeNotifierProvider<ThemeProvider>(
         create: (_) => ThemeProvider(),
       ),
@@ -42,15 +43,11 @@ Future<void> main() async {
         create: (_) => EditorService(),
         lazy: true,
       ),
-      Provider<UIService>(
-        create: (_) => UIService(),
-        lazy: true,
-      ),
       Provider<KeyboardShortcutService>(
-        create: (context) =>
-            KeyboardShortcutService(context.read<EditorService>()),
-        lazy: true,
-      ),
+          create: (context) => KeyboardShortcutService(
+                context.read<EditorService>(),
+              ),
+          lazy: true),
     ],
     child: const App(),
   ));
