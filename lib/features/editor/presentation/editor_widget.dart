@@ -628,6 +628,7 @@ class EditorWidgetState extends State<EditorWidget> {
     setState(() {
       _tabs.clear();
       _selectedTabIndex.value = -1;
+      _currentEditorKey = const EditorContentKey('');
     });
   }
 
@@ -637,6 +638,7 @@ class EditorWidgetState extends State<EditorWidget> {
       _tabs.clear();
       _tabs.add(currentTab);
       _selectedTabIndex.value = 0;
+      _currentEditorKey = EditorContentKey(currentTab.content);
     });
   }
 
@@ -645,6 +647,15 @@ class EditorWidgetState extends State<EditorWidget> {
       _tabs.removeAt(index);
       if (_selectedTabIndex.value >= _tabs.length) {
         _selectedTabIndex.value = _tabs.isEmpty ? -1 : _tabs.length - 1;
+      }
+
+      // Update the current editor key if there's still an active tab
+      if (_selectedTabIndex.value != -1) {
+        _currentEditorKey =
+            EditorContentKey(_tabs[_selectedTabIndex.value].content);
+      } else {
+        // If no tabs are left, reset the editor key
+        _currentEditorKey = const EditorContentKey('');
       }
     });
   }
@@ -667,6 +678,14 @@ class EditorWidgetState extends State<EditorWidget> {
       // Adjust the selected index if necessary
       if (_selectedTabIndex.value >= _tabs.length) {
         _selectedTabIndex.value = _tabs.length - 1;
+      }
+
+      // Update the current editor key
+      if (_selectedTabIndex.value != -1) {
+        _currentEditorKey =
+            EditorContentKey(_tabs[_selectedTabIndex.value].content);
+      } else {
+        _currentEditorKey = const EditorContentKey('');
       }
     });
   }
