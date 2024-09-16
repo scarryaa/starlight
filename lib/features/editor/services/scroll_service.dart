@@ -160,7 +160,8 @@ class CodeEditorScrollService {
             CodeEditorConstants.charWidth * zoomLevel) {
       horizontalController.jumpTo(cursorX -
           horizontalController.position.viewportDimension +
-          CodeEditorConstants.charWidth * zoomLevel);
+          CodeEditorConstants.charWidth * zoomLevel -
+          15);
     }
 
     // Ensure the entire selection is visible

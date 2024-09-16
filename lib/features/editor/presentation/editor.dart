@@ -392,6 +392,11 @@ class CodeEditorState extends State<CodeEditor> {
       return KeyEventResult.ignored;
     }
 
+    // Ignore modifier keys
+    if (_isModifierKey(event.logicalKey)) {
+      return KeyEventResult.ignored;
+    }
+
     if (_handleShortcuts(event)) {
       return KeyEventResult.handled;
     }
@@ -406,6 +411,26 @@ class CodeEditorState extends State<CodeEditor> {
 
     editorService.scrollService.ensureCursorVisibility();
     return KeyEventResult.handled;
+  }
+
+  bool _isModifierKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.shift ||
+        key == LogicalKeyboardKey.shiftLeft ||
+        key == LogicalKeyboardKey.shiftRight ||
+        key == LogicalKeyboardKey.shift ||
+        key == LogicalKeyboardKey.controlLeft ||
+        key == LogicalKeyboardKey.controlRight ||
+        key == LogicalKeyboardKey.control ||
+        key == LogicalKeyboardKey.altLeft ||
+        key == LogicalKeyboardKey.altRight ||
+        key == LogicalKeyboardKey.alt ||
+        key == LogicalKeyboardKey.metaLeft ||
+        key == LogicalKeyboardKey.metaRight ||
+        key == LogicalKeyboardKey.meta ||
+        key == LogicalKeyboardKey.capsLock ||
+        key == LogicalKeyboardKey.numLock ||
+        key == LogicalKeyboardKey.scrollLock ||
+        key == LogicalKeyboardKey.fn;
   }
 
   bool _handleShortcuts(KeyEvent event) {
