@@ -1,20 +1,29 @@
 import 'dart:io';
 import 'dart:math';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/services/text_editing_service.dart';
 import 'package:starlight/features/editor/services/clipboard_service.dart';
+import 'package:starlight/services/keyboard_shortcut_service.dart';
 
 class KeyboardHandlingService {
   final TextEditingService textEditingService;
+  final KeyboardShortcutService keyboardShortcutService;
   final ClipboardService clipboardService;
   final VoidCallback recalculateEditor;
 
   KeyboardHandlingService(
       {required this.textEditingService,
       required this.clipboardService,
-      required this.recalculateEditor});
+      required this.recalculateEditor,
+      required this.keyboardShortcutService});
 
   bool handleKeyPress(KeyEvent event) {
+    if (keyboardShortcutService.handleKeyEvent(event) ==
+        KeyEventResult.handled) {
+      return true;
+    }
+
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return false;
     }

@@ -39,6 +39,7 @@ class _CommandPaletteState extends State<CommandPalette> {
   final ScrollController _scrollController = ScrollController();
   List<Command> _filteredCommands = [];
   int _selectedIndex = 0;
+  FocusNode? _previousFocus;
 
   @override
   Widget build(BuildContext context) {
@@ -108,8 +109,10 @@ class _CommandPaletteState extends State<CommandPalette> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchFocusNode.unfocus();
     _searchFocusNode.dispose();
     _scrollController.dispose();
+    _restorePreviousFocus();
     super.dispose();
   }
 
@@ -118,6 +121,7 @@ class _CommandPaletteState extends State<CommandPalette> {
     super.initState();
     _filteredCommands = widget.commands;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _previousFocus = FocusManager.instance.primaryFocus;
       _searchFocusNode.requestFocus();
     });
   }
@@ -228,8 +232,15 @@ class _CommandPaletteState extends State<CommandPalette> {
           widget.onCommandSelected(_filteredCommands[_selectedIndex]);
         }
       } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _restorePreviousFocus();
         widget.onClose();
       }
+    }
+  }
+
+  void _restorePreviousFocus() {
+    if (_previousFocus != null && _previousFocus!.canRequestFocus) {
+      _previousFocus!.requestFocus();
     }
   }
 

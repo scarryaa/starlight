@@ -1,4 +1,3 @@
-
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -26,6 +25,7 @@ class MainLayout extends StatefulWidget {
 
 class MainLayoutState extends State<MainLayout> {
   bool _showTerminal = false;
+  final FocusNode _mainFocusNode = FocusNode();
   late final FileExplorerService _fileExplorerService;
   late final EditorService _editorService;
   late final UIService _uiService;
@@ -36,87 +36,98 @@ class MainLayoutState extends State<MainLayout> {
   @override
   Widget build(BuildContext context) {
     return Focus(
-      focusNode: _keyboardShortcutService.focusNode,
-      onKeyEvent: (_, event) => _keyboardShortcutService.handleKeyEvent(event),
-      child: Consumer<UIService>(
-        builder: (context, uiService, child) {
-          return Scaffold(
-            body: Stack(
-              children: [
-                Column(
-                  children: [
-                    uiService.buildAppBar(
+      focusNode: _mainFocusNode,
+      autofocus: true,
+      onKeyEvent: (FocusNode node, KeyEvent event) {
+        return _keyboardShortcutService.handleKeyEvent(event);
+      },
+      child: GestureDetector(
+        onTap: () {
+          _mainFocusNode.requestFocus();
+        },
+        behavior: HitTestBehavior.translucent,
+        child: Consumer<UIService>(
+          builder: (context, uiService, child) {
+            return Scaffold(
+              body: Stack(
+                children: [
+                  Column(
+                    children: [
+                      uiService.buildAppBar(
                         context,
                         Provider.of<ThemeProvider>(context),
-                        Theme.of(context).brightness == Brightness.dark),
-                    Expanded(
-                      child: Row(
-                        children: [
-                          if (uiService.showFileExplorer)
-                            ResizableWidget(
-                              maxSizePercentage: 0.9,
-                              child: RepaintBoundary(
-                                child: FileExplorerWidget(
-                                  onFileSelected: _editorService.handleOpenFile,
-                                  onDirectorySelected: _fileExplorerService
-                                      .handleDirectorySelected,
-                                  controller: _fileExplorerService.controller,
-                                ),
-                              ),
-                            ),
-                          Expanded(
-                            child: Column(
-                              children: [
-                                Expanded(
-                                  child: EditorWidget(
-                                    key: _editorService.editorKey,
-                                    onContentChanged: (String newContent) =>
-                                        _editorService
-                                            .handleContentChanged(newContent),
-                                    fileMenuActions: FileMenuActions(
-                                      newFile: _editorService.handleNewFile,
-                                      openFile: _editorService.handleOpenFile,
-                                      save:
-                                          _editorService.handleSaveCurrentFile,
-                                      saveAs: _editorService.handleSaveFileAs,
-                                      exit: (context) => SystemNavigator.pop(),
-                                    ),
-                                    rootDirectory:
-                                        _fileExplorerService.selectedDirectory,
-                                    keyboardShortcutService:
-                                        _keyboardShortcutService,
+                        Theme.of(context).brightness == Brightness.dark,
+                      ),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            if (uiService.showFileExplorer)
+                              ResizableWidget(
+                                maxSizePercentage: 0.9,
+                                child: RepaintBoundary(
+                                  child: FileExplorerWidget(
+                                    onFileSelected:
+                                        _editorService.handleOpenFile,
+                                    onDirectorySelected: _fileExplorerService
+                                        .handleDirectorySelected,
+                                    controller: _fileExplorerService.controller,
                                   ),
                                 ),
-                                if (_showTerminal)
+                              ),
+                            Expanded(
+                              child: Column(
+                                children: [
+                                  Expanded(
+                                    child: EditorWidget(
+                                      key: _editorService.editorKey,
+                                      onContentChanged: (String newContent) =>
+                                          _editorService
+                                              .handleContentChanged(newContent),
+                                      fileMenuActions: FileMenuActions(
+                                        newFile: _editorService.handleNewFile,
+                                        openFile: _editorService.handleOpenFile,
+                                        save: _editorService
+                                            .handleSaveCurrentFile,
+                                        saveAs: _editorService.handleSaveFileAs,
+                                        exit: (context) =>
+                                            SystemNavigator.pop(),
+                                      ),
+                                      rootDirectory: _fileExplorerService
+                                          .selectedDirectory,
+                                      keyboardShortcutService:
+                                          _keyboardShortcutService,
+                                    ),
+                                  ),
                                   if (_showTerminal)
                                     const ResizableWidget(
-isTopResizable: true,
+                                      isTopResizable: true,
                                       isHorizontal: false,
                                       maxSizePercentage: 0.5,
                                       child: IntegratedTerminal(),
                                     ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    uiService.buildStatusBar(context),
-                  ],
-                ),
-                if (_showCommandPalette)
-                  CommandPalette(
-                    commands: _commands,
-                    onCommandSelected: (command) {
-                      command.action();
-                      _toggleCommandPalette();
-                    },
-                    onClose: _toggleCommandPalette,
+                      uiService.buildStatusBar(context),
+                    ],
                   ),
-              ],
-            ),
-          );
-        },
+                  if (_showCommandPalette)
+                    CommandPalette(
+                      commands: _commands,
+                      onCommandSelected: (command) {
+                        command.action();
+                        _toggleCommandPalette();
+                      },
+                      onClose: _toggleCommandPalette,
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -130,6 +141,10 @@ isTopResizable: true,
     _keyboardShortcutService = context.read<KeyboardShortcutService>();
     _keyboardShortcutService.setToggleCommandPalette(_toggleCommandPalette);
     _initializeCommands();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _mainFocusNode.requestFocus();
+    });
   }
 
   void _initializeCommands() {
@@ -262,5 +277,11 @@ isTopResizable: true,
     setState(() {
       _showCommandPalette = !_showCommandPalette;
     });
+  }
+
+  @override
+  void dispose() {
+    _mainFocusNode.dispose();
+    super.dispose();
   }
 }

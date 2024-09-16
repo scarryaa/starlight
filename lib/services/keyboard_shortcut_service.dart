@@ -8,6 +8,7 @@ import 'package:starlight/services/editor_service.dart';
 class KeyboardShortcutService {
   final EditorService editorService;
   VoidCallback? _toggleCommandPalette;
+  FocusNode? _lastFocusedNode;
   final FocusNode focusNode = FocusNode(debugLabel: 'KeyboardShortcutService');
 
   KeyboardShortcutService(this.editorService);
@@ -21,6 +22,7 @@ class KeyboardShortcutService {
 
   KeyEventResult handleKeyEvent(KeyEvent event) {
     if (event is KeyDownEvent) {
+      _lastFocusedNode = FocusManager.instance.primaryFocus;
       bool isCommandOrControlPressed = Platform.isMacOS
           ? HardwareKeyboard.instance.isMetaPressed
           : HardwareKeyboard.instance.isControlPressed;
@@ -30,6 +32,7 @@ class KeyboardShortcutService {
           HardwareKeyboard.instance.isShiftPressed &&
           event.logicalKey == LogicalKeyboardKey.keyF) {
         editorService.editorKey.currentState?.addSearchAllFilesTab();
+        _restoreFocus();
         return KeyEventResult.handled;
       }
 
@@ -38,6 +41,7 @@ class KeyboardShortcutService {
           event.logicalKey == LogicalKeyboardKey.keyS &&
           !HardwareKeyboard.instance.isShiftPressed) {
         editorService.handleSaveCurrentFile();
+        _restoreFocus();
         return KeyEventResult.handled;
       }
 
@@ -46,6 +50,7 @@ class KeyboardShortcutService {
           HardwareKeyboard.instance.isShiftPressed &&
           event.logicalKey == LogicalKeyboardKey.keyS) {
         editorService.handleSaveFileAs();
+        _restoreFocus();
         return KeyEventResult.handled;
       }
 
@@ -56,7 +61,7 @@ class KeyboardShortcutService {
         return KeyEventResult.handled;
       }
 
-// Undo (Cmd/Ctrl + Z)
+      // Undo (Cmd/Ctrl + Z)
       if (isCommandOrControlPressed &&
           event.logicalKey == LogicalKeyboardKey.keyZ &&
           !HardwareKeyboard.instance.isShiftPressed) {
@@ -66,7 +71,7 @@ class KeyboardShortcutService {
         return KeyEventResult.handled;
       }
 
-// Redo (Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y)
+      // Redo (Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y)
       if (isCommandOrControlPressed &&
           ((HardwareKeyboard.instance.isShiftPressed &&
                   event.logicalKey == LogicalKeyboardKey.keyZ) ||
@@ -82,6 +87,7 @@ class KeyboardShortcutService {
       if (isCommandOrControlPressed &&
           event.logicalKey == LogicalKeyboardKey.equal) {
         editorService.editorKey.currentState?.zoomIn();
+        _restoreFocus();
         return KeyEventResult.handled;
       }
 
@@ -89,6 +95,7 @@ class KeyboardShortcutService {
       if (isCommandOrControlPressed &&
           event.logicalKey == LogicalKeyboardKey.minus) {
         editorService.editorKey.currentState?.zoomOut();
+        _restoreFocus();
         return KeyEventResult.handled;
       }
 
@@ -96,6 +103,7 @@ class KeyboardShortcutService {
       if (isCommandOrControlPressed &&
           event.logicalKey == LogicalKeyboardKey.digit0) {
         editorService.editorKey.currentState?.resetZoom();
+        _restoreFocus();
         return KeyEventResult.handled;
       }
     }
@@ -105,5 +113,13 @@ class KeyboardShortcutService {
 
   void setToggleCommandPalette(VoidCallback callback) {
     _toggleCommandPalette = callback;
+  }
+
+  void _restoreFocus() {
+    if (_lastFocusedNode != null && _lastFocusedNode!.canRequestFocus) {
+      _lastFocusedNode!.requestFocus();
+    } else {
+      focusNode.requestFocus();
+    }
   }
 }

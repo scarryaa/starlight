@@ -171,7 +171,8 @@ class CodeEditorState extends State<CodeEditor> {
     keyboardHandlingService = KeyboardHandlingService(
         textEditingService: textEditingService,
         clipboardService: clipboardService,
-        recalculateEditor: _recalculateEditor);
+        recalculateEditor: _recalculateEditor,
+        keyboardShortcutService: widget.keyboardShortcutService);
 
     editorService = CodeEditorService(
       scrollService: scrollService,
@@ -190,12 +191,6 @@ class CodeEditorState extends State<CodeEditor> {
         recalculateEditor: _recalculateEditor);
 
     clipboardService = ClipboardService(textEditingService);
-
-    keyboardHandlingService = KeyboardHandlingService(
-        textEditingService: textEditingService,
-        clipboardService: clipboardService,
-        recalculateEditor: _recalculateEditor);
-
     _syntaxHighlighter = SyntaxHighlighter({
       'keyword':
           const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
