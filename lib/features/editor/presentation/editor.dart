@@ -238,6 +238,7 @@ class _CodeEditorState extends State<CodeEditor> {
                     interactive: true,
                     controller: codeScrollController,
                     child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
                       controller: codeScrollController,
                       scrollDirection: Axis.vertical,
                       child: SizedBox(

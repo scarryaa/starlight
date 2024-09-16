@@ -21,6 +21,8 @@ dependencies:
   macos_ui: ^2.0.9
   async: ^2.11.0
   uuid: ^4.5.0
+  xterm: ^4.0.0
+  flutter_pty: ^0.4.1
 
 dev_dependencies:
   flutter_test:

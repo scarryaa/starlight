@@ -8,6 +8,7 @@ import 'package:starlight/features/command_palette/command_palette.dart';
 import 'package:starlight/features/editor/presentation/editor_widget.dart';
 import 'package:starlight/features/file_explorer/presentation/file_explorer_widget.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
+import 'package:starlight/features/terminal/terminal.dart';
 import 'package:starlight/services/editor_service.dart';
 import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
@@ -23,6 +24,7 @@ class MainLayout extends StatefulWidget {
 }
 
 class MainLayoutState extends State<MainLayout> {
+  bool _showTerminal = false;
   late final FileExplorerService _fileExplorerService;
   late final EditorService _editorService;
   late final UIService _uiService;
@@ -51,7 +53,7 @@ class MainLayoutState extends State<MainLayout> {
                         children: [
                           if (uiService.showFileExplorer)
                             ResizableWidget(
-                              maxWidthPercentage: 0.9,
+                              maxSizePercentage: 0.9,
                               child: RepaintBoundary(
                                 child: FileExplorerWidget(
                                   onFileSelected: _editorService.handleOpenFile,
@@ -62,21 +64,36 @@ class MainLayoutState extends State<MainLayout> {
                               ),
                             ),
                           Expanded(
-                            child: EditorWidget(
-                              key: _editorService.editorKey,
-                              onContentChanged: (String newContent) =>
-                                  _editorService
-                                      .handleContentChanged(newContent),
-                              fileMenuActions: FileMenuActions(
-                                newFile: _editorService.handleNewFile,
-                                openFile: _editorService.handleOpenFile,
-                                save: _editorService.handleSaveCurrentFile,
-                                saveAs: _editorService.handleSaveFileAs,
-                                exit: (context) => SystemNavigator.pop(),
-                              ),
-                              rootDirectory:
-                                  _fileExplorerService.selectedDirectory,
-                              keyboardShortcutService: _keyboardShortcutService,
+                            child: Column(
+                              children: [
+                                Expanded(
+                                  child: EditorWidget(
+                                    key: _editorService.editorKey,
+                                    onContentChanged: (String newContent) =>
+                                        _editorService
+                                            .handleContentChanged(newContent),
+                                    fileMenuActions: FileMenuActions(
+                                      newFile: _editorService.handleNewFile,
+                                      openFile: _editorService.handleOpenFile,
+                                      save:
+                                          _editorService.handleSaveCurrentFile,
+                                      saveAs: _editorService.handleSaveFileAs,
+                                      exit: (context) => SystemNavigator.pop(),
+                                    ),
+                                    rootDirectory:
+                                        _fileExplorerService.selectedDirectory,
+                                    keyboardShortcutService:
+                                        _keyboardShortcutService,
+                                  ),
+                                ),
+                                if (_showTerminal)
+                                  if (_showTerminal)
+                                    const ResizableWidget(
+                                      isHorizontal: false,
+                                      maxSizePercentage: 0.5,
+                                      child: IntegratedTerminal(),
+                                    ),
+                              ],
                             ),
                           ),
                         ],
@@ -110,7 +127,10 @@ class MainLayoutState extends State<MainLayout> {
     _uiService = context.read<UIService>();
     _keyboardShortcutService = context.read<KeyboardShortcutService>();
     _keyboardShortcutService.setToggleCommandPalette(_toggleCommandPalette);
+    _initializeCommands();
+  }
 
+  void _initializeCommands() {
     _commands = [
       Command(
         name: 'New File',
@@ -153,6 +173,12 @@ class MainLayoutState extends State<MainLayout> {
         description: 'Show or hide the file explorer',
         icon: Icons.folder_open,
         action: _toggleFileExplorer,
+      ),
+      Command(
+        name: 'Toggle Terminal',
+        description: 'Show or hide the integrated terminal',
+        icon: Icons.terminal,
+        action: _toggleTerminal,
       ),
       Command(
         name: 'Search All Files',
@@ -210,6 +236,12 @@ class MainLayoutState extends State<MainLayout> {
             Provider.of<ThemeProvider>(context, listen: false).toggleTheme(),
       ),
     ];
+  }
+
+  void _toggleTerminal() {
+    setState(() {
+      _showTerminal = !_showTerminal;
+    });
   }
 
   void _openFile() async {
