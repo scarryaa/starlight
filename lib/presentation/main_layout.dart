@@ -1,3 +1,4 @@
+
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
@@ -89,6 +90,7 @@ class MainLayoutState extends State<MainLayout> {
                                 if (_showTerminal)
                                   if (_showTerminal)
                                     const ResizableWidget(
+isTopResizable: true,
                                       isHorizontal: false,
                                       maxSizePercentage: 0.5,
                                       child: IntegratedTerminal(),

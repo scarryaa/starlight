@@ -147,6 +147,7 @@ class EditorWidgetState extends State<EditorWidget> {
           _tabs.add(FileTab(filePath: file.path, content: content));
           _selectedTabIndex.value = _tabs.length - 1;
         });
+        _currentEditorKey = EditorContentKey(content);
       }
     } catch (e) {
       print('Error reading file: $e');
@@ -215,14 +216,12 @@ class EditorWidgetState extends State<EditorWidget> {
           currentTab.updateContent(newContent);
           _currentEditorKey = EditorContentKey(newContent);
         }
-
         // Update cursor position and selection if provided
         if (cursorPosition != null) currentTab.cursorPosition = cursorPosition;
         if (selectionStart != null) currentTab.selectionStart = selectionStart;
         if (selectionEnd != null) currentTab.selectionEnd = selectionEnd;
       }
     });
-
     // Ensure the editor is focused
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _editorFocusNode.requestFocus();
@@ -824,7 +823,10 @@ class EditorWidgetState extends State<EditorWidget> {
   }
 
   void _selectTab(int index) {
-    _selectedTabIndex.value = index;
+    setState(() {
+      _selectedTabIndex.value = index;
+      _currentEditorKey = EditorContentKey(_tabs[index].content);
+    });
   }
 
   void _updateCodeEditorHighlights() {
