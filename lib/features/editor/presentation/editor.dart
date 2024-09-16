@@ -9,7 +9,9 @@ import 'package:starlight/features/editor/domain/enums/selection_mode.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
+import 'package:starlight/mixins/editor_mixins.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
+import 'package:starlight/utils/constants.dart';
 
 class CodeEditor extends StatefulWidget {
   final FocusNode focusNode;
@@ -54,28 +56,23 @@ class CodeEditor extends StatefulWidget {
   });
 
   @override
-  _CodeEditorState createState() => _CodeEditorState();
+  CodeEditorState createState() => CodeEditorState();
 }
 
-class _CodeEditorState extends State<CodeEditor> {
-  static const double lineHeight = 24.0;
-  static double charWidth = 8.0;
-  static const double scrollbarWidth = 10.0;
-  static const double _clickDistanceThreshold = 10.0; // pixels
+class CodeEditorState extends State<CodeEditor>
+    with CodeEditorScrollMixin<CodeEditor> {
+  @override
   late TextEditingCore editingCore;
-  late ScrollController codeScrollController;
 
-  late ScrollController lineNumberScrollController;
-  late ScrollController horizontalController;
-  late ScrollController horizontalScrollbarController;
-
-  bool _scrollingCode = false;
-  bool _scrollingLineNumbers = false;
-  bool _isHorizontalScrolling = false;
+  @override
   int firstVisibleLine = 0;
+  @override
   int visibleLineCount = 0;
   double maxLineWidth = 0.0;
+  @override
   double lineNumberWidth = 0.0;
+  @override
+  double zoomLevel = 1.0;
 
   final Map<int, double> _lineWidthCache = {};
   int _lastCalculatedLine = -1;
@@ -136,9 +133,6 @@ class _CodeEditorState extends State<CodeEditor> {
   void dispose() {
     editingCore.removeListener(_onTextChanged);
     editingCore.dispose();
-    codeScrollController.dispose();
-    horizontalController.dispose();
-    lineNumberScrollController.dispose();
     _textPainter.dispose();
     super.dispose();
   }
@@ -165,49 +159,12 @@ class _CodeEditorState extends State<CodeEditor> {
 
     editingCore.addListener(_onTextChanged);
 
-    codeScrollController = ScrollController()..addListener(_onCodeScroll);
-
-    lineNumberScrollController = ScrollController()
-      ..addListener(_onLineNumberScroll);
-
-    horizontalController = ScrollController()..addListener(_onHorizontalScroll);
-
-    horizontalScrollbarController = ScrollController()
-      ..addListener(_syncHorizontalScrollbar);
-
     _calculateLineNumberWidth();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateMaxLineWidth();
-      _updateVisibleLines();
+      updateVisibleLines();
     });
-  }
-
-  void _autoScrollOnDrag(Offset position) {
-    const scrollThreshold = 50.0;
-    final scrollStep = 16.0 * widget.zoomLevel;
-
-    if (position.dy < scrollThreshold && codeScrollController.offset > 0) {
-      codeScrollController
-          .jumpTo(max(0, codeScrollController.offset - scrollStep));
-    } else if (position.dy > context.size!.height - scrollThreshold &&
-        codeScrollController.offset <
-            codeScrollController.position.maxScrollExtent) {
-      codeScrollController.jumpTo(min(
-          codeScrollController.position.maxScrollExtent,
-          codeScrollController.offset + scrollStep));
-    }
-
-    if (position.dx < scrollThreshold && horizontalController.offset > 0) {
-      horizontalController
-          .jumpTo(max(0, horizontalController.offset - scrollStep));
-    } else if (position.dx > context.size!.width - scrollThreshold &&
-        horizontalController.offset <
-            horizontalController.position.maxScrollExtent) {
-      horizontalController.jumpTo(min(
-          horizontalController.position.maxScrollExtent,
-          horizontalController.offset + scrollStep));
-    }
   }
 
   Widget _buildCodeArea(BoxConstraints constraints) {
@@ -248,7 +205,9 @@ class _CodeEditorState extends State<CodeEditor> {
                           controller: horizontalController,
                           child: SizedBox(
                             width: max(maxLineWidth, constraints.maxWidth),
-                            height: max(editingCore.lineCount * lineHeight,
+                            height: max(
+                                editingCore.lineCount *
+                                    CodeEditorConstants.lineHeight,
                                 constraints.maxHeight),
                             child: CustomPaint(
                               painter: CodeEditorPainter(
@@ -289,8 +248,8 @@ class _CodeEditorState extends State<CodeEditor> {
                     right: 0,
                     bottom: 0,
                     child: SizedBox(
-                      width: scrollbarWidth + 2,
-                      height: scrollbarWidth,
+                      width: CodeEditorConstants.scrollbarWidth + 2,
+                      height: CodeEditorConstants.scrollbarWidth,
                       child: ColoredBox(color: theme.colorScheme.surface),
                     ),
                   ),
@@ -299,7 +258,7 @@ class _CodeEditorState extends State<CodeEditor> {
                     right: 0,
                     bottom: 0,
                     child: SizedBox(
-                      height: scrollbarWidth,
+                      height: CodeEditorConstants.scrollbarWidth,
                       child: Scrollbar(
                         controller: horizontalScrollbarController,
                         child: SingleChildScrollView(
@@ -324,7 +283,7 @@ class _CodeEditorState extends State<CodeEditor> {
   Widget _buildLineNumbers(BoxConstraints constraints) {
     final theme = Theme.of(context);
     final scaledLineNumberWidth = lineNumberWidth * widget.zoomLevel;
-    final scaledLineHeight = lineHeight * widget.zoomLevel;
+    final scaledLineHeight = CodeEditorConstants.lineHeight * widget.zoomLevel;
 
     return SizedBox(
       width: scaledLineNumberWidth,
@@ -337,7 +296,7 @@ class _CodeEditorState extends State<CodeEditor> {
                 constraints.maxHeight),
             child: LineNumbers(
               lineCount: editingCore.lineCount,
-              lineHeight: lineHeight,
+              lineHeight: CodeEditorConstants.lineHeight,
               lineNumberWidth: lineNumberWidth,
               firstVisibleLine: firstVisibleLine,
               visibleLineCount: visibleLineCount,
@@ -354,87 +313,13 @@ class _CodeEditorState extends State<CodeEditor> {
 
   void _calculateLineNumberWidth() {
     final lineCount = editingCore.lineCount;
-    final maxLineNumberWidth = '$lineCount'.length * charWidth;
+    final maxLineNumberWidth =
+        '$lineCount'.length * CodeEditorConstants.charWidth;
     lineNumberWidth = maxLineNumberWidth + 40;
   }
 
   double _calculateLineWidth(String line) {
-    return line.length * charWidth;
-  }
-
-  void _ensureCursorVisibility() {
-    if (!codeScrollController.hasClients || !horizontalController.hasClients) {
-      return;
-    }
-
-    final cursorPosition =
-        editingCore.cursorPosition.clamp(0, editingCore.length);
-    int cursorLine = editingCore.rope.findLine(cursorPosition);
-    int lineStartIndex = editingCore.getLineStartIndex(cursorLine);
-    int cursorColumn = cursorPosition - lineStartIndex;
-
-    // Vertical scrolling
-    final cursorY = cursorLine * lineHeight * widget.zoomLevel;
-    if (cursorY < codeScrollController.offset) {
-      codeScrollController.jumpTo(cursorY);
-    } else if (cursorY >
-        codeScrollController.offset +
-            codeScrollController.position.viewportDimension -
-            lineHeight * widget.zoomLevel) {
-      codeScrollController.jumpTo(cursorY -
-          codeScrollController.position.viewportDimension +
-          lineHeight * widget.zoomLevel);
-    }
-
-    // Horizontal scrolling
-    final cursorX = cursorColumn * charWidth * widget.zoomLevel +
-        lineNumberWidth * widget.zoomLevel;
-    if (cursorX <
-        horizontalController.offset + lineNumberWidth * widget.zoomLevel) {
-      horizontalController.jumpTo(cursorX - lineNumberWidth * widget.zoomLevel);
-    } else if (cursorX >
-        horizontalController.offset +
-            horizontalController.position.viewportDimension -
-            charWidth * widget.zoomLevel) {
-      horizontalController.jumpTo(cursorX -
-          horizontalController.position.viewportDimension +
-          charWidth * widget.zoomLevel);
-    }
-
-    // Ensure the entire selection is visible
-    if (editingCore.hasSelection()) {
-      final selectionStart = editingCore.selectionStart!;
-      final selectionEnd = editingCore.selectionEnd!;
-      final startLine = editingCore.rope.findLine(selectionStart);
-      final endLine = editingCore.rope.findLine(selectionEnd);
-      final startColumn =
-          selectionStart - editingCore.getLineStartIndex(startLine);
-      final endColumn = selectionEnd - editingCore.getLineStartIndex(endLine);
-
-      // Vertical scrolling for selection
-      final startY = startLine * lineHeight;
-      final endY = (endLine + 1) * lineHeight;
-      if (startY < codeScrollController.offset) {
-        codeScrollController.jumpTo(startY);
-      } else if (endY >
-          codeScrollController.offset +
-              codeScrollController.position.viewportDimension) {
-        codeScrollController
-            .jumpTo(endY - codeScrollController.position.viewportDimension);
-      }
-
-      // Horizontal scrolling for selection
-      final startX = startColumn * charWidth + lineNumberWidth;
-      final endX = endColumn * charWidth + lineNumberWidth;
-      if (startX < horizontalController.offset + lineNumberWidth) {
-        horizontalController.jumpTo(startX - lineNumberWidth);
-      } else if (endX >
-          horizontalController.offset +
-              horizontalController.position.viewportDimension) {
-        horizontalController.jumpTo(
-            endX - horizontalController.position.viewportDimension + charWidth);
-      }
-    }
+    return line.length * CodeEditorConstants.charWidth;
   }
 
   void _extendSelectionByLineFromAnchor(int anchor, int extent) {
@@ -503,43 +388,6 @@ class _CodeEditorState extends State<CodeEditor> {
     return start;
   }
 
-  int _getPositionFromOffset(Offset offset) {
-    final adjustedOffset = offset +
-        Offset(
-            max(0, horizontalController.offset), codeScrollController.offset);
-    final tappedLine =
-        (adjustedOffset.dy / (lineHeight * widget.zoomLevel)).floor();
-
-    if (editingCore.lineCount == 0) return 0;
-
-    if (tappedLine < editingCore.lineCount) {
-      final scaledLineNumberWidth = lineNumberWidth * widget.zoomLevel;
-      final textStartX = scaledLineNumberWidth / 8;
-
-      // Adjust the tapped offset to account for the text start position
-      final adjustedTappedOffset =
-          (adjustedOffset.dx - textStartX).clamp(0, double.infinity);
-
-      final column = (adjustedTappedOffset / (charWidth * widget.zoomLevel))
-          .round()
-          .clamp(0, double.infinity)
-          .toInt();
-
-      if (tappedLine < 0) return 0;
-
-      int lineStartIndex = editingCore.getLineStartIndex(tappedLine);
-      String line = editingCore.getLineContent(tappedLine);
-
-      if (line.isEmpty) return lineStartIndex;
-      if (column >= line.length) {
-        return lineStartIndex + line.length;
-      }
-      return lineStartIndex + column;
-    }
-
-    return editingCore.length;
-  }
-
   void _handleCopy() async {
     if (editingCore.hasSelection()) {
       await Clipboard.setData(
@@ -559,7 +407,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _handleDoubleTap(TapDownDetails details) {
-    final position = _getPositionFromOffset(details.localPosition);
+    final position = getPositionFromOffset(details.localPosition);
     setState(() {
       _selectWordAtPosition(position);
     });
@@ -567,109 +415,151 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
-    // First, check if the KeyboardShortcutService wants to handle this event
-    KeyEventResult shortcutResult =
-        widget.keyboardShortcutService.handleKeyEvent(event);
-    if (shortcutResult == KeyEventResult.handled) {
-      return KeyEventResult.handled;
-    }
-
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
 
+    if (_handleShortcuts(event)) {
+      return KeyEventResult.handled;
+    }
+
+    if (_handleSelectionKeys(event)) {
+      return KeyEventResult.handled;
+    }
+
+    if (_handleTextInputKeys(event)) {
+      return KeyEventResult.handled;
+    }
+
+    ensureCursorVisibility();
+    return KeyEventResult.handled;
+  }
+
+  bool _handleShortcuts(KeyEvent event) {
     final bool isControlPressed = Platform.isMacOS
         ? HardwareKeyboard.instance.isMetaPressed
         : HardwareKeyboard.instance.isControlPressed;
-    final bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-    final bool isAltPressed = HardwareKeyboard.instance.isAltPressed;
-    final bool isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
 
     if (isControlPressed) {
-      if (event.logicalKey == LogicalKeyboardKey.keyC) {
-        _handleCopy();
-        return KeyEventResult.handled;
-      } else if (event.logicalKey == LogicalKeyboardKey.keyX) {
-        _handleCut();
-        return KeyEventResult.handled;
-      } else if (event.logicalKey == LogicalKeyboardKey.keyV) {
-        _handlePaste();
-        return KeyEventResult.handled;
-      } else if (event.logicalKey == LogicalKeyboardKey.keyA) {
-        _handleSelectAll();
-        return KeyEventResult.handled;
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.keyC:
+          _handleCopy();
+          return true;
+        case LogicalKeyboardKey.keyX:
+          _handleCut();
+          return true;
+        case LogicalKeyboardKey.keyV:
+          _handlePaste();
+          return true;
+        case LogicalKeyboardKey.keyA:
+          _handleSelectAll();
+          return true;
       }
     }
+    return false;
+  }
 
-    setState(() {
-      if (editingCore.hasSelection()) {
-        int selectionStart = editingCore.selectionStart!;
-        int selectionEnd = editingCore.selectionEnd!;
-        bool isBackwardSelection = selectionEnd < selectionStart;
+  bool _handleSelectionKeys(KeyEvent event) {
+    if (editingCore.hasSelection()) {
+      int selectionStart = editingCore.selectionStart!;
+      int selectionEnd = editingCore.selectionEnd!;
+      bool isBackwardSelection = selectionEnd < selectionStart;
+      int actualStart = min(selectionStart, selectionEnd);
+      int actualEnd = max(selectionStart, selectionEnd);
 
-        int actualStart = selectionStart;
-        int actualEnd = selectionEnd;
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.arrowLeft:
+          editingCore.cursorPosition =
+              isBackwardSelection ? actualEnd : actualStart;
+          editingCore.clearSelection();
+          return true;
+        case LogicalKeyboardKey.arrowRight:
+          editingCore.cursorPosition =
+              isBackwardSelection ? actualStart : actualEnd;
+          editingCore.clearSelection();
+          return true;
+        case LogicalKeyboardKey.arrowUp:
+          _handleSelectionArrowUp(isBackwardSelection, actualStart, actualEnd);
+          return true;
+        case LogicalKeyboardKey.arrowDown:
+          _handleSelectionArrowDown(
+              isBackwardSelection, actualStart, actualEnd);
+          return true;
+      }
+    }
+    return false;
+  }
 
-        switch (event.logicalKey) {
-          case LogicalKeyboardKey.arrowLeft:
-            editingCore.cursorPosition =
-                isBackwardSelection ? actualEnd : actualStart;
-            editingCore.clearSelection();
-            break;
-          case LogicalKeyboardKey.arrowRight:
-            editingCore.cursorPosition =
-                isBackwardSelection ? actualStart : actualEnd;
-            editingCore.clearSelection();
-            break;
-          case LogicalKeyboardKey.arrowUp:
-            int targetLine = editingCore.rope
-                .findLine(isBackwardSelection ? actualEnd : actualStart);
-            if (targetLine > 0) {
-              int column = (isBackwardSelection ? actualEnd : actualStart) -
-                  editingCore.getLineStartIndex(targetLine);
-              int newLine = targetLine - 1;
-              int newPosition = getPositionAtColumn(newLine, column);
-              editingCore.cursorPosition = newPosition;
-            } else {
-              editingCore.cursorPosition =
-                  isBackwardSelection ? actualEnd : actualStart;
-            }
-            editingCore.clearSelection();
-            break;
-          case LogicalKeyboardKey.arrowDown:
-            int targetLine = editingCore.rope
-                .findLine(isBackwardSelection ? actualStart : actualEnd);
-            if (targetLine < editingCore.lineCount - 1) {
-              int column = (isBackwardSelection ? actualStart : actualEnd) -
-                  editingCore.getLineStartIndex(targetLine);
-              int newLine = targetLine + 1;
-              int newPosition = getPositionAtColumn(newLine, column);
-              editingCore.cursorPosition = newPosition;
-            } else {
-              editingCore.cursorPosition =
-                  isBackwardSelection ? actualStart : actualEnd;
-            }
-            editingCore.clearSelection();
-            break;
-          default:
-            _handleRegularKeyPress(event);
+  void _handleSelectionArrowUp(
+      bool isBackwardSelection, int actualStart, int actualEnd) {
+    int targetLine = editingCore.rope
+        .findLine(isBackwardSelection ? actualEnd : actualStart);
+    if (targetLine > 0) {
+      int column = (isBackwardSelection ? actualEnd : actualStart) -
+          editingCore.getLineStartIndex(targetLine);
+      int newLine = targetLine - 1;
+      int newPosition = getPositionAtColumn(newLine, column);
+      editingCore.cursorPosition = newPosition;
+    } else {
+      editingCore.cursorPosition =
+          isBackwardSelection ? actualEnd : actualStart;
+    }
+    editingCore.clearSelection();
+  }
+
+  void _handleSelectionArrowDown(
+      bool isBackwardSelection, int actualStart, int actualEnd) {
+    int targetLine = editingCore.rope
+        .findLine(isBackwardSelection ? actualStart : actualEnd);
+    if (targetLine < editingCore.lineCount - 1) {
+      int column = (isBackwardSelection ? actualStart : actualEnd) -
+          editingCore.getLineStartIndex(targetLine);
+      int newLine = targetLine + 1;
+      int newPosition = getPositionAtColumn(newLine, column);
+      editingCore.cursorPosition = newPosition;
+    } else {
+      editingCore.cursorPosition =
+          isBackwardSelection ? actualStart : actualEnd;
+    }
+    editingCore.clearSelection();
+  }
+
+  bool _handleTextInputKeys(KeyEvent event) {
+    switch (event.logicalKey) {
+      case LogicalKeyboardKey.arrowLeft:
+        editingCore.moveCursor(-1, 0);
+        return true;
+      case LogicalKeyboardKey.arrowRight:
+        editingCore.moveCursor(1, 0);
+        return true;
+      case LogicalKeyboardKey.arrowUp:
+        editingCore.moveCursor(0, -1);
+        return true;
+      case LogicalKeyboardKey.arrowDown:
+        editingCore.moveCursor(0, 1);
+        return true;
+      case LogicalKeyboardKey.enter:
+        editingCore.insertText('\n');
+        return true;
+      case LogicalKeyboardKey.backspace:
+        editingCore.handleBackspace();
+        _recalculateEditor();
+        return true;
+      case LogicalKeyboardKey.delete:
+        editingCore.handleDelete();
+        _recalculateEditor();
+        return true;
+      case LogicalKeyboardKey.tab:
+        editingCore.insertText(' ');
+        return true;
+      default:
+        if (event.character != null) {
+          editingCore.insertText(event.character!);
+          _recalculateEditor();
+          return true;
         }
-      } else {
-        _handleRegularKeyPress(event);
-      }
-    });
-
-    // Only ensure cursor visibility if no modifier keys are pressed
-    if (!isShiftPressed &&
-        !isAltPressed &&
-        !isMetaPressed &&
-        !isControlPressed) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _ensureCursorVisibility();
-      });
     }
-
-    return KeyEventResult.handled;
+    return false;
   }
 
   void _handlePaste() async {
@@ -681,42 +571,6 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
-  void _handleRegularKeyPress(KeyEvent event) {
-    switch (event.logicalKey) {
-      case LogicalKeyboardKey.arrowLeft:
-        editingCore.moveCursor(-1, 0);
-        break;
-      case LogicalKeyboardKey.arrowRight:
-        editingCore.moveCursor(1, 0);
-        break;
-      case LogicalKeyboardKey.arrowUp:
-        editingCore.moveCursor(0, -1);
-        break;
-      case LogicalKeyboardKey.arrowDown:
-        editingCore.moveCursor(0, 1);
-        break;
-      case LogicalKeyboardKey.enter:
-        editingCore.insertText('\n');
-        break;
-      case LogicalKeyboardKey.backspace:
-        editingCore.handleBackspace();
-        _recalculateEditor();
-        break;
-      case LogicalKeyboardKey.delete:
-        editingCore.handleDelete();
-        _recalculateEditor();
-        break;
-      case LogicalKeyboardKey.tab:
-        editingCore.insertText('    ');
-        break;
-      default:
-        if (event.character != null) {
-          editingCore.insertText(event.character!);
-          _recalculateEditor();
-        }
-    }
-  }
-
   void _handleSelectAll() {
     setState(() {
       editingCore.setSelection(0, editingCore.length);
@@ -725,7 +579,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _handleSingleTap(TapDownDetails details) {
-    final position = _getPositionFromOffset(details.localPosition);
+    final position = getPositionFromOffset(details.localPosition);
     setState(() {
       editingCore.cursorPosition = position;
       editingCore.clearSelection();
@@ -736,7 +590,7 @@ class _CodeEditorState extends State<CodeEditor> {
   void _handleTap(TapDownDetails details) {
     if (_lastTapPosition != null) {
       double distance = (details.localPosition - _lastTapPosition!).distance;
-      if (distance > _clickDistanceThreshold) {
+      if (distance > CodeEditorConstants.clickDistanceThreshold) {
         // If the new tap is too far from the last one, reset the tap count
         _tapCount = 0;
       }
@@ -763,7 +617,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _handleTripleTap(TapDownDetails details) {
-    final position = _getPositionFromOffset(details.localPosition);
+    final position = getPositionFromOffset(details.localPosition);
     setState(() {
       _selectLineAtPosition(position);
     });
@@ -780,7 +634,7 @@ class _CodeEditorState extends State<CodeEditor> {
       ),
     );
     _textPainter.layout();
-    charWidth = _textPainter.width;
+    CodeEditorConstants.charWidth = _textPainter.width;
   }
 
   bool _isCompoundOperator(String sequence) {
@@ -822,20 +676,7 @@ class _CodeEditorState extends State<CodeEditor> {
         });
 
         SchedulerBinding.instance.addPostFrameCallback((_) {
-          setState(() {
-            if (codeScrollController.hasClients) {
-              codeScrollController.jumpTo(0);
-            }
-            if (lineNumberScrollController.hasClients) {
-              lineNumberScrollController.jumpTo(0);
-            }
-            if (horizontalController.hasClients) {
-              horizontalController.jumpTo(0);
-            }
-            if (horizontalScrollbarController.hasClients) {
-              horizontalScrollbarController.jumpTo(0);
-            }
-          });
+          resetAllScrollPositions();
           _recalculateEditor();
         });
       } catch (e, stackTrace) {
@@ -843,37 +684,6 @@ class _CodeEditorState extends State<CodeEditor> {
         print("Stack trace: $stackTrace");
       }
     }
-  }
-
-  void _onCodeScroll() {
-    if (!_scrollingCode && !_scrollingLineNumbers) {
-      _scrollingCode = true;
-      lineNumberScrollController.jumpTo(codeScrollController.offset);
-      _scrollingCode = false;
-    }
-    _updateVisibleLines();
-    setState(() {});
-  }
-
-  void _onHorizontalScroll() {
-    if (!_isHorizontalScrolling &&
-        horizontalController.hasClients &&
-        horizontalScrollbarController.hasClients) {
-      _isHorizontalScrolling = true;
-      horizontalScrollbarController.jumpTo(horizontalController.offset);
-      _isHorizontalScrolling = false;
-    }
-    setState(() {});
-  }
-
-  void _onLineNumberScroll() {
-    if (!_scrollingLineNumbers && !_scrollingCode) {
-      _scrollingLineNumbers = true;
-      codeScrollController.jumpTo(lineNumberScrollController.offset);
-      _scrollingLineNumbers = false;
-    }
-    _updateVisibleLines();
-    setState(() {});
   }
 
   void _onTextChanged() {
@@ -891,8 +701,8 @@ class _CodeEditorState extends State<CodeEditor> {
   void _recalculateEditor() {
     _calculateLineNumberWidth();
     _updateMaxLineWidth();
-    _updateVisibleLines();
-    _ensureCursorVisibility();
+    updateVisibleLines();
+    ensureCursorVisibility();
     setState(() {});
   }
 
@@ -964,16 +774,6 @@ class _CodeEditorState extends State<CodeEditor> {
     }
   }
 
-  void _syncHorizontalScrollbar() {
-    if (!_isHorizontalScrolling &&
-        horizontalScrollbarController.hasClients &&
-        horizontalController.hasClients) {
-      _isHorizontalScrolling = true;
-      horizontalController.jumpTo(horizontalScrollbarController.offset);
-      _isHorizontalScrolling = false;
-    }
-  }
-
   void _updateMaxLineWidth() {
     int currentLineCount = editingCore.lineCount;
     double newMaxLineWidth = _cachedMaxLineWidth;
@@ -1021,7 +821,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _updateSelection(DragStartDetails details) {
-    final position = _getPositionFromOffset(details.localPosition);
+    final position = getPositionFromOffset(details.localPosition);
     _selectionAnchor = position;
     setState(() {
       if (_selectionMode == SelectionMode.word) {
@@ -1037,7 +837,7 @@ class _CodeEditorState extends State<CodeEditor> {
   }
 
   void _updateSelectionOnDrag(DragUpdateDetails details) {
-    final position = _getPositionFromOffset(details.localPosition);
+    final position = getPositionFromOffset(details.localPosition);
     setState(() {
       if (_selectionMode == SelectionMode.word) {
         _extendSelectionByWordFromAnchor(_selectionAnchor!, position);
@@ -1047,24 +847,6 @@ class _CodeEditorState extends State<CodeEditor> {
         editingCore.setSelection(_selectionAnchor!, position);
       }
     });
-    _autoScrollOnDrag(details.localPosition);
-  }
-
-  void _updateVisibleLines() {
-    if (!mounted || !codeScrollController.hasClients) return;
-    final totalLines = editingCore.lineCount;
-    final viewportHeight = codeScrollController.position.viewportDimension;
-
-    firstVisibleLine =
-        (codeScrollController.offset / (lineHeight * widget.zoomLevel))
-            .floor()
-            .clamp(0, totalLines == 0 ? 0 : totalLines - 1);
-
-    visibleLineCount =
-        (viewportHeight / (lineHeight * widget.zoomLevel)).ceil() + 1;
-
-    if (firstVisibleLine + visibleLineCount > totalLines) {
-      visibleLineCount = totalLines - firstVisibleLine;
-    }
+    autoScrollOnDrag(details.localPosition);
   }
 }
