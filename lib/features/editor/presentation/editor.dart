@@ -1,21 +1,21 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide TabBar, Tab;
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
 import 'package:starlight/features/editor/services/calculation_service.dart';
 import 'package:starlight/features/editor/services/clipboard_service.dart';
 import 'package:starlight/features/editor/services/editor_service.dart';
+import 'package:starlight/features/editor/services/gesture_handling_service.dart';
 import 'package:starlight/features/editor/services/keyboard_handler_service.dart';
 import 'package:starlight/features/editor/services/layout_service.dart';
 import 'package:starlight/features/editor/services/scroll_service.dart';
 import 'package:starlight/features/editor/services/selection_service.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
+import 'package:starlight/features/editor/services/text_editing_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
 import 'package:starlight/utils/constants.dart';
 
@@ -37,9 +37,9 @@ class CodeEditor extends StatefulWidget {
   final int? cursorPosition;
   final KeyboardShortcutService keyboardShortcutService;
   final Function(String) onContentChanged;
-  double zoomLevel = 1.0;
+  final double zoomLevel;
 
-  CodeEditor({
+  const CodeEditor({
     super.key,
     required this.initialCode,
     required this.filePath,
@@ -66,27 +66,24 @@ class CodeEditor extends StatefulWidget {
 }
 
 class CodeEditorState extends State<CodeEditor> {
-  @override
   late TextEditingCore editingCore;
+  late TextEditingService textEditingService;
   late CodeEditorSelectionService selectionService;
   late LayoutService layoutService;
   late CodeEditorService editorService;
+  late GestureHandlingService gestureHandlingService;
+  late KeyboardHandlingService keyboardHandlingService;
+  late ClipboardService clipboardService;
 
-  @override
   int firstVisibleLine = 0;
-  @override
   int visibleLineCount = 500;
   double maxLineWidth = 0.0;
-  @override
   double zoomLevel = 1.0;
   double lineNumberWidth = 0.0;
 
   late TextPainter _textPainter;
   late SyntaxHighlighter _syntaxHighlighter;
   int _lastKnownVersion = -1;
-  int _tapCount = 0;
-  Timer? _tapTimer;
-  Offset? _lastTapPosition;
 
   void maintainFocus() {
     widget.focusNode.requestFocus();
@@ -155,6 +152,7 @@ class CodeEditorState extends State<CodeEditor> {
       editingCore.handleBackspace();
     }
     editingCore.addListener(_onTextChanged);
+    textEditingService = TextEditingService(editingCore);
 
     selectionService = CodeEditorSelectionService(
       editingCore: editingCore,
@@ -168,13 +166,35 @@ class CodeEditorState extends State<CodeEditor> {
       lineNumberWidth: lineNumberWidth,
     );
 
+    clipboardService = ClipboardService(textEditingService);
+
+    keyboardHandlingService = KeyboardHandlingService(
+        textEditingService: textEditingService,
+        clipboardService: clipboardService,
+        recalculateEditor: _recalculateEditor);
+
     editorService = CodeEditorService(
       scrollService: scrollService,
       selectionService: selectionService,
-      keyboardHandlerService: CodeEditorKeyboardHandlerService(),
-      clipboardService: CodeEditorClipboardService(),
+      keyboardHandlerService: keyboardHandlingService,
+      clipboardService: ClipboardService(textEditingService),
       calculationService: CodeEditorCalculationService(),
     );
+
+    layoutService = LayoutService(editingCore);
+
+    gestureHandlingService = GestureHandlingService(
+        textEditingService: textEditingService,
+        selectionService: selectionService,
+        getPositionFromOffset: editorService.getPositionFromOffset,
+        recalculateEditor: _recalculateEditor);
+
+    clipboardService = ClipboardService(textEditingService);
+
+    keyboardHandlingService = KeyboardHandlingService(
+        textEditingService: textEditingService,
+        clipboardService: clipboardService,
+        recalculateEditor: _recalculateEditor);
 
     _syntaxHighlighter = SyntaxHighlighter({
       'keyword':
@@ -361,268 +381,6 @@ class CodeEditorState extends State<CodeEditor> {
     );
   }
 
-  void _handleCopy() async {
-    if (editingCore.hasSelection()) {
-      await Clipboard.setData(
-          ClipboardData(text: editingCore.getSelectedText()));
-    }
-  }
-
-  void _handleCut() async {
-    if (editingCore.hasSelection()) {
-      final selectedText = editingCore.getSelectedText();
-      await Clipboard.setData(ClipboardData(text: selectedText));
-      setState(() {
-        editingCore.deleteSelection();
-      });
-      _recalculateEditor();
-    }
-  }
-
-  void _handleDoubleTap(TapDownDetails details) {
-    final position = editorService.getPositionFromOffset(details.localPosition);
-    setState(() {
-      selectionService.selectWordAtPosition(position);
-    });
-    widget.focusNode.requestFocus();
-  }
-
-  KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-
-    // Ignore modifier keys
-    if (_isModifierKey(event.logicalKey)) {
-      return KeyEventResult.ignored;
-    }
-
-    if (_handleShortcuts(event)) {
-      return KeyEventResult.handled;
-    }
-
-    if (_handleSelectionKeys(event)) {
-      return KeyEventResult.handled;
-    }
-
-    if (_handleTextInputKeys(event)) {
-      return KeyEventResult.handled;
-    }
-
-    editorService.scrollService.ensureCursorVisibility();
-    return KeyEventResult.handled;
-  }
-
-  bool _isModifierKey(LogicalKeyboardKey key) {
-    return key == LogicalKeyboardKey.shift ||
-        key == LogicalKeyboardKey.shiftLeft ||
-        key == LogicalKeyboardKey.shiftRight ||
-        key == LogicalKeyboardKey.shift ||
-        key == LogicalKeyboardKey.controlLeft ||
-        key == LogicalKeyboardKey.controlRight ||
-        key == LogicalKeyboardKey.control ||
-        key == LogicalKeyboardKey.altLeft ||
-        key == LogicalKeyboardKey.altRight ||
-        key == LogicalKeyboardKey.alt ||
-        key == LogicalKeyboardKey.metaLeft ||
-        key == LogicalKeyboardKey.metaRight ||
-        key == LogicalKeyboardKey.meta ||
-        key == LogicalKeyboardKey.capsLock ||
-        key == LogicalKeyboardKey.numLock ||
-        key == LogicalKeyboardKey.scrollLock ||
-        key == LogicalKeyboardKey.fn;
-  }
-
-  bool _handleShortcuts(KeyEvent event) {
-    final bool isControlPressed = Platform.isMacOS
-        ? HardwareKeyboard.instance.isMetaPressed
-        : HardwareKeyboard.instance.isControlPressed;
-
-    if (isControlPressed) {
-      switch (event.logicalKey) {
-        case LogicalKeyboardKey.keyC:
-          _handleCopy();
-          return true;
-        case LogicalKeyboardKey.keyX:
-          _handleCut();
-          return true;
-        case LogicalKeyboardKey.keyV:
-          _handlePaste();
-          return true;
-        case LogicalKeyboardKey.keyA:
-          _handleSelectAll();
-          return true;
-      }
-    }
-    return false;
-  }
-
-  bool _handleSelectionKeys(KeyEvent event) {
-    if (editingCore.hasSelection()) {
-      int selectionStart = editingCore.selectionStart!;
-      int selectionEnd = editingCore.selectionEnd!;
-      bool isBackwardSelection = selectionEnd < selectionStart;
-      int actualStart = min(selectionStart, selectionEnd);
-      int actualEnd = max(selectionStart, selectionEnd);
-
-      switch (event.logicalKey) {
-        case LogicalKeyboardKey.arrowLeft:
-          editingCore.cursorPosition =
-              isBackwardSelection ? actualEnd : actualStart;
-          editingCore.clearSelection();
-          return true;
-        case LogicalKeyboardKey.arrowRight:
-          editingCore.cursorPosition =
-              isBackwardSelection ? actualStart : actualEnd;
-          editingCore.clearSelection();
-          return true;
-        case LogicalKeyboardKey.arrowUp:
-          _handleSelectionArrowUp(isBackwardSelection, actualStart, actualEnd);
-          return true;
-        case LogicalKeyboardKey.arrowDown:
-          _handleSelectionArrowDown(
-              isBackwardSelection, actualStart, actualEnd);
-          return true;
-      }
-    }
-    return false;
-  }
-
-  void _handleSelectionArrowUp(
-      bool isBackwardSelection, int actualStart, int actualEnd) {
-    int targetLine = editingCore.rope
-        .findLine(isBackwardSelection ? actualEnd : actualStart);
-    if (targetLine > 0) {
-      int column = (isBackwardSelection ? actualEnd : actualStart) -
-          editingCore.getLineStartIndex(targetLine);
-      int newLine = targetLine - 1;
-      int newPosition = getPositionAtColumn(newLine, column);
-      editingCore.cursorPosition = newPosition;
-    } else {
-      editingCore.cursorPosition =
-          isBackwardSelection ? actualEnd : actualStart;
-    }
-    editingCore.clearSelection();
-  }
-
-  void _handleSelectionArrowDown(
-      bool isBackwardSelection, int actualStart, int actualEnd) {
-    int targetLine = editingCore.rope
-        .findLine(isBackwardSelection ? actualStart : actualEnd);
-    if (targetLine < editingCore.lineCount - 1) {
-      int column = (isBackwardSelection ? actualStart : actualEnd) -
-          editingCore.getLineStartIndex(targetLine);
-      int newLine = targetLine + 1;
-      int newPosition = getPositionAtColumn(newLine, column);
-      editingCore.cursorPosition = newPosition;
-    } else {
-      editingCore.cursorPosition =
-          isBackwardSelection ? actualStart : actualEnd;
-    }
-    editingCore.clearSelection();
-  }
-
-  bool _handleTextInputKeys(KeyEvent event) {
-    switch (event.logicalKey) {
-      case LogicalKeyboardKey.arrowLeft:
-        editingCore.moveCursor(-1, 0);
-        _recalculateEditor();
-        return true;
-      case LogicalKeyboardKey.arrowRight:
-        editingCore.moveCursor(1, 0);
-        _recalculateEditor();
-        return true;
-      case LogicalKeyboardKey.arrowUp:
-        editingCore.moveCursor(0, -1);
-        _recalculateEditor();
-        return true;
-      case LogicalKeyboardKey.arrowDown:
-        editingCore.moveCursor(0, 1);
-        _recalculateEditor();
-        return true;
-      case LogicalKeyboardKey.enter:
-        editingCore.insertText('\n');
-        return true;
-      case LogicalKeyboardKey.backspace:
-        editingCore.handleBackspace();
-        _recalculateEditor();
-        return true;
-      case LogicalKeyboardKey.delete:
-        editingCore.handleDelete();
-        _recalculateEditor();
-        return true;
-      case LogicalKeyboardKey.tab:
-        editingCore.insertText(' ');
-        return true;
-      default:
-        if (event.character != null) {
-          editingCore.insertText(event.character!);
-          _recalculateEditor();
-          return true;
-        }
-    }
-    return false;
-  }
-
-  void _handlePaste() async {
-    ClipboardData? clipboardData =
-        await Clipboard.getData(Clipboard.kTextPlain);
-    if (clipboardData?.text != null) {
-      editingCore.insertText(clipboardData!.text!);
-      _recalculateEditor();
-    }
-  }
-
-  void _handleSelectAll() {
-    setState(() {
-      editingCore.setSelection(0, editingCore.length);
-    });
-    _recalculateEditor();
-  }
-
-  void _handleSingleTap(TapDownDetails details) {
-    final position = editorService.getPositionFromOffset(details.localPosition);
-    setState(() {
-      editingCore.cursorPosition = position;
-      editingCore.clearSelection();
-    });
-    widget.focusNode.requestFocus();
-  }
-
-  void _handleTap(TapDownDetails details) {
-    if (_lastTapPosition != null) {
-      double distance = (details.localPosition - _lastTapPosition!).distance;
-      if (distance > CodeEditorConstants.clickDistanceThreshold) {
-        // If the new tap is too far from the last one, reset the tap count
-        _tapCount = 0;
-      }
-    }
-
-    _tapCount++;
-    _lastTapPosition = details.localPosition;
-    _tapTimer?.cancel();
-    _tapTimer = Timer(const Duration(milliseconds: 500), () {
-      _tapCount = 0;
-      _lastTapPosition = null;
-    });
-
-    if (_tapCount == 1) {
-      _handleSingleTap(details);
-    } else if (_tapCount == 2) {
-      _handleDoubleTap(details);
-    } else if (_tapCount == 3) {
-      _handleTripleTap(details);
-    }
-  }
-
-  void _handleTripleTap(TapDownDetails details) {
-    final position = editorService.getPositionFromOffset(details.localPosition);
-    setState(() {
-      selectionService.selectLineAtPosition(position);
-    });
-    widget.focusNode.requestFocus();
-  }
-
   void _initializeTextPainter(BuildContext context) {
     final theme = Theme.of(context);
     _textPainter = TextPainter(
@@ -634,6 +392,19 @@ class CodeEditorState extends State<CodeEditor> {
     );
     _textPainter.layout();
     CodeEditorConstants.charWidth = _textPainter.width;
+  }
+
+  void _handleTap(TapDownDetails details) {
+    gestureHandlingService.handleTap(details);
+    widget.focusNode.requestFocus();
+  }
+
+  KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
+    if (keyboardHandlingService.handleKeyPress(event)) {
+      editorService.scrollService.ensureCursorVisibility();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   void _loadFile() {

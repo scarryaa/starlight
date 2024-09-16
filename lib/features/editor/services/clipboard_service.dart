@@ -1,11 +1,31 @@
-import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
+import 'package:flutter/services.dart';
+import 'package:starlight/features/editor/services/text_editing_service.dart';
 
-class CodeEditorClipboardService {
-  late TextEditingCore editingCore;
+class ClipboardService {
+  final TextEditingService textEditingService;
 
-  Future<void> handleCopy() async {}
+  ClipboardService(this.textEditingService);
 
-  Future<void> handleCut() async {}
+  Future<void> handleCopy() async {
+    if (textEditingService.hasSelection()) {
+      await Clipboard.setData(
+          ClipboardData(text: textEditingService.getSelectedText()));
+    }
+  }
 
-  Future<void> handlePaste() async {}
+  Future<void> handleCut() async {
+    if (textEditingService.hasSelection()) {
+      final selectedText = textEditingService.getSelectedText();
+      await Clipboard.setData(ClipboardData(text: selectedText));
+      textEditingService.deleteSelection();
+    }
+  }
+
+  Future<void> handlePaste() async {
+    ClipboardData? clipboardData =
+        await Clipboard.getData(Clipboard.kTextPlain);
+    if (clipboardData?.text != null) {
+      textEditingService.insertText(clipboardData!.text!);
+    }
+  }
 }

@@ -12,8 +12,8 @@ import 'package:starlight/utils/constants.dart';
 class CodeEditorService {
   final CodeEditorScrollService scrollService;
   final CodeEditorSelectionService selectionService;
-  final CodeEditorKeyboardHandlerService keyboardHandlerService;
-  final CodeEditorClipboardService clipboardService;
+  final KeyboardHandlingService keyboardHandlerService;
+  final ClipboardService clipboardService;
   final CodeEditorCalculationService calculationService;
 
   CodeEditorService({
@@ -28,8 +28,6 @@ class CodeEditorService {
     scrollService.editingCore = editingCore;
     scrollService.zoomLevel = zoomLevel;
     selectionService.editingCore = editingCore;
-    keyboardHandlerService.editingCore = editingCore;
-    clipboardService.editingCore = editingCore;
     calculationService.editingCore = editingCore;
     calculationService.zoomLevel = zoomLevel;
   }
