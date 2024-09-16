@@ -8,6 +8,8 @@ import 'package:starlight/services/editor_service.dart';
 class KeyboardShortcutService {
   final EditorService editorService;
   VoidCallback? _toggleCommandPalette;
+  VoidCallback? _toggleFileExplorer;
+  VoidCallback? _toggleTerminal;
   FocusNode? _lastFocusedNode;
   final FocusNode focusNode = FocusNode(debugLabel: 'KeyboardShortcutService');
 
@@ -106,6 +108,55 @@ class KeyboardShortcutService {
         _restoreFocus();
         return KeyEventResult.handled;
       }
+
+      // Toggle File Explorer (Cmd/Ctrl + Shift + E)
+      if (isCommandOrControlPressed &&
+          HardwareKeyboard.instance.isShiftPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyE) {
+        _toggleFileExplorer?.call();
+        return KeyEventResult.handled;
+      }
+
+      // Toggle Terminal (Cmd/Ctrl + `)
+      if (isCommandOrControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.backquote) {
+        _toggleTerminal?.call();
+        return KeyEventResult.handled;
+      }
+
+      // Go to Definition (F12)
+      if (event.logicalKey == LogicalKeyboardKey.f12) {
+        // currentEditorState?.goToDefinition();
+        return KeyEventResult.handled;
+      }
+
+      // Find References (Shift + F12)
+      if (HardwareKeyboard.instance.isShiftPressed &&
+          event.logicalKey == LogicalKeyboardKey.f12) {
+        // currentEditorState?.findReferences();
+        return KeyEventResult.handled;
+      }
+
+      // Rename Symbol (F2)
+      if (event.logicalKey == LogicalKeyboardKey.f2) {
+        // currentEditorState?.renameSymbol();
+        return KeyEventResult.handled;
+      }
+
+      // Format Document (Shift + Alt + F)
+      if (HardwareKeyboard.instance.isShiftPressed &&
+          HardwareKeyboard.instance.isAltPressed &&
+          event.logicalKey == LogicalKeyboardKey.keyF) {
+        // currentEditorState?.formatDocument();
+        return KeyEventResult.handled;
+      }
+
+      // Toggle Comment (Cmd/Ctrl + /)
+      if (isCommandOrControlPressed &&
+          event.logicalKey == LogicalKeyboardKey.slash) {
+        // currentEditorState?.toggleComment();
+        return KeyEventResult.handled;
+      }
     }
 
     return KeyEventResult.ignored;
@@ -113,6 +164,14 @@ class KeyboardShortcutService {
 
   void setToggleCommandPalette(VoidCallback callback) {
     _toggleCommandPalette = callback;
+  }
+
+  void setToggleFileExplorer(VoidCallback callback) {
+    _toggleFileExplorer = callback;
+  }
+
+  void setToggleTerminal(VoidCallback callback) {
+    _toggleTerminal = callback;
   }
 
   void _restoreFocus() {

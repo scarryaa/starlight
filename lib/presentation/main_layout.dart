@@ -140,6 +140,9 @@ class MainLayoutState extends State<MainLayout> {
     _uiService = context.read<UIService>();
     _keyboardShortcutService = context.read<KeyboardShortcutService>();
     _keyboardShortcutService.setToggleCommandPalette(_toggleCommandPalette);
+    _keyboardShortcutService.setToggleFileExplorer(_toggleFileExplorer);
+    _keyboardShortcutService.setToggleTerminal(_toggleTerminal);
+
     _initializeCommands();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
