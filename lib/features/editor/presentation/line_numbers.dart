@@ -27,7 +27,7 @@ class LineNumberPainter extends CustomPainter {
     );
 
     final scaledLineHeight = lineHeight * zoomLevel;
-    final scaledLineNumberWidth = lineNumberWidth * zoomLevel;
+    final scaledLineNumberWidth = lineNumberWidth;
     final padding = 8.0 * zoomLevel;
 
     for (int i = firstVisibleLine;
@@ -87,7 +87,7 @@ class LineNumbers extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final scaledLineNumberWidth = lineNumberWidth * zoomLevel;
+    final scaledLineNumberWidth = (lineNumberWidth ?? 50) * zoomLevel;
 
     return SizedBox(
       width: scaledLineNumberWidth,
@@ -95,7 +95,7 @@ class LineNumbers extends StatelessWidget {
         painter: LineNumberPainter(
           lineCount: lineCount,
           lineHeight: lineHeight,
-          lineNumberWidth: lineNumberWidth,
+          lineNumberWidth: scaledLineNumberWidth,
           firstVisibleLine: firstVisibleLine,
           visibleLineCount: visibleLineCount,
           zoomLevel: zoomLevel,
