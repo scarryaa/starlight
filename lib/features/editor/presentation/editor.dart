@@ -16,7 +16,6 @@ import 'package:starlight/features/editor/services/layout_service.dart';
 import 'package:starlight/features/editor/services/scroll_service.dart';
 import 'package:starlight/features/editor/services/selection_service.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
-import 'package:starlight/mixins/editor_mixins.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
 import 'package:starlight/utils/constants.dart';
 
@@ -66,8 +65,7 @@ class CodeEditor extends StatefulWidget {
   CodeEditorState createState() => CodeEditorState();
 }
 
-class CodeEditorState extends State<CodeEditor>
-    with CodeEditorScrollMixin<CodeEditor> {
+class CodeEditorState extends State<CodeEditor> {
   @override
   late TextEditingCore editingCore;
   late CodeEditorSelectionService selectionService;
@@ -80,9 +78,8 @@ class CodeEditorState extends State<CodeEditor>
   int visibleLineCount = 500;
   double maxLineWidth = 0.0;
   @override
-  double lineNumberWidth = 50.0;
-  @override
   double zoomLevel = 1.0;
+  double lineNumberWidth = 0.0;
 
   late TextPainter _textPainter;
   late SyntaxHighlighter _syntaxHighlighter;
@@ -160,25 +157,24 @@ class CodeEditorState extends State<CodeEditor>
     editingCore.addListener(_onTextChanged);
 
     selectionService = CodeEditorSelectionService(
-        editingCore: editingCore,
-        getPositionFromOffset: (Offset offset) => 0,
-        autoScrollOnDrag: (Offset offset, Size size) {});
+      editingCore: editingCore,
+      getPositionFromOffset: (Offset offset) => 0,
+      autoScrollOnDrag: (Offset offset, Size size) {},
+    );
+
+    final scrollService = CodeEditorScrollService(
+      editingCore: editingCore,
+      zoomLevel: widget.zoomLevel,
+      lineNumberWidth: lineNumberWidth,
+    );
 
     editorService = CodeEditorService(
-      scrollService: CodeEditorScrollService(),
+      scrollService: scrollService,
       selectionService: selectionService,
       keyboardHandlerService: CodeEditorKeyboardHandlerService(),
       clipboardService: CodeEditorClipboardService(),
       calculationService: CodeEditorCalculationService(),
     );
-    editorService.initialize(editingCore, widget.zoomLevel);
-
-    selectionService.getPositionFromOffset =
-        editorService.getPositionFromOffset;
-    selectionService.autoScrollOnDrag =
-        editorService.scrollService.autoScrollOnDrag;
-
-    layoutService = LayoutService(editingCore);
 
     _syntaxHighlighter = SyntaxHighlighter({
       'keyword':
@@ -192,11 +188,19 @@ class CodeEditorState extends State<CodeEditor>
       'default': const TextStyle(color: Colors.black),
     }, language: 'dart');
 
-    layoutService.calculateLineNumberWidth();
+    layoutService = LayoutService(editingCore);
+
+    scrollService.lineNumberWidth = layoutService.calculateLineNumberWidth();
+
+    selectionService.getPositionFromOffset =
+        editorService.getPositionFromOffset;
+    selectionService.autoScrollOnDrag = scrollService.autoScrollOnDrag;
+
+    editorService.initialize(editingCore, widget.zoomLevel);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       layoutService.updateMaxLineWidth();
-      updateVisibleLines();
+      scrollService.updateVisibleLines();
     });
   }
 
@@ -224,18 +228,22 @@ class CodeEditorState extends State<CodeEditor>
                 children: [
                   Scrollbar(
                     interactive: true,
-                    controller: codeScrollController,
+                    controller:
+                        editorService.scrollService.codeScrollController,
                     child: SingleChildScrollView(
                       physics: const ClampingScrollPhysics(),
-                      controller: codeScrollController,
+                      controller:
+                          editorService.scrollService.codeScrollController,
                       scrollDirection: Axis.vertical,
                       child: SizedBox(
                         width: constraints.maxWidth,
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          controller: horizontalController,
+                          controller:
+                              editorService.scrollService.horizontalController,
                           child: SizedBox(
-                            width: max(maxLineWidth, constraints.maxWidth),
+                            width: max(layoutService.getMaxLineWidth(),
+                                constraints.maxWidth),
                             height: max(
                                 editingCore.lineCount *
                                     CodeEditorConstants.lineHeight,
@@ -248,19 +256,25 @@ class CodeEditorState extends State<CodeEditor>
                                 searchTerm: widget.searchTerm,
                                 highlightColor: theme.colorScheme.secondary
                                     .withOpacity(0.3),
-                                lineNumberWidth: lineNumberWidth,
+                                lineNumberWidth:
+                                    editorService.scrollService.lineNumberWidth,
                                 viewportWidth: constraints.maxWidth,
                                 version: editingCore.version,
                                 editingCore: editingCore,
                                 firstVisibleLine: firstVisibleLine,
                                 visibleLineCount: visibleLineCount,
-                                horizontalOffset:
-                                    horizontalController.hasClients
-                                        ? horizontalController.offset.clamp(
+                                horizontalOffset: editorService.scrollService
+                                        .horizontalController.hasClients
+                                    ? editorService.scrollService
+                                        .horizontalController.offset
+                                        .clamp(
                                             0.0,
-                                            horizontalController
-                                                .position.maxScrollExtent)
-                                        : 0,
+                                            editorService
+                                                .scrollService
+                                                .horizontalController
+                                                .position
+                                                .maxScrollExtent)
+                                    : 0,
                                 textStyle: theme.textTheme.bodyMedium!
                                     .copyWith(fontFamily: 'Courier'),
                                 selectionColor:
@@ -292,12 +306,15 @@ class CodeEditorState extends State<CodeEditor>
                     child: SizedBox(
                       height: CodeEditorConstants.scrollbarWidth,
                       child: Scrollbar(
-                        controller: horizontalScrollbarController,
+                        controller: editorService
+                            .scrollService.horizontalScrollbarController,
                         child: SingleChildScrollView(
                           scrollDirection: Axis.horizontal,
-                          controller: horizontalScrollbarController,
+                          controller: editorService
+                              .scrollService.horizontalScrollbarController,
                           child: SizedBox(
-                            width: max(maxLineWidth, constraints.maxWidth),
+                            width: max(layoutService.getMaxLineWidth(),
+                                constraints.maxWidth),
                           ),
                         ),
                       ),
@@ -314,7 +331,8 @@ class CodeEditorState extends State<CodeEditor>
 
   Widget _buildLineNumbers(BoxConstraints constraints) {
     final theme = Theme.of(context);
-    final scaledLineNumberWidth = lineNumberWidth * widget.zoomLevel;
+    final scaledLineNumberWidth =
+        editorService.scrollService.lineNumberWidth * widget.zoomLevel;
     final scaledLineHeight = CodeEditorConstants.lineHeight * widget.zoomLevel;
 
     return SizedBox(
@@ -322,14 +340,14 @@ class CodeEditorState extends State<CodeEditor>
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
         child: SingleChildScrollView(
-          controller: lineNumberScrollController,
+          controller: editorService.scrollService.lineNumberScrollController,
           child: SizedBox(
             height: max(editingCore.lineCount * scaledLineHeight,
                 constraints.maxHeight),
             child: LineNumbers(
               lineCount: editingCore.lineCount,
               lineHeight: CodeEditorConstants.lineHeight,
-              lineNumberWidth: lineNumberWidth,
+              lineNumberWidth: editorService.scrollService.lineNumberWidth,
               firstVisibleLine: firstVisibleLine,
               visibleLineCount: visibleLineCount,
               zoomLevel: widget.zoomLevel,
@@ -362,7 +380,7 @@ class CodeEditorState extends State<CodeEditor>
   }
 
   void _handleDoubleTap(TapDownDetails details) {
-    final position = getPositionFromOffset(details.localPosition);
+    final position = editorService.getPositionFromOffset(details.localPosition);
     setState(() {
       selectionService.selectWordAtPosition(position);
     });
@@ -386,7 +404,7 @@ class CodeEditorState extends State<CodeEditor>
       return KeyEventResult.handled;
     }
 
-    ensureCursorVisibility();
+    editorService.scrollService.ensureCursorVisibility();
     return KeyEventResult.handled;
   }
 
@@ -538,7 +556,7 @@ class CodeEditorState extends State<CodeEditor>
   }
 
   void _handleSingleTap(TapDownDetails details) {
-    final position = getPositionFromOffset(details.localPosition);
+    final position = editorService.getPositionFromOffset(details.localPosition);
     setState(() {
       editingCore.cursorPosition = position;
       editingCore.clearSelection();
@@ -573,7 +591,7 @@ class CodeEditorState extends State<CodeEditor>
   }
 
   void _handleTripleTap(TapDownDetails details) {
-    final position = getPositionFromOffset(details.localPosition);
+    final position = editorService.getPositionFromOffset(details.localPosition);
     setState(() {
       selectionService.selectLineAtPosition(position);
     });
@@ -605,7 +623,7 @@ class CodeEditorState extends State<CodeEditor>
         });
 
         SchedulerBinding.instance.addPostFrameCallback((_) {
-          resetAllScrollPositions();
+          editorService.scrollService.resetAllScrollPositions();
           _recalculateEditor();
         });
       } catch (e, stackTrace) {
@@ -632,8 +650,8 @@ class CodeEditorState extends State<CodeEditor>
   void _recalculateEditor() {
     layoutService.calculateLineNumberWidth();
     layoutService.updateMaxLineWidth();
-    updateVisibleLines();
-    ensureCursorVisibility();
+    editorService.scrollService.updateVisibleLines();
+    editorService.scrollService.ensureCursorVisibility();
     setState(() {});
   }
 }

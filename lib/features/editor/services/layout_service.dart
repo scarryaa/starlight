@@ -14,11 +14,12 @@ class LayoutService {
 
   LayoutService(this.editingCore);
 
-  void calculateLineNumberWidth() {
+  double calculateLineNumberWidth() {
     final lineCount = editingCore.lineCount;
     final maxLineNumberWidth =
         '$lineCount'.length * CodeEditorConstants.charWidth;
     lineNumberWidth = maxLineNumberWidth + 40;
+    return lineNumberWidth;
   }
 
   double calculateLineWidth(String line) {
@@ -61,7 +62,7 @@ class LayoutService {
       }
     }
 
-    newMaxLineWidth += lineNumberWidth;
+    newMaxLineWidth += lineNumberWidth + 50;
 
     if (newMaxLineWidth != cachedMaxLineWidth) {
       maxLineWidth = newMaxLineWidth;

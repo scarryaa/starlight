@@ -19,7 +19,11 @@ class CodeEditorScrollService {
   late double lineNumberWidth;
   late double zoomLevel;
 
-  CodeEditorScrollService() {
+  CodeEditorScrollService({
+    required this.editingCore,
+    required this.zoomLevel,
+    required this.lineNumberWidth,
+  }) {
     initializeScrollControllers();
   }
 
