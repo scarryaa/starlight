@@ -219,8 +219,7 @@ class CodeEditorState extends State<CodeEditor> {
     editorService.initialize(editingCore, widget.zoomLevel);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      layoutService.updateMaxLineWidth();
-      scrollService.updateVisibleLines();
+      _recalculateEditor();
     });
   }
 

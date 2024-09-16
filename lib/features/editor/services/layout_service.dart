@@ -62,7 +62,7 @@ class LayoutService {
       }
     }
 
-    newMaxLineWidth += lineNumberWidth + 50;
+    newMaxLineWidth += lineNumberWidth;
 
     if (newMaxLineWidth != cachedMaxLineWidth) {
       maxLineWidth = newMaxLineWidth;
@@ -71,6 +71,6 @@ class LayoutService {
   }
 
   double getMaxLineWidth() {
-    return cachedMaxLineWidth;
+    return cachedMaxLineWidth + 40;
   }
 }
