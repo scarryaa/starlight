@@ -72,7 +72,6 @@ class SyntaxHighlighter {
       'with',
       'yield'
     ],
-    // Add more languages here
   };
 
   static const Map<String, List<String>> _languageTypes = {
@@ -87,7 +86,6 @@ class SyntaxHighlighter {
       'Future',
       'Stream'
     ],
-    // Add more languages here
   };
 
   List<TextSpan> highlightLine(String line, int lineNumber, int version) {

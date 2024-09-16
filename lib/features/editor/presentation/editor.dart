@@ -483,15 +483,19 @@ class CodeEditorState extends State<CodeEditor>
     switch (event.logicalKey) {
       case LogicalKeyboardKey.arrowLeft:
         editingCore.moveCursor(-1, 0);
+        _recalculateEditor();
         return true;
       case LogicalKeyboardKey.arrowRight:
         editingCore.moveCursor(1, 0);
+        _recalculateEditor();
         return true;
       case LogicalKeyboardKey.arrowUp:
         editingCore.moveCursor(0, -1);
+        _recalculateEditor();
         return true;
       case LogicalKeyboardKey.arrowDown:
         editingCore.moveCursor(0, 1);
+        _recalculateEditor();
         return true;
       case LogicalKeyboardKey.enter:
         editingCore.insertText('\n');
