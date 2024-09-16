@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
+import 'package:starlight/features/editor/services/syntax_highlighter.dart';
 
 class CodeEditorPainter extends CustomPainter {
   static const double lineHeight = 24.0;
@@ -25,6 +26,7 @@ class CodeEditorPainter extends CustomPainter {
   final int? selectionStart;
   final int? selectionEnd;
   final double zoomLevel;
+  final SyntaxHighlighter syntaxHighlighter;
   late double scaledLineNumberWidth;
   late double textStartX;
 
@@ -48,6 +50,7 @@ class CodeEditorPainter extends CustomPainter {
     required this.selectionStart,
     required this.selectionEnd,
     required this.zoomLevel,
+    required this.syntaxHighlighter,
   }) {
     _calculateCharWidth();
     scaledLineNumberWidth = lineNumberWidth * zoomLevel;
@@ -69,8 +72,9 @@ class CodeEditorPainter extends CustomPainter {
       if (_isLineSelected(i)) {
         _paintSelection(canvas, i, lineContent);
       }
-      // Paint line content
-      _paintText(canvas, lineContent, Offset(textStartX, i * scaledLineHeight));
+      // Paint syntax highlighted text
+      _paintSyntaxHighlightedText(
+          canvas, i, lineContent, Offset(textStartX, i * scaledLineHeight));
       // Paint cursor
       if (_isCursorOnLine(i)) {
         _paintCursor(canvas, i, lineContent);
@@ -81,6 +85,30 @@ class CodeEditorPainter extends CustomPainter {
     if (editingCore.cursorPosition == editingCore.length) {
       _paintCursorAtEnd(canvas, lineCount - 1);
     }
+  }
+
+  void _paintSyntaxHighlightedText(
+      Canvas canvas, int line, String text, Offset offset) {
+    final highlightedSpans =
+        syntaxHighlighter.highlightLine(text, line, version);
+    final textPainter = TextPainter(
+      text: TextSpan(
+        children: highlightedSpans
+            .map((span) => TextSpan(
+                  text: span.text,
+                  style: span.style?.copyWith(
+                          fontSize: fontSize * zoomLevel,
+                          fontFamily: "Courier") ??
+                      textStyle.copyWith(fontSize: fontSize * zoomLevel),
+                ))
+            .toList(),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: double.infinity);
+
+    final yOffset =
+        offset.dy + (lineHeight * zoomLevel - textPainter.height) / 2;
+    textPainter.paint(canvas, Offset(offset.dx, yOffset));
   }
 
   @override

@@ -9,6 +9,7 @@ import 'package:starlight/features/editor/domain/enums/selection_mode.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
+import 'package:starlight/features/editor/services/syntax_highlighter.dart';
 import 'package:starlight/mixins/editor_mixins.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
 import 'package:starlight/utils/constants.dart';
@@ -79,6 +80,7 @@ class CodeEditorState extends State<CodeEditor>
   double _cachedMaxLineWidth = 0;
   int _lastLineCount = 0;
   late TextPainter _textPainter;
+  late SyntaxHighlighter _syntaxHighlighter;
   int _lastKnownVersion = -1;
   int _tapCount = 0;
   Timer? _tapTimer;
@@ -159,6 +161,17 @@ class CodeEditorState extends State<CodeEditor>
 
     editingCore.addListener(_onTextChanged);
 
+    _syntaxHighlighter = SyntaxHighlighter({
+      'keyword':
+          const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+      'type': const TextStyle(color: Colors.green),
+      'comment':
+          const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+      'string': const TextStyle(color: Colors.red),
+      'number': const TextStyle(color: Colors.purple),
+      'function': const TextStyle(color: Colors.orange),
+      'default': const TextStyle(color: Colors.black),
+    }, language: 'dart');
     _calculateLineNumberWidth();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -211,6 +224,7 @@ class CodeEditorState extends State<CodeEditor>
                                 constraints.maxHeight),
                             child: CustomPaint(
                               painter: CodeEditorPainter(
+                                syntaxHighlighter: _syntaxHighlighter,
                                 zoomLevel: widget.zoomLevel,
                                 matchPositions: widget.matchPositions,
                                 searchTerm: widget.searchTerm,
@@ -688,6 +702,8 @@ class CodeEditorState extends State<CodeEditor>
 
   void _onTextChanged() {
     if (_lastKnownVersion != editingCore.version) {
+      _syntaxHighlighter.updateLine(
+          editingCore.lastModifiedLine, editingCore.version);
       setState(() {});
       widget.onContentChanged(editingCore.getText());
       WidgetsBinding.instance.addPostFrameCallback((_) {
