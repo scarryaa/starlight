@@ -6,7 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/command_palette/command_palette.dart';
 import 'package:starlight/features/editor/presentation/editor_widget.dart';
-import 'package:starlight/features/file_explorer/presentation/file_explorer_widget.dart';
+import 'package:starlight/features/file_explorer/presentation/file_explorer.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
 import 'package:starlight/features/terminal/terminal.dart';
 import 'package:starlight/services/editor_service.dart';
@@ -26,6 +26,7 @@ class MainLayout extends StatefulWidget {
 }
 
 class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
+  String? _terminalDirectory;
   final FocusNode _mainFocusNode = FocusNode();
   late final SettingsService _settingsService;
   late final FileExplorerService _fileExplorerService;
@@ -69,13 +70,15 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                                 ResizableWidget(
                                   maxSizePercentage: 0.9,
                                   child: RepaintBoundary(
-                                    child: FileExplorerWidget(
+                                    child: FileExplorer(
                                       onFileSelected:
                                           _editorService.handleOpenFile,
                                       onDirectorySelected: _fileExplorerService
                                           .handleDirectorySelected,
                                       controller:
                                           _fileExplorerService.controller,
+                                      onOpenInTerminal:
+                                          _openInIntegratedTerminal,
                                     ),
                                   ),
                                 ),
@@ -106,11 +109,13 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                                       ),
                                     ),
                                     if (settingsService.showTerminal)
-                                      const ResizableWidget(
+                                      ResizableWidget(
                                         isTopResizable: true,
                                         isHorizontal: false,
                                         maxSizePercentage: 0.5,
-                                        child: IntegratedTerminal(),
+                                        child: IntegratedTerminal(
+                                          initialDirectory: _terminalDirectory,
+                                        ),
                                       ),
                                   ],
                                 ),
@@ -156,6 +161,15 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _mainFocusNode.requestFocus();
+    });
+  }
+
+  void _openInIntegratedTerminal(String directory) {
+    setState(() {
+      _terminalDirectory = directory;
+      if (!_settingsService.showTerminal) {
+        _settingsService.setShowTerminal(true);
+      }
     });
   }
 
@@ -227,6 +241,13 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         description: 'Show or hide the integrated terminal',
         icon: Icons.terminal,
         action: _toggleTerminal,
+      ),
+      Command(
+        name: 'Open in Integrated Terminal',
+        description: 'Open the current directory in the integrated terminal',
+        icon: Icons.terminal,
+        action: () => _openInIntegratedTerminal(
+            _fileExplorerService.selectedDirectory.value ?? ''),
       ),
       Command(
         name: 'Search All Files',

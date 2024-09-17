@@ -6,7 +6,9 @@ import 'package:xterm/xterm.dart';
 import 'package:path_provider/path_provider.dart';
 
 class IntegratedTerminal extends StatefulWidget {
-  const IntegratedTerminal({super.key});
+  final String? initialDirectory;
+
+  const IntegratedTerminal({super.key, this.initialDirectory});
 
   @override
   IntegratedTerminalState createState() => IntegratedTerminalState();
@@ -111,7 +113,9 @@ class IntegratedTerminalState extends State<IntegratedTerminal> {
   }
 
   Future<void> _startProcess() async {
-    final directory = await getApplicationDocumentsDirectory();
+    final directory = widget.initialDirectory != null
+        ? Directory(widget.initialDirectory!)
+        : await getApplicationDocumentsDirectory();
     final homeDir = directory.path;
     _currentDirectory = homeDir;
 
