@@ -54,22 +54,23 @@ class FileExplorerController extends ChangeNotifier {
     notifyListeners();
   }
 
-  void toggleDirectoryExpansion(FileTreeItem item) {
+  Future<void> toggleDirectoryExpansion(FileTreeItem item) async {
     if (item.isDirectory) {
       item.isExpanded = !item.isExpanded;
       if (item.isExpanded && item.children.isEmpty) {
-        item.children =
-            _getDirectoryContents(item.entity as Directory, item.level + 1);
+        item.children = await _getDirectoryContents(
+            item.entity as Directory, item.level + 1);
         _sortFileTree(item.children);
       }
-      notifyListeners();
     }
+    notifyListeners();
   }
 
-  List<FileTreeItem> _getDirectoryContents(Directory directory, int level) {
+  Future<List<FileTreeItem>> _getDirectoryContents(
+      Directory directory, int level) async {
     List<FileTreeItem> items = [];
     try {
-      final entities = directory.listSync();
+      final entities = await directory.list().toList();
       for (var entity in entities) {
         final item = FileTreeItem(entity, level, false);
         items.add(item);
@@ -82,15 +83,15 @@ class FileExplorerController extends ChangeNotifier {
 
   Future<void> refreshDirectory() async {
     if (_currentDirectory != null) {
-      _rootItems = _getDirectoryContents(_currentDirectory!, 0);
+      _rootItems = await _getDirectoryContents(_currentDirectory!, 0);
       _sortFileTree(_rootItems);
       notifyListeners();
     }
   }
 
-  void _refreshFileTree() {
+  Future<void> _refreshFileTree() async {
     if (_currentDirectory != null) {
-      _rootItems = _getDirectoryContents(_currentDirectory!, 0);
+      _rootItems = await _getDirectoryContents(_currentDirectory!, 0);
       _sortFileTree(_rootItems);
       notifyListeners();
     }
