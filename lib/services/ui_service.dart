@@ -55,15 +55,6 @@ class UIService extends ChangeNotifier {
                 },
               ),
               const Spacer(),
-              IconButton(
-                icon: Icon(
-                  isDarkMode ? Icons.light_mode : Icons.dark_mode,
-                  color: Theme.of(context).appBarTheme.iconTheme?.color,
-                  size: 14,
-                ),
-                onPressed: () => themeProvider.toggleTheme(),
-              ),
-              const SizedBox(width: 8),
             ],
           ),
         ],

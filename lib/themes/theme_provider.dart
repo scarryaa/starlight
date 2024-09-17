@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:starlight/services/settings_service.dart';
 
-class ThemeProvider with ChangeNotifier {
-  ThemeMode _themeMode = ThemeMode.system;
+class ThemeProvider extends ChangeNotifier {
+  late SettingsService _settingsService;
 
-  ThemeMode get themeMode => _themeMode;
+  ThemeProvider(this._settingsService);
+
+  ThemeMode get themeMode => _settingsService.themeMode;
 
   void toggleTheme() {
-    _themeMode =
-        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    _settingsService.setThemeMode(
+        themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light);
     notifyListeners();
   }
 }

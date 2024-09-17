@@ -12,9 +12,11 @@ import 'package:starlight/features/terminal/terminal.dart';
 import 'package:starlight/services/editor_service.dart';
 import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
+import 'package:starlight/services/settings_service.dart';
 import 'package:starlight/services/ui_service.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:starlight/utils/widgets/resizable_widget.dart';
+import 'package:window_manager/window_manager.dart';
 
 class MainLayout extends StatefulWidget {
   const MainLayout({super.key});
@@ -23,9 +25,10 @@ class MainLayout extends StatefulWidget {
   MainLayoutState createState() => MainLayoutState();
 }
 
-class MainLayoutState extends State<MainLayout> {
+class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   bool _showTerminal = false;
   final FocusNode _mainFocusNode = FocusNode();
+  late final SettingsService _settingsService;
   late final FileExplorerService _fileExplorerService;
   late final EditorService _editorService;
   late final UIService _uiService;
@@ -35,106 +38,114 @@ class MainLayoutState extends State<MainLayout> {
 
   @override
   Widget build(BuildContext context) {
-    return Focus(
-      focusNode: _mainFocusNode,
-      autofocus: true,
-      onKeyEvent: (FocusNode node, KeyEvent event) {
-        return _keyboardShortcutService.handleKeyEvent(event);
-      },
-      child: GestureDetector(
-        onTap: () {
-          _mainFocusNode.requestFocus();
+    return Consumer<SettingsService>(
+        builder: (context, settingsService, child) {
+      return Focus(
+        focusNode: _mainFocusNode,
+        autofocus: true,
+        onKeyEvent: (FocusNode node, KeyEvent event) {
+          return _keyboardShortcutService.handleKeyEvent(event);
         },
-        behavior: HitTestBehavior.translucent,
-        child: Consumer<UIService>(
-          builder: (context, uiService, child) {
-            return Scaffold(
-              body: Stack(
-                children: [
-                  Column(
-                    children: [
-                      uiService.buildAppBar(
-                        context,
-                        Provider.of<ThemeProvider>(context),
-                        Theme.of(context).brightness == Brightness.dark,
-                      ),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            if (uiService.showFileExplorer)
-                              ResizableWidget(
-                                maxSizePercentage: 0.9,
-                                child: RepaintBoundary(
-                                  child: FileExplorerWidget(
-                                    onFileSelected:
-                                        _editorService.handleOpenFile,
-                                    onDirectorySelected: _fileExplorerService
-                                        .handleDirectorySelected,
-                                    controller: _fileExplorerService.controller,
+        child: GestureDetector(
+          onTap: () {
+            _mainFocusNode.requestFocus();
+          },
+          behavior: HitTestBehavior.translucent,
+          child: Consumer<UIService>(
+            builder: (context, uiService, child) {
+              return Scaffold(
+                body: Stack(
+                  children: [
+                    Column(
+                      children: [
+                        uiService.buildAppBar(
+                          context,
+                          Provider.of<ThemeProvider>(context),
+                          Theme.of(context).brightness == Brightness.dark,
+                        ),
+                        Expanded(
+                          child: Row(
+                            children: [
+                              if (settingsService.showFileExplorer)
+                                ResizableWidget(
+                                  maxSizePercentage: 0.9,
+                                  child: RepaintBoundary(
+                                    child: FileExplorerWidget(
+                                      onFileSelected:
+                                          _editorService.handleOpenFile,
+                                      onDirectorySelected: _fileExplorerService
+                                          .handleDirectorySelected,
+                                      controller:
+                                          _fileExplorerService.controller,
+                                    ),
                                   ),
                                 ),
-                              ),
-                            Expanded(
-                              child: Column(
-                                children: [
-                                  Expanded(
-                                    child: EditorWidget(
-                                      key: _editorService.editorKey,
-                                      onContentChanged: (String newContent) =>
-                                          _editorService
-                                              .handleContentChanged(newContent),
-                                      fileMenuActions: FileMenuActions(
-                                        newFile: _editorService.handleNewFile,
-                                        openFile: _editorService.handleOpenFile,
-                                        save: _editorService
-                                            .handleSaveCurrentFile,
-                                        saveAs: _editorService.handleSaveFileAs,
-                                        exit: (context) =>
-                                            SystemNavigator.pop(),
+                              Expanded(
+                                child: Column(
+                                  children: [
+                                    Expanded(
+                                      child: EditorWidget(
+                                        key: _editorService.editorKey,
+                                        onContentChanged: (String newContent) =>
+                                            _editorService.handleContentChanged(
+                                                newContent),
+                                        fileMenuActions: FileMenuActions(
+                                          newFile: _editorService.handleNewFile,
+                                          openFile:
+                                              _editorService.handleOpenFile,
+                                          save: _editorService
+                                              .handleSaveCurrentFile,
+                                          saveAs:
+                                              _editorService.handleSaveFileAs,
+                                          exit: (context) =>
+                                              SystemNavigator.pop(),
+                                        ),
+                                        rootDirectory: _fileExplorerService
+                                            .selectedDirectory,
+                                        keyboardShortcutService:
+                                            _keyboardShortcutService,
                                       ),
-                                      rootDirectory: _fileExplorerService
-                                          .selectedDirectory,
-                                      keyboardShortcutService:
-                                          _keyboardShortcutService,
                                     ),
-                                  ),
-                                  if (_showTerminal)
-                                    const ResizableWidget(
-                                      isTopResizable: true,
-                                      isHorizontal: false,
-                                      maxSizePercentage: 0.5,
-                                      child: IntegratedTerminal(),
-                                    ),
-                                ],
+                                    if (settingsService.showTerminal)
+                                      const ResizableWidget(
+                                        isTopResizable: true,
+                                        isHorizontal: false,
+                                        maxSizePercentage: 0.5,
+                                        child: IntegratedTerminal(),
+                                      ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
-                      ),
-                      uiService.buildStatusBar(context),
-                    ],
-                  ),
-                  if (_showCommandPalette)
-                    CommandPalette(
-                      commands: _commands,
-                      onCommandSelected: (command) {
-                        command.action();
-                        _toggleCommandPalette();
-                      },
-                      onClose: _toggleCommandPalette,
+                        uiService.buildStatusBar(context),
+                      ],
                     ),
-                ],
-              ),
-            );
-          },
+                    if (_showCommandPalette)
+                      CommandPalette(
+                        commands: _commands,
+                        onCommandSelected: (command) {
+                          command.action();
+                          _toggleCommandPalette();
+                        },
+                        onClose: _toggleCommandPalette,
+                      ),
+                  ],
+                ),
+              );
+            },
+          ),
         ),
-      ),
-    );
+      );
+    });
   }
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _settingsService = context.read<SettingsService>();
     _fileExplorerService = context.read<FileExplorerService>();
     _editorService = context.read<EditorService>();
     _uiService = context.read<UIService>();
@@ -148,6 +159,25 @@ class MainLayoutState extends State<MainLayout> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _mainFocusNode.requestFocus();
     });
+  }
+
+  @override
+  void dispose() {
+    _mainFocusNode.dispose();
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    _updateWindowSize();
+  }
+
+  void _updateWindowSize() async {
+    final size = await windowManager.getSize();
+    final isFullscreen = await windowManager.isFullScreen();
+    _settingsService.setWindowSize(size);
+    _settingsService.setFullscreen(isFullscreen);
   }
 
   void _initializeCommands() {
@@ -259,9 +289,7 @@ class MainLayoutState extends State<MainLayout> {
   }
 
   void _toggleTerminal() {
-    setState(() {
-      _showTerminal = !_showTerminal;
-    });
+    _settingsService.setShowTerminal(!_settingsService.showTerminal);
   }
 
   void _openFile() async {
@@ -273,18 +301,12 @@ class MainLayoutState extends State<MainLayout> {
   }
 
   void _toggleFileExplorer() {
-    _uiService.toggleFileExplorer();
+    _settingsService.setShowFileExplorer(!_settingsService.showFileExplorer);
   }
 
   void _toggleCommandPalette() {
     setState(() {
       _showCommandPalette = !_showCommandPalette;
     });
-  }
-
-  @override
-  void dispose() {
-    _mainFocusNode.dispose();
-    super.dispose();
   }
 }
