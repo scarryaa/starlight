@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart' hide TabBar, Tab;
 import 'package:flutter/scheduler.dart';
+import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
@@ -17,6 +18,7 @@ import 'package:starlight/features/editor/services/selection_service.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
 import 'package:starlight/features/editor/services/text_editing_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
+import 'package:starlight/services/settings_service.dart';
 import 'package:starlight/utils/constants.dart';
 
 class CodeEditor extends StatefulWidget {
@@ -74,6 +76,7 @@ class CodeEditorState extends State<CodeEditor> {
   late GestureHandlingService gestureHandlingService;
   late KeyboardHandlingService keyboardHandlingService;
   late ClipboardService clipboardService;
+  late SettingsService _settingsService;
 
   int firstVisibleLine = 0;
   int visibleLineCount = 500;
@@ -85,15 +88,12 @@ class CodeEditorState extends State<CodeEditor> {
   late SyntaxHighlighter _syntaxHighlighter;
   int _lastKnownVersion = -1;
 
-  void maintainFocus() {
-    widget.focusNode.requestFocus();
-  }
-
   @override
   Widget build(BuildContext context) {
     _initializeTextPainter(context);
-
+    _syntaxHighlighter.updateTheme(_settingsService.themeMode, context);
     final theme = Theme.of(context);
+
     return LayoutBuilder(
       builder: (context, constraints) {
         return ColoredBox(
@@ -133,7 +133,13 @@ class CodeEditorState extends State<CodeEditor> {
     editingCore.removeListener(_onTextChanged);
     editingCore.dispose();
     _textPainter.dispose();
+    _settingsService.removeListener(_onSettingsChanged);
     super.dispose();
+  }
+
+  void _onSettingsChanged() {
+    _syntaxHighlighter.updateTheme(_settingsService.themeMode, context);
+    setState(() {});
   }
 
   int getPositionAtColumn(int line, int column) {
@@ -154,6 +160,7 @@ class CodeEditorState extends State<CodeEditor> {
     editingCore.addListener(_onTextChanged);
     textEditingService = TextEditingService(editingCore);
 
+    _settingsService = Provider.of<SettingsService>(context, listen: false);
     selectionService = CodeEditorSelectionService(
       editingCore: editingCore,
       getPositionFromOffset: (Offset offset) => 0,
@@ -191,17 +198,21 @@ class CodeEditorState extends State<CodeEditor> {
         recalculateEditor: _recalculateEditor);
 
     clipboardService = ClipboardService(textEditingService);
-    _syntaxHighlighter = SyntaxHighlighter({
-      'keyword':
-          const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
-      'type': const TextStyle(color: Colors.green),
-      'comment':
-          const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
-      'string': const TextStyle(color: Colors.red),
-      'number': const TextStyle(color: Colors.purple),
-      'function': const TextStyle(color: Colors.orange),
-      'default': const TextStyle(color: Colors.black),
-    }, language: 'dart');
+    _syntaxHighlighter = SyntaxHighlighter(
+      {
+        'keyword':
+            const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+        'type': const TextStyle(color: Colors.green),
+        'comment':
+            const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+        'string': const TextStyle(color: Colors.red),
+        'number': const TextStyle(color: Colors.purple),
+        'function': const TextStyle(color: Colors.orange),
+        'default': TextStyle(color: _getDefaultTextColor(context)),
+      },
+      language: 'dart',
+      initialThemeMode: _settingsService.themeMode,
+    );
 
     layoutService = LayoutService(editingCore);
 
@@ -213,19 +224,30 @@ class CodeEditorState extends State<CodeEditor> {
 
     editorService.initialize(editingCore, widget.zoomLevel);
 
+    _settingsService.addListener(_onSettingsChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _recalculateEditor();
     });
   }
 
+  void maintainFocus() {
+    widget.focusNode.requestFocus();
+  }
+
   Widget _buildCodeArea(BoxConstraints constraints) {
     final theme = Theme.of(context);
+    final defaultTextColor = _getDefaultTextColor(context);
 
     return GestureDetector(
       onTapDown: _handleTap,
-      onPanStart: selectionService.updateSelection,
-      onPanUpdate: (details) =>
-          selectionService.updateSelectionOnDrag(details, constraints.biggest),
+      onPanStart: (details) {
+        selectionService.updateSelection(details);
+        _recalculateEditor();
+      },
+      onPanUpdate: (details) {
+        selectionService.updateSelectionOnDrag(details, constraints.biggest);
+        _recalculateEditor();
+      },
       onPanEnd: (details) {},
       behavior: HitTestBehavior.deferToChild,
       child: Focus(
@@ -233,9 +255,11 @@ class CodeEditorState extends State<CodeEditor> {
         onKeyEvent: _handleKeyPress,
         child: ScrollbarTheme(
           data: ScrollbarThemeData(
-              thumbColor: WidgetStateProperty.all(
-                  theme.colorScheme.secondary.withOpacity(0.6)),
-              radius: Radius.zero),
+            thumbColor: WidgetStateProperty.all(
+              theme.colorScheme.secondary.withOpacity(0.6),
+            ),
+            radius: Radius.zero,
+          ),
           child: LayoutBuilder(
             builder: (context, constraints) {
               return Stack(
@@ -259,9 +283,10 @@ class CodeEditorState extends State<CodeEditor> {
                             width: max(layoutService.getMaxLineWidth(),
                                 constraints.maxWidth),
                             height: max(
-                                editingCore.lineCount *
-                                    CodeEditorConstants.lineHeight,
-                                constraints.maxHeight),
+                                    editingCore.lineCount *
+                                        CodeEditorConstants.lineHeight,
+                                    constraints.maxHeight) +
+                                100,
                             child: CustomPaint(
                               painter: CodeEditorPainter(
                                 syntaxHighlighter: _syntaxHighlighter,
@@ -282,15 +307,18 @@ class CodeEditorState extends State<CodeEditor> {
                                     ? editorService.scrollService
                                         .horizontalController.offset
                                         .clamp(
-                                            0.0,
-                                            editorService
-                                                .scrollService
-                                                .horizontalController
-                                                .position
-                                                .maxScrollExtent)
+                                        0.0,
+                                        editorService
+                                            .scrollService
+                                            .horizontalController
+                                            .position
+                                            .maxScrollExtent,
+                                      )
                                     : 0,
-                                textStyle: theme.textTheme.bodyMedium!
-                                    .copyWith(fontFamily: 'Courier'),
+                                textStyle: theme.textTheme.bodyMedium!.copyWith(
+                                  fontFamily: 'Courier',
+                                  color: defaultTextColor,
+                                ),
                                 selectionColor:
                                     theme.colorScheme.primary.withOpacity(0.3),
                                 cursorColor: theme.colorScheme.primary,
@@ -357,7 +385,8 @@ class CodeEditorState extends State<CodeEditor> {
           controller: editorService.scrollService.lineNumberScrollController,
           child: SizedBox(
             height: max(editingCore.lineCount * scaledLineHeight,
-                constraints.maxHeight),
+                    constraints.maxHeight) +
+                100,
             child: LineNumbers(
               lineCount: editingCore.lineCount,
               lineHeight: CodeEditorConstants.lineHeight,
@@ -375,22 +404,14 @@ class CodeEditorState extends State<CodeEditor> {
     );
   }
 
-  void _initializeTextPainter(BuildContext context) {
-    final theme = Theme.of(context);
-    _textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
-      text: TextSpan(
-        text: 'X',
-        style: theme.textTheme.bodyMedium?.copyWith(fontFamily: 'Courier'),
-      ),
-    );
-    _textPainter.layout();
-    CodeEditorConstants.charWidth = _textPainter.width;
-  }
+  Color _getDefaultTextColor(BuildContext context) {
+    final brightness = _settingsService.themeMode == ThemeMode.system
+        ? MediaQuery.of(context).platformBrightness
+        : _settingsService.themeMode == ThemeMode.dark
+            ? Brightness.dark
+            : Brightness.light;
 
-  void _handleTap(TapDownDetails details) {
-    gestureHandlingService.handleTap(details);
-    widget.focusNode.requestFocus();
+    return brightness == Brightness.dark ? Colors.white : Colors.black;
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
@@ -399,6 +420,30 @@ class CodeEditorState extends State<CodeEditor> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  void _handleTap(TapDownDetails details) {
+    gestureHandlingService.handleTap(details);
+    widget.focusNode.requestFocus();
+  }
+
+  void _initializeTextPainter(BuildContext context) {
+    final theme = Theme.of(context);
+    final defaultTextColor =
+        theme.brightness == Brightness.dark ? Colors.white : Colors.black;
+
+    _textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+      text: TextSpan(
+        text: 'X',
+        style: theme.textTheme.bodyMedium?.copyWith(
+          fontFamily: 'Courier',
+          color: defaultTextColor,
+        ),
+      ),
+    );
+    _textPainter.layout();
+    CodeEditorConstants.charWidth = _textPainter.width;
   }
 
   void _loadFile() {
@@ -442,6 +487,7 @@ class CodeEditorState extends State<CodeEditor> {
     layoutService.updateMaxLineWidth();
     editorService.scrollService.updateVisibleLines();
     editorService.scrollService.ensureCursorVisibility();
+    _syntaxHighlighter.invalidateCache();
     setState(() {});
   }
 }

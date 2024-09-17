@@ -48,12 +48,12 @@ class UIService extends ChangeNotifier {
 
   Widget _buildLeadingSpace(bool isFullscreen) {
     if (kIsWeb) {
-      return const SizedBox(width: 16);
+      return const SizedBox(width: 0);
     } else if (Platform.isMacOS && !isFullscreen) {
       return const SizedBox(
-          width: 78); // Space for traffic lights when not fullscreen
+          width: 68); // Space for traffic lights when not fullscreen
     } else {
-      return const SizedBox(width: 16);
+      return const SizedBox(width: 0);
     }
   }
 
