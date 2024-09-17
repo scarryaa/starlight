@@ -26,12 +26,10 @@ class MainLayout extends StatefulWidget {
 }
 
 class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
-  bool _showTerminal = false;
   final FocusNode _mainFocusNode = FocusNode();
   late final SettingsService _settingsService;
   late final FileExplorerService _fileExplorerService;
   late final EditorService _editorService;
-  late final UIService _uiService;
   late final KeyboardShortcutService _keyboardShortcutService;
   bool _showCommandPalette = false;
   late final List<Command> _commands;
@@ -62,6 +60,7 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                           context,
                           Provider.of<ThemeProvider>(context),
                           Theme.of(context).brightness == Brightness.dark,
+                          settingsService.isFullscreen,
                         ),
                         Expanded(
                           child: Row(
@@ -148,7 +147,6 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     _settingsService = context.read<SettingsService>();
     _fileExplorerService = context.read<FileExplorerService>();
     _editorService = context.read<EditorService>();
-    _uiService = context.read<UIService>();
     _keyboardShortcutService = context.read<KeyboardShortcutService>();
     _keyboardShortcutService.setToggleCommandPalette(_toggleCommandPalette);
     _keyboardShortcutService.setToggleFileExplorer(_toggleFileExplorer);

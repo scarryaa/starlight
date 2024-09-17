@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 import 'package:provider/provider.dart';
 import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/themes/theme_provider.dart';
@@ -6,11 +8,14 @@ import 'package:window_manager/window_manager.dart';
 
 class UIService extends ChangeNotifier {
   bool _showFileExplorer = true;
-
   bool get showFileExplorer => _showFileExplorer;
 
   Widget buildAppBar(
-      BuildContext context, ThemeProvider themeProvider, bool isDarkMode) {
+    BuildContext context,
+    ThemeProvider themeProvider,
+    bool isDarkMode,
+    bool isFullscreen,
+  ) {
     return Container(
       height: 30,
       decoration: BoxDecoration(
@@ -31,34 +36,46 @@ class UIService extends ChangeNotifier {
           ),
           Row(
             children: [
-              const SizedBox(width: 70),
-              const SizedBox(width: 8),
-              ValueListenableBuilder<String?>(
-                valueListenable:
-                    Provider.of<FileExplorerService>(context).selectedDirectory,
-                builder: (context, directory, _) {
-                  return directory != null
-                      ? TextButton(
-                          onPressed: () => Provider.of<FileExplorerService>(
-                                  context,
-                                  listen: false)
-                              .pickDirectory(),
-                          child: Text(
-                            directory.split('/').last,
-                            style: TextStyle(
-                              color:
-                                  Theme.of(context).textTheme.bodyLarge?.color,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink();
-                },
-              ),
+              _buildLeadingSpace(isFullscreen),
+              _buildDirectoryButton(context),
               const Spacer(),
             ],
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildLeadingSpace(bool isFullscreen) {
+    if (kIsWeb) {
+      return const SizedBox(width: 16);
+    } else if (Platform.isMacOS && !isFullscreen) {
+      return const SizedBox(
+          width: 78); // Space for traffic lights when not fullscreen
+    } else {
+      return const SizedBox(width: 16);
+    }
+  }
+
+  Widget _buildDirectoryButton(BuildContext context) {
+    return ValueListenableBuilder<String?>(
+      valueListenable:
+          Provider.of<FileExplorerService>(context).selectedDirectory,
+      builder: (context, directory, _) {
+        return directory != null
+            ? TextButton(
+                onPressed: () =>
+                    Provider.of<FileExplorerService>(context, listen: false)
+                        .pickDirectory(),
+                child: Text(
+                  directory.split('/').last,
+                  style: TextStyle(
+                    color: Theme.of(context).textTheme.bodyLarge?.color,
+                  ),
+                ),
+              )
+            : const SizedBox.shrink();
+      },
     );
   }
 
