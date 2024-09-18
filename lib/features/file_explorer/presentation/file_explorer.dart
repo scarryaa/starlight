@@ -1,6 +1,4 @@
 import 'dart:io';
-import 'package:path/path.dart' as path;
-
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -9,8 +7,9 @@ import 'package:starlight/features/file_explorer/application/file_explorer_contr
 import 'package:starlight/features/file_explorer/infrastructure/services/file_service.dart';
 import 'package:starlight/features/file_explorer/presentation/file_tree_item.dart';
 import 'package:starlight/features/toasts/message_toast.dart';
+import 'package:path/path.dart' as path;
 
-class FileExplorer extends StatefulWidget {
+class FileExplorer extends StatelessWidget {
   final Function(File) onFileSelected;
   final Function(String?) onDirectorySelected;
   final FileExplorerController controller;
@@ -25,18 +24,13 @@ class FileExplorer extends StatefulWidget {
   });
 
   @override
-  FileExplorerState createState() => FileExplorerState();
-}
-
-class FileExplorerState extends State<FileExplorer> {
-  @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider.value(
-      value: widget.controller,
+      value: controller,
       child: _FileExplorerContent(
-        onFileSelected: widget.onFileSelected,
-        onDirectorySelected: widget.onDirectorySelected,
-        onOpenInTerminal: widget.onOpenInTerminal,
+        onFileSelected: onFileSelected,
+        onDirectorySelected: onDirectorySelected,
+        onOpenInTerminal: onOpenInTerminal,
       ),
     );
   }
@@ -62,6 +56,7 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _newItemController = TextEditingController();
   final FocusNode _newItemFocusNode = FocusNode();
+  final FocusNode _explorerFocusNode = FocusNode();
   bool _isCreatingNewItem = false;
   bool _isCreatingFile = true;
 
@@ -72,6 +67,7 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
   void initState() {
     super.initState();
     _newItemFocusNode.addListener(_onFocusChange);
+    _explorerFocusNode.addListener(_onExplorerFocusChange);
   }
 
   @override
@@ -80,12 +76,23 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
     _newItemController.dispose();
     _newItemFocusNode.removeListener(_onFocusChange);
     _newItemFocusNode.dispose();
+    _explorerFocusNode.removeListener(_onExplorerFocusChange);
+    _explorerFocusNode.dispose();
     super.dispose();
   }
 
   void _onFocusChange() {
     if (!_newItemFocusNode.hasFocus) {
       setState(() => _isCreatingNewItem = false);
+    }
+  }
+
+  void _onExplorerFocusChange() {
+    if (_explorerFocusNode.hasFocus) {
+      final controller = context.read<FileExplorerController>();
+      if (controller.selectedItem == null && controller.rootItems.isNotEmpty) {
+        controller.setSelectedItem(controller.rootItems.first);
+      }
     }
   }
 
@@ -107,6 +114,172 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
         ],
       ),
     );
+  }
+
+  Widget _buildFileExplorer(
+      ThemeData theme, FileExplorerController controller) {
+    if (controller.currentDirectory == null) {
+      return _buildDirectorySelectionPrompt(theme);
+    }
+    return Theme(
+      data: theme.copyWith(
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: MaterialStateProperty.all(
+              theme.colorScheme.secondary.withOpacity(0.6)),
+          thickness: MaterialStateProperty.all(6.0),
+          radius: const Radius.circular(0),
+        ),
+      ),
+      child: Focus(
+        focusNode: _explorerFocusNode,
+        onKey: (node, event) => _handleKeyPress(event, controller),
+        child: GestureDetector(
+          onTap: () => _explorerFocusNode.requestFocus(),
+          behavior: HitTestBehavior.opaque,
+          child: Scrollbar(
+            controller: _scrollController,
+            child: ListView(
+              controller: _scrollController,
+              children: [
+                ...controller.rootItems.map((item) => FileTreeItemWidget(
+                      key: ValueKey(item.path),
+                      item: item,
+                      isSelected: controller.isItemSelected(item),
+                      onItemSelected: (item) =>
+                          _handleItemTap(item, controller),
+                      onLongPress: () => _handleItemLongPress(item, controller),
+                    )),
+                if (_isCreatingNewItem) _buildNewItemInput(controller),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _handleItemTap(FileTreeItem item, FileExplorerController controller) {
+    _explorerFocusNode.requestFocus(); // Request focus when an item is tapped
+    if (controller.isMultiSelectMode) {
+      controller.toggleItemSelection(item);
+    } else {
+      controller.setSelectedItem(item);
+      if (!item.isDirectory) {
+        widget.onFileSelected(item.entity as File);
+      }
+    }
+  }
+
+  KeyEventResult _handleKeyPress(
+      RawKeyEvent event, FileExplorerController controller) {
+    if (event is RawKeyDownEvent) {
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.arrowUp:
+          _navigateUp(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.arrowDown:
+          _navigateDown(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.arrowLeft:
+          _navigateLeft(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.arrowRight:
+          _navigateRight(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.enter:
+          _handleEnter(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.space:
+          _handleSpace(controller);
+          return KeyEventResult.handled;
+      }
+
+      if (event.isControlPressed) {
+        switch (event.logicalKey) {
+          case LogicalKeyboardKey.keyC:
+            _copyItems(context, controller);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyX:
+            _cutItems(context, controller);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyV:
+            _pasteItems(context, controller);
+            return KeyEventResult.handled;
+        }
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _navigateUp(FileExplorerController controller) {
+    final allItems = _flattenItems(controller.rootItems);
+    final currentIndex = controller.selectedItem != null
+        ? allItems.indexOf(controller.selectedItem!)
+        : -1;
+    if (currentIndex > 0) {
+      controller.setSelectedItem(allItems[currentIndex - 1]);
+    } else if (currentIndex == -1) {
+      controller.setSelectedItem(allItems.last);
+    }
+  }
+
+  void _navigateDown(FileExplorerController controller) {
+    final allItems = _flattenItems(controller.rootItems);
+    final currentIndex = controller.selectedItem != null
+        ? allItems.indexOf(controller.selectedItem!)
+        : -1;
+    if (currentIndex < allItems.length - 1) {
+      controller.setSelectedItem(allItems[currentIndex + 1]);
+    } else if (currentIndex == -1) {
+      controller.setSelectedItem(allItems.first);
+    }
+  }
+
+  void _navigateLeft(FileExplorerController controller) {
+    if (controller.selectedItem?.isDirectory == true &&
+        controller.selectedItem!.isExpanded) {
+      controller.toggleDirectoryExpansion(controller.selectedItem!);
+    } else if (controller.selectedItem?.parent != null) {
+      controller.setSelectedItem(controller.selectedItem!.parent!);
+    }
+  }
+
+  void _navigateRight(FileExplorerController controller) {
+    if (controller.selectedItem?.isDirectory == true) {
+      if (!controller.selectedItem!.isExpanded) {
+        controller.toggleDirectoryExpansion(controller.selectedItem!);
+      } else if (controller.selectedItem!.children.isNotEmpty) {
+        controller.setSelectedItem(controller.selectedItem!.children.first);
+      }
+    }
+  }
+
+  List<FileTreeItem> _flattenItems(List<FileTreeItem> items) {
+    List<FileTreeItem> flattened = [];
+    for (var item in items) {
+      flattened.add(item);
+      if (item.isDirectory && item.isExpanded) {
+        flattened.addAll(_flattenItems(item.children));
+      }
+    }
+    return flattened;
+  }
+
+  void _handleEnter(FileExplorerController controller) {
+    if (controller.selectedItem != null) {
+      if (controller.selectedItem!.isDirectory) {
+        controller.toggleDirectoryExpansion(controller.selectedItem!);
+      } else {
+        widget.onFileSelected(controller.selectedItem!.entity as File);
+      }
+    }
+  }
+
+  void _handleSpace(FileExplorerController controller) {
+    if (controller.selectedItem != null) {
+      controller.toggleItemSelection(controller.selectedItem!);
+    }
   }
 
   Widget _buildDirectorySelectionPrompt(ThemeData theme) {
@@ -134,49 +307,6 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
           ),
         ],
       ),
-    );
-  }
-
-  Widget _buildFileExplorer(
-      ThemeData theme, FileExplorerController controller) {
-    if (controller.currentDirectory == null) {
-      return _buildDirectorySelectionPrompt(theme);
-    }
-    return Theme(
-      data: theme.copyWith(
-        scrollbarTheme: ScrollbarThemeData(
-          thumbColor: WidgetStateProperty.all(
-              theme.colorScheme.secondary.withOpacity(0.6)),
-          thickness: WidgetStateProperty.all(6.0),
-          radius: const Radius.circular(0),
-        ),
-      ),
-      child: GestureDetector(
-        onSecondaryTapUp: (details) => _handleSecondaryTapUp(context, details),
-        behavior: HitTestBehavior.translucent,
-        child: Scrollbar(
-          controller: _scrollController,
-          child: ListView(
-            controller: _scrollController,
-            children: [
-              ...controller.rootItems
-                  .map((item) => _buildFileTreeItem(item, controller)),
-              if (_isCreatingNewItem) _buildNewItemInput(controller),
-              const SizedBox(height: 24),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildFileTreeItem(
-      FileTreeItem item, FileExplorerController controller) {
-    return FileTreeItemWidget(
-      key: ValueKey(item.path),
-      item: item,
-      onFileSelected: widget.onFileSelected,
-      onOpenInTerminal: widget.onOpenInTerminal,
     );
   }
 
@@ -215,18 +345,32 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
     );
   }
 
-  void _handleSecondaryTapUp(BuildContext context, TapUpDetails details) {
+  void _handleItemLongPress(
+      FileTreeItem item, FileExplorerController controller) {
+    controller.enterMultiSelectMode();
+    controller.toggleItemSelection(item);
+  }
+
+  void _handleSecondaryTapUp(BuildContext context, TapUpDetails details,
+      FileExplorerController controller) {
+    final tappedItem =
+        controller.findTappedItem(details.globalPosition, controller.rootItems);
+
+    if (tappedItem != null) {
+      controller.setSelectedItem(tappedItem);
+    }
+
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
     final RelativeRect position = RelativeRect.fromRect(
       Rect.fromPoints(details.globalPosition, details.globalPosition),
       Offset.zero & overlay.size,
     );
-    _showContextMenu(context, position);
+    _showContextMenu(context, position, controller);
   }
 
-  void _showContextMenu(BuildContext context, RelativeRect position) {
-    final controller = context.read<FileExplorerController>();
+  void _showContextMenu(BuildContext context, RelativeRect position,
+      FileExplorerController controller) {
     showMenu<void>(
       context: context,
       position: position,
@@ -238,85 +382,57 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
           enabled: false,
           padding: EdgeInsets.zero,
           child: ContextMenu(
-            items: [
-              ContextMenuItem(
-                title: 'New File',
-                onTap: () => _startCreatingNewItem(true),
-              ),
-              ContextMenuItem(
-                title: 'New Folder',
-                onTap: () => _startCreatingNewItem(false),
-              ),
-              ContextMenuItem(
-                title: 'Refresh',
-                onTap: () => controller.refreshDirectory(),
-              ),
-              ContextMenuItem(
-                title: 'Paste',
-                onTap: () => _pasteItem(context, controller),
-              ),
-              ContextMenuItem(
-                title: 'Copy Path',
-                onTap: () => _copyPath(context, false),
-              ),
-              ContextMenuItem(
-                title: 'Copy Relative Path',
-                onTap: () => _copyPath(context, true),
-              ),
-              ContextMenuItem(
-                title: 'Reveal in Finder',
-                onTap: () => _revealInFinder(context),
-              ),
-              ContextMenuItem(
-                title: 'Open in Integrated Terminal',
-                onTap: () =>
-                    widget.onOpenInTerminal(controller.currentDirectory!.path),
-              ),
-            ],
+            items: _buildContextMenuItems(context, controller),
           ),
         ),
       ],
     );
   }
 
-  void _pasteItem(
-      BuildContext context, FileExplorerController controller) async {
-    try {
-      await controller.pasteItem(controller.currentDirectory!.path);
-      await controller.refreshDirectory();
-      MessageToastManager.showToast(context, 'Item pasted successfully');
-    } catch (e) {
-      MessageToastManager.showToast(context, 'Error pasting item: $e');
-    }
-  }
-
-  void _copyPath(BuildContext context, bool relative) {
-    final currentPath =
-        context.read<FileExplorerController>().currentDirectory!.path;
-    final pathToCopy = relative
-        ? path.relative(currentPath, from: path.dirname(currentPath))
-        : currentPath;
-    Clipboard.setData(ClipboardData(text: pathToCopy));
-    MessageToastManager.showToast(
-        context, '${relative ? 'Relative path' : 'Path'} copied to clipboard');
-  }
-
-  void _revealInFinder(BuildContext context) async {
-    final currentPath =
-        context.read<FileExplorerController>().currentDirectory!.path;
-    try {
-      if (Platform.isMacOS) {
-        await Process.run('open', [currentPath]);
-      } else if (Platform.isWindows) {
-        await Process.run('explorer', [currentPath]);
-      } else if (Platform.isLinux) {
-        await Process.run('xdg-open', [currentPath]);
-      } else {
-        throw UnsupportedError('Unsupported platform for reveal in finder');
-      }
-    } catch (e) {
-      MessageToastManager.showToast(context, 'Error revealing in finder: $e');
-    }
+  List<ContextMenuItem> _buildContextMenuItems(
+      BuildContext context, FileExplorerController controller) {
+    return [
+      ContextMenuItem(
+        title: 'New File',
+        onTap: () => _startCreatingNewItem(true),
+      ),
+      ContextMenuItem(
+        title: 'New Folder',
+        onTap: () => _startCreatingNewItem(false),
+      ),
+      ContextMenuItem(
+        title: 'Refresh',
+        onTap: () => controller.refreshDirectory(),
+      ),
+      ContextMenuItem(
+        title: 'Copy',
+        onTap: () => _copyItems(context, controller),
+      ),
+      ContextMenuItem(
+        title: 'Cut',
+        onTap: () => _cutItems(context, controller),
+      ),
+      ContextMenuItem(
+        title: 'Paste',
+        onTap: () => _pasteItems(context, controller),
+      ),
+      ContextMenuItem(
+        title: 'Copy Path',
+        onTap: () => _copyPath(context, false),
+      ),
+      ContextMenuItem(
+        title: 'Copy Relative Path',
+        onTap: () => _copyPath(context, true),
+      ),
+      ContextMenuItem(
+        title: 'Reveal in Finder',
+        onTap: () => _revealInFinder(context),
+      ),
+      ContextMenuItem(
+        title: 'Open in Integrated Terminal',
+        onTap: () => widget.onOpenInTerminal(controller.currentDirectory!.path),
+      ),
+    ];
   }
 
   void _startCreatingNewItem(bool isFile) {
@@ -350,6 +466,68 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       }
     }
     setState(() => _isCreatingNewItem = false);
+  }
+
+  void _copyItems(BuildContext context, FileExplorerController controller) {
+    final selectedItems = controller.selectedItems;
+    if (selectedItems.isNotEmpty) {
+      controller.setCopiedItems(selectedItems);
+      MessageToastManager.showToast(
+          context, '${selectedItems.length} item(s) copied');
+    } else {
+      MessageToastManager.showToast(context, 'No items selected');
+    }
+  }
+
+  void _cutItems(BuildContext context, FileExplorerController controller) {
+    final selectedItems = controller.selectedItems;
+    if (selectedItems.isNotEmpty) {
+      controller.setCutItems(selectedItems);
+      MessageToastManager.showToast(
+          context, '${selectedItems.length} item(s) cut');
+    } else {
+      MessageToastManager.showToast(context, 'No items selected');
+    }
+  }
+
+  Future<void> _pasteItems(
+      BuildContext context, FileExplorerController controller) async {
+    try {
+      await controller.pasteItems(controller.currentDirectory!.path);
+      await controller.refreshDirectory();
+      MessageToastManager.showToast(context, 'Items pasted successfully');
+    } catch (e) {
+      MessageToastManager.showToast(context, 'Error pasting items: $e');
+    }
+  }
+
+  void _copyPath(BuildContext context, bool relative) {
+    final currentPath =
+        context.read<FileExplorerController>().currentDirectory!.path;
+    final pathToCopy = relative
+        ? path.relative(currentPath, from: path.dirname(currentPath))
+        : currentPath;
+    Clipboard.setData(ClipboardData(text: pathToCopy));
+    MessageToastManager.showToast(
+        context, '${relative ? 'Relative path' : 'Path'} copied to clipboard');
+  }
+
+  Future<void> _revealInFinder(BuildContext context) async {
+    final currentPath =
+        context.read<FileExplorerController>().currentDirectory!.path;
+    try {
+      if (Platform.isMacOS) {
+        await Process.run('open', [currentPath]);
+      } else if (Platform.isWindows) {
+        await Process.run('explorer', [currentPath]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [currentPath]);
+      } else {
+        throw UnsupportedError('Unsupported platform for reveal in finder');
+      }
+    } catch (e) {
+      MessageToastManager.showToast(context, 'Error revealing in finder: $e');
+    }
   }
 
   Future<void> _pickDirectory() async {

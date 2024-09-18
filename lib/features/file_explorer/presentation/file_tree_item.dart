@@ -1,91 +1,75 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import 'package:starlight/features/context_menu/context_menu.dart';
 import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
-import 'package:starlight/features/toasts/message_toast.dart';
-import 'package:path/path.dart' as path;
 
-class FileTreeItemWidget extends StatelessWidget {
+class FileTreeItemWidget extends StatefulWidget {
   final FileTreeItem item;
-  final ValueChanged<File> onFileSelected;
-  final Function(String) onOpenInTerminal;
+  final bool isSelected;
+  final ValueChanged<FileTreeItem> onItemSelected;
+  final VoidCallback onLongPress;
 
   const FileTreeItemWidget({
     Key? key,
     required this.item,
-    required this.onFileSelected,
-    required this.onOpenInTerminal,
+    required this.isSelected,
+    required this.onItemSelected,
+    required this.onLongPress,
   }) : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return Consumer<FileExplorerController>(
-      builder: (context, controller, child) {
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            GestureDetector(
-              onTap: () => controller.toggleDirectoryExpansion(item),
-              child: _FileTreeItemContent(
-                item: item,
-                onTap: () {
-                  if (item.isDirectory) {
-                    controller.toggleDirectoryExpansion(item);
-                  } else if (item.entity is File) {
-                    onFileSelected(item.entity as File);
-                  }
-                },
-              ),
-            ),
-            if (item.isDirectory && item.isExpanded)
-              Padding(
-                padding: EdgeInsets.only(left: 16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: item.children
-                      .map((child) => FileTreeItemWidget(
-                            key: ValueKey(child.path),
-                            item: child,
-                            onFileSelected: onFileSelected,
-                            onOpenInTerminal: onOpenInTerminal,
-                          ))
-                      .toList(),
-                ),
-              ),
-          ],
-        );
-      },
-    );
-  }
+  _FileTreeItemWidgetState createState() => _FileTreeItemWidgetState();
 }
 
-class _FileTreeItemContent extends StatelessWidget {
-  final FileTreeItem item;
-  final VoidCallback onTap;
+class _FileTreeItemWidgetState extends State<FileTreeItemWidget> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateRenderBox();
+      }
+    });
+  }
 
-  const _FileTreeItemContent({
-    required this.item,
-    required this.onTap,
-  });
+  @override
+  void didUpdateWidget(FileTreeItemWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _updateRenderBox();
+      }
+    });
+  }
+
+  void _updateRenderBox() {
+    if (!mounted) return;
+    final RenderBox? renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      widget.item.setRenderBox(renderBox);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return InkWell(
-      onTap: onTap,
+    return GestureDetector(
+      onTap: () => widget.onItemSelected(widget.item),
+      onLongPress: widget.onLongPress,
       child: Container(
-        padding: EdgeInsets.only(left: 8.0 * (item.level + 1)),
+        color: widget.isSelected
+            ? Theme.of(context).colorScheme.secondary.withOpacity(0.3)
+            : null,
+        padding: EdgeInsets.only(left: 16.0 * widget.item.level),
         height: 24,
         child: Row(
           children: [
-            _buildIcon(theme),
-            const SizedBox(width: 4),
+            _buildIcon(context),
+            SizedBox(width: 4),
             Expanded(
               child: Text(
-                item.name,
-                style: theme.textTheme.bodyMedium?.copyWith(fontSize: 14),
+                widget.item.name,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontSize: 14),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -95,25 +79,24 @@ class _FileTreeItemContent extends StatelessWidget {
     );
   }
 
-  Widget _buildIcon(ThemeData theme) {
-    const double iconSize = 14.0;
+  Widget _buildIcon(BuildContext context) {
+    final theme = Theme.of(context);
+    const double iconSize = 16.0;
     final IconData iconData;
     final Color iconColor;
-    if (item.isDirectory) {
-      iconData = item.isExpanded ? Icons.folder_open : Icons.folder;
+
+    if (widget.item.isDirectory) {
+      iconData = widget.item.isExpanded ? Icons.folder_open : Icons.folder;
       iconColor = theme.colorScheme.primary;
     } else {
       iconData = Icons.insert_drive_file;
       iconColor = theme.iconTheme.color?.withOpacity(0.7) ?? Colors.grey;
     }
+
     return Icon(
       iconData,
       size: iconSize,
       color: iconColor,
     );
   }
-}
-
-extension on FileTreeItem {
-  String get name => path.split('/').last;
 }
