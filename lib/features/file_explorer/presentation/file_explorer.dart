@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/context_menu/context_menu.dart';
 import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
+import 'package:starlight/features/file_explorer/infrastructure/file_operation.dart';
 import 'package:starlight/features/file_explorer/infrastructure/services/file_service.dart';
 import 'package:starlight/features/file_explorer/presentation/file_tree_item.dart';
 import 'package:starlight/features/toasts/message_toast.dart';
@@ -62,6 +63,9 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
   bool _isCreatingFile = true;
 
   static const double _itemHeight = 24.0;
+
+  List<FileOperation> _undoStack = [];
+  List<FileOperation> _redoStack = [];
 
   @override
   bool get wantKeepAlive => true;
@@ -281,14 +285,15 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       RawKeyEvent event, FileExplorerController controller) {
     if (event is RawKeyDownEvent) {
       if (_isCreatingNewItem) {
-        // If creating a new item, only handle Enter key
         if (event.logicalKey == LogicalKeyboardKey.enter) {
           _handleNewItemCreation();
           return KeyEventResult.handled;
         }
-        // Let other keys (including backspace) be handled by the TextField
         return KeyEventResult.ignored;
       }
+
+      final bool isShiftPressed = event.isShiftPressed;
+      final bool isCtrlPressed = event.isControlPressed || event.isMetaPressed;
 
       switch (event.logicalKey) {
         case LogicalKeyboardKey.arrowUp:
@@ -310,17 +315,14 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
           _handleSpace(controller);
           return KeyEventResult.handled;
         case LogicalKeyboardKey.delete:
-          _handleDelete(context, controller);
-          return KeyEventResult.handled;
         case LogicalKeyboardKey.backspace:
-          if (event.isControlPressed || event.isMetaPressed) {
-            // Only handle Ctrl+Backspace or Cmd+Backspace (on Mac) for deletion
-            _handleDelete(context, controller);
+          if (isCtrlPressed || isShiftPressed) {
+            _handleDelete(context, controller, isShiftPressed);
             return KeyEventResult.handled;
           }
       }
 
-      if (event.isControlPressed) {
+      if (isCtrlPressed) {
         switch (event.logicalKey) {
           case LogicalKeyboardKey.keyC:
             _copyItems(context, controller);
@@ -331,52 +333,130 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
           case LogicalKeyboardKey.keyV:
             _pasteItems(context, controller);
             return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyZ:
+            if (isShiftPressed) {
+              _redo(context, controller);
+            } else {
+              _undo(context, controller);
+            }
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyY:
+            _redo(context, controller);
+            return KeyEventResult.handled;
         }
       }
     }
     return KeyEventResult.ignored;
   }
 
-  void _handleDelete(BuildContext context, FileExplorerController controller) {
+  void _handleDelete(BuildContext context, FileExplorerController controller,
+      bool forceDelete) async {
     if (controller.selectedItems.isNotEmpty) {
-      _deleteItems(context, controller, controller.selectedItems);
+      if (forceDelete) {
+        await _deleteItems(context, controller, controller.selectedItems, true);
+      } else {
+        await _deleteItems(
+            context, controller, controller.selectedItems, false);
+      }
     }
   }
 
-  Future<void> _deleteItems(BuildContext context,
-      FileExplorerController controller, List<FileTreeItem> items) async {
-    final bool confirmDelete = await showDialog<bool>(
-          context: context,
-          builder: (BuildContext context) {
-            return AlertDialog(
-              title: Text('Confirm Delete'),
-              content: Text(
-                  'Are you sure you want to delete ${items.length} item(s)?'),
-              actions: <Widget>[
-                TextButton(
-                  child: Text('Cancel'),
-                  onPressed: () => Navigator.of(context).pop(false),
-                ),
-                TextButton(
-                  child: Text('Delete'),
-                  onPressed: () => Navigator.of(context).pop(true),
-                ),
-              ],
-            );
-          },
-        ) ??
-        false;
-
+  Future<void> _deleteItems(
+      BuildContext context,
+      FileExplorerController controller,
+      List<FileTreeItem> items,
+      bool forceDelete) async {
+    bool confirmDelete = forceDelete;
+    if (!forceDelete) {
+      confirmDelete = await showDialog<bool>(
+            context: context,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                title: Text('Confirm Delete'),
+                content: Text(
+                    'Are you sure you want to delete ${items.length} item(s)?'),
+                actions: <Widget>[
+                  TextButton(
+                    child: Text('Cancel'),
+                    onPressed: () => Navigator.of(context).pop(false),
+                  ),
+                  TextButton(
+                    child: Text('Delete'),
+                    onPressed: () => Navigator.of(context).pop(true),
+                  ),
+                ],
+              );
+            },
+          ) ??
+          false;
+    }
     if (confirmDelete) {
       try {
+        List<FileOperation> deleteOperations = [];
         for (var item in items) {
           await controller.delete(item.path);
+          deleteOperations.add(FileOperation(OperationType.delete, item.path,
+              item.path)); // Changed null to item.path
         }
+        _addToUndoStack(deleteOperations);
+        await controller.refreshDirectory();
         MessageToastManager.showToast(
             context, '${items.length} item(s) deleted successfully');
       } catch (e) {
         MessageToastManager.showToast(context, 'Error deleting items: $e');
       }
+    }
+  }
+
+  Future<void> _pasteItems(
+      BuildContext context, FileExplorerController controller) async {
+    try {
+      List<FileOperation> pasteOperations =
+          await controller.pasteItems(controller.currentDirectory!.path);
+      _addToUndoStack(pasteOperations);
+      await controller.refreshDirectory();
+      MessageToastManager.showToast(context, 'Items pasted successfully');
+    } catch (e) {
+      MessageToastManager.showToast(context, 'Error pasting items: $e');
+    }
+  }
+
+  void _addToUndoStack(List<FileOperation> operations) {
+    _undoStack.add(FileOperation.combine(operations));
+    _redoStack.clear();
+  }
+
+  Future<void> _undo(
+      BuildContext context, FileExplorerController controller) async {
+    if (_undoStack.isNotEmpty) {
+      try {
+        FileOperation operation = _undoStack.removeLast();
+        List<FileOperation> undoOperations = await operation.undo(controller);
+        _redoStack.add(FileOperation.combine(undoOperations));
+        await controller.refreshDirectory();
+        MessageToastManager.showToast(context, 'Undo successful');
+      } catch (e) {
+        MessageToastManager.showToast(context, 'Error undoing operation: $e');
+      }
+    } else {
+      MessageToastManager.showToast(context, 'Nothing to undo');
+    }
+  }
+
+  Future<void> _redo(
+      BuildContext context, FileExplorerController controller) async {
+    if (_redoStack.isNotEmpty) {
+      try {
+        FileOperation operation = _redoStack.removeLast();
+        List<FileOperation> redoOperations = await operation.redo(controller);
+        _undoStack.add(FileOperation.combine(redoOperations));
+        await controller.refreshDirectory();
+        MessageToastManager.showToast(context, 'Redo successful');
+      } catch (e) {
+        MessageToastManager.showToast(context, 'Error redoing operation: $e');
+      }
+    } else {
+      MessageToastManager.showToast(context, 'Nothing to redo');
     }
   }
 
@@ -733,17 +813,6 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
           context, '${selectedItems.length} item(s) cut');
     } else {
       MessageToastManager.showToast(context, 'No items selected');
-    }
-  }
-
-  Future<void> _pasteItems(
-      BuildContext context, FileExplorerController controller) async {
-    try {
-      await controller.pasteItems(controller.currentDirectory!.path);
-      await controller.refreshDirectory();
-      MessageToastManager.showToast(context, 'Items pasted successfully');
-    } catch (e) {
-      MessageToastManager.showToast(context, 'Error pasting items: $e');
     }
   }
 

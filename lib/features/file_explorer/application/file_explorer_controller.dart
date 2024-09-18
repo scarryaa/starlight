@@ -1,8 +1,8 @@
 import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as path;
+import 'package:starlight/features/file_explorer/infrastructure/file_operation.dart';
 
 class FileExplorerController extends ChangeNotifier {
   Directory? _currentDirectory;
@@ -11,7 +11,7 @@ class FileExplorerController extends ChangeNotifier {
   List<FileTreeItem> _cutItems = [];
   List<FileTreeItem> _copiedItems = [];
   FileTreeItem? _selectedItem;
-  Set<FileTreeItem> _selectedItems = {};
+  final Set<FileTreeItem> _selectedItems = {};
   bool _isMultiSelectMode = false;
 
   // Getters
@@ -70,9 +70,10 @@ class FileExplorerController extends ChangeNotifier {
     return null;
   }
 
-  Future<void> pasteItems(String destinationPath) async {
+  Future<List<FileOperation>> pasteItems(String destinationPath) async {
     final itemsToPaste = _cutItems.isNotEmpty ? _cutItems : _copiedItems;
     final isCutOperation = _cutItems.isNotEmpty;
+    List<FileOperation> operations = [];
 
     for (var item in itemsToPaste) {
       final newPath = isCutOperation
@@ -80,15 +81,19 @@ class FileExplorerController extends ChangeNotifier {
           : _generateUniquePathIfNeeded(destinationPath, item.name);
 
       if (isCutOperation) {
-        await _moveItem(item.path, newPath);
+        await moveItem(item.path, newPath);
+        operations.add(FileOperation(OperationType.move, item.path, newPath));
       } else {
-        await _copyItem(item.path, newPath);
+        await copyItem(item.path, newPath);
+        operations.add(FileOperation(OperationType.copy, item.path, newPath));
       }
     }
 
     _cutItems.clear();
     _copiedItems.clear();
     notifyListeners();
+
+    return operations;
   }
 
   Future<void> toggleDirectoryExpansion(FileTreeItem item) async {
@@ -99,6 +104,68 @@ class FileExplorerController extends ChangeNotifier {
             Directory(item.path), item.level + 1, item);
       }
       notifyListeners();
+    }
+  }
+
+  Future<void> moveItem(String sourcePath, String destinationPath) async {
+    final source =
+        FileSystemEntity.typeSync(sourcePath) == FileSystemEntityType.directory
+            ? Directory(sourcePath)
+            : File(sourcePath);
+
+    try {
+      await source.rename(destinationPath);
+    } catch (e) {
+      // If rename fails (e.g., across devices), fallback to copy and delete
+      await _copyItem(sourcePath, destinationPath);
+      await source.delete(recursive: true);
+    }
+    await refreshDirectory();
+  }
+
+  Future<void> copyItem(String sourcePath, String destinationPath) async {
+    await _copyItem(sourcePath, destinationPath);
+    await refreshDirectory();
+  }
+
+  Future<void> _copyDirectory(Directory source, Directory destination) async {
+    await destination.create(recursive: true);
+    await for (var entity in source.list(recursive: false)) {
+      if (entity is Directory) {
+        var newDirectory =
+            Directory(path.join(destination.path, path.basename(entity.path)));
+        await _copyDirectory(entity.absolute, newDirectory);
+      } else if (entity is File) {
+        await entity
+            .copy(path.join(destination.path, path.basename(entity.path)));
+      }
+    }
+  }
+
+  Future<void> _copyItem(String sourcePath, String destinationPath) async {
+    if (FileSystemEntity.typeSync(sourcePath) ==
+        FileSystemEntityType.directory) {
+      final sourceDir = Directory(sourcePath);
+      final destinationDir = Directory(destinationPath);
+      await _copyDirectory(sourceDir, destinationDir);
+    } else {
+      final sourceFile = File(sourcePath);
+      await sourceFile.copy(destinationPath);
+    }
+  }
+
+  Future<void> _moveItem(String sourcePath, String destinationPath) async {
+    final source =
+        FileSystemEntity.typeSync(sourcePath) == FileSystemEntityType.directory
+            ? Directory(sourcePath)
+            : File(sourcePath);
+
+    try {
+      await source.rename(destinationPath);
+    } catch (e) {
+      // If rename fails (e.g., across devices), fallback to copy and delete
+      await _copyItem(sourcePath, destinationPath);
+      await source.delete(recursive: true);
     }
   }
 
@@ -123,47 +190,6 @@ class FileExplorerController extends ChangeNotifier {
     }
 
     return newPath;
-  }
-
-  Future<void> _moveItem(String sourcePath, String destinationPath) async {
-    final source =
-        FileSystemEntity.typeSync(sourcePath) == FileSystemEntityType.directory
-            ? Directory(sourcePath)
-            : File(sourcePath);
-
-    try {
-      await source.rename(destinationPath);
-    } catch (e) {
-      // If rename fails (e.g., across devices), fallback to copy and delete
-      await _copyItem(sourcePath, destinationPath);
-      await source.delete(recursive: true);
-    }
-  }
-
-  Future<void> _copyItem(String sourcePath, String destinationPath) async {
-    if (FileSystemEntity.typeSync(sourcePath) ==
-        FileSystemEntityType.directory) {
-      final sourceDir = Directory(sourcePath);
-      final destinationDir = Directory(destinationPath);
-      await _copyDirectory(sourceDir, destinationDir);
-    } else {
-      final sourceFile = File(sourcePath);
-      await sourceFile.copy(destinationPath);
-    }
-  }
-
-  Future<void> _copyDirectory(Directory source, Directory destination) async {
-    await destination.create(recursive: true);
-    await for (var entity in source.list(recursive: false)) {
-      if (entity is Directory) {
-        var newDirectory =
-            Directory(path.join(destination.path, path.basename(entity.path)));
-        await _copyDirectory(entity.absolute, newDirectory);
-      } else if (entity is File) {
-        await entity
-            .copy(path.join(destination.path, path.basename(entity.path)));
-      }
-    }
   }
 
   Future<void> refreshDirectory() async {
