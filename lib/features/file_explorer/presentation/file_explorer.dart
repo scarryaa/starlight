@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/context_menu/context_menu.dart';
@@ -60,6 +61,8 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
   bool _isCreatingNewItem = false;
   bool _isCreatingFile = true;
 
+  static const double _itemHeight = 24.0;
+
   @override
   bool get wantKeepAlive => true;
 
@@ -92,8 +95,68 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       final controller = context.read<FileExplorerController>();
       if (controller.selectedItem == null && controller.rootItems.isNotEmpty) {
         controller.setSelectedItem(controller.rootItems.first);
+        _scrollToSelectedItem(ScrollDirection.forward);
       }
     }
+  }
+
+  void _scrollToSelectedItem(ScrollDirection direction) {
+    final controller = context.read<FileExplorerController>();
+    if (controller.selectedItem != null) {
+      final selectedItemIndex =
+          _findItemIndex(controller.rootItems, controller.selectedItem!);
+      if (selectedItemIndex != -1) {
+        final itemPosition = selectedItemIndex * _itemHeight;
+        final viewportHeight = _scrollController.position.viewportDimension;
+        final currentScrollOffset = _scrollController.offset;
+
+        double targetScrollOffset = currentScrollOffset;
+
+        if (direction == ScrollDirection.forward) {
+          // Scrolling down
+          final bottomEdge = currentScrollOffset + viewportHeight;
+          if (itemPosition + _itemHeight > bottomEdge) {
+            targetScrollOffset = itemPosition - viewportHeight + _itemHeight;
+          }
+        } else {
+          // Scrolling up
+          if (itemPosition < currentScrollOffset) {
+            targetScrollOffset = itemPosition;
+          }
+        }
+
+        targetScrollOffset = targetScrollOffset.clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        );
+
+        if ((targetScrollOffset - currentScrollOffset).abs() > 1.0) {
+          _scrollController.animateTo(
+            targetScrollOffset,
+            duration: const Duration(milliseconds: 1),
+            curve: Curves.easeInOut,
+          );
+        }
+      }
+    }
+  }
+
+  int _findItemIndex(List<FileTreeItem> items, FileTreeItem target,
+      [int startIndex = 0]) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] == target) {
+        return startIndex + i;
+      }
+      if (items[i].isDirectory && items[i].isExpanded) {
+        final childIndex =
+            _findItemIndex(items[i].children, target, startIndex + i + 1);
+        if (childIndex != -1) {
+          return childIndex;
+        }
+        startIndex += items[i].children.length;
+      }
+    }
+    return -1;
   }
 
   @override
@@ -124,9 +187,9 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
     return Theme(
       data: theme.copyWith(
         scrollbarTheme: ScrollbarThemeData(
-          thumbColor: MaterialStateProperty.all(
+          thumbColor: WidgetStateProperty.all(
               theme.colorScheme.secondary.withOpacity(0.6)),
-          thickness: MaterialStateProperty.all(6.0),
+          thickness: WidgetStateProperty.all(6.0),
           radius: const Radius.circular(0),
         ),
       ),
@@ -141,14 +204,7 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
             child: ListView(
               controller: _scrollController,
               children: [
-                ...controller.rootItems.map((item) => FileTreeItemWidget(
-                      key: ValueKey(item.path),
-                      item: item,
-                      isSelected: controller.isItemSelected(item),
-                      onItemSelected: (item) =>
-                          _handleItemTap(item, controller),
-                      onLongPress: () => _handleItemLongPress(item, controller),
-                    )),
+                ..._buildFileTreeItems(controller.rootItems, controller),
                 if (_isCreatingNewItem) _buildNewItemInput(controller),
                 const SizedBox(height: 24),
               ],
@@ -159,16 +215,37 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
     );
   }
 
+  List<Widget> _buildFileTreeItems(
+      List<FileTreeItem> items, FileExplorerController controller) {
+    List<Widget> widgets = [];
+    for (var item in items) {
+      widgets.add(FileTreeItemWidget(
+        key: ValueKey(item.path),
+        item: item,
+        isSelected: controller.isItemSelected(item),
+        onItemSelected: (item) => _handleItemTap(item, controller),
+        onLongPress: () => _handleItemLongPress(item, controller),
+      ));
+      if (item.isDirectory && item.isExpanded) {
+        widgets.addAll(_buildFileTreeItems(item.children, controller));
+      }
+    }
+    return widgets;
+  }
+
   void _handleItemTap(FileTreeItem item, FileExplorerController controller) {
-    _explorerFocusNode.requestFocus(); // Request focus when an item is tapped
+    _explorerFocusNode.requestFocus();
     if (controller.isMultiSelectMode) {
       controller.toggleItemSelection(item);
     } else {
       controller.setSelectedItem(item);
-      if (!item.isDirectory) {
+      if (item.isDirectory) {
+        controller.toggleDirectoryExpansion(item);
+      } else {
         widget.onFileSelected(item.entity as File);
       }
     }
+    _scrollToSelectedItem(ScrollDirection.forward);
   }
 
   KeyEventResult _handleKeyPress(
@@ -219,8 +296,10 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
         : -1;
     if (currentIndex > 0) {
       controller.setSelectedItem(allItems[currentIndex - 1]);
+      _scrollToSelectedItem(ScrollDirection.reverse);
     } else if (currentIndex == -1) {
       controller.setSelectedItem(allItems.last);
+      _scrollToSelectedItem(ScrollDirection.reverse);
     }
   }
 
@@ -231,8 +310,10 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
         : -1;
     if (currentIndex < allItems.length - 1) {
       controller.setSelectedItem(allItems[currentIndex + 1]);
+      _scrollToSelectedItem(ScrollDirection.forward);
     } else if (currentIndex == -1) {
       controller.setSelectedItem(allItems.first);
+      _scrollToSelectedItem(ScrollDirection.forward);
     }
   }
 
@@ -242,6 +323,7 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       controller.toggleDirectoryExpansion(controller.selectedItem!);
     } else if (controller.selectedItem?.parent != null) {
       controller.setSelectedItem(controller.selectedItem!.parent!);
+      _scrollToSelectedItem(ScrollDirection.reverse);
     }
   }
 
@@ -251,6 +333,7 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
         controller.toggleDirectoryExpansion(controller.selectedItem!);
       } else if (controller.selectedItem!.children.isNotEmpty) {
         controller.setSelectedItem(controller.selectedItem!.children.first);
+        _scrollToSelectedItem(ScrollDirection.forward);
       }
     }
   }
