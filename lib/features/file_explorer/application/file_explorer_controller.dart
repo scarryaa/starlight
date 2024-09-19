@@ -224,13 +224,11 @@ class FileExplorerController extends ChangeNotifier {
   }
 
   void setSelectedItem(FileTreeItem? item) {
-    _selectedItem = item;
-    if (!_isMultiSelectMode) {
-      _selectedItems.clear();
-      if (item != null) {
-        _selectedItems.add(item);
-      }
-    }
+    selectItem(item!);
+  }
+
+  void clearSelectedItems() {
+    _selectedItems.clear();
     notifyListeners();
   }
 

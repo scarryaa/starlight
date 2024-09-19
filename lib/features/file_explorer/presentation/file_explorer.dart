@@ -242,9 +242,12 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
 
   void _handleItemTap(FileTreeItem item, FileExplorerController controller) {
     _explorerFocusNode.requestFocus();
-    if (controller.isMultiSelectMode) {
+    if (_isCtrlOrCmdPressed()) {
       controller.toggleItemSelection(item);
+    } else if (_isShiftPressed() && controller.selectedItem != null) {
+      _handleShiftClickSelection(controller, item);
     } else {
+      controller.clearSelectedItems();
       controller.setSelectedItem(item);
       if (item.isDirectory) {
         controller.toggleDirectoryExpansion(item);
@@ -253,6 +256,45 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       }
     }
     _scrollToSelectedItem(ScrollDirection.forward);
+  }
+
+  bool _isCtrlOrCmdPressed() {
+    return RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.controlLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.controlRight) ||
+        (Platform.isMacOS && // Check for Cmd on macOS
+            (RawKeyboard.instance.keysPressed
+                    .contains(LogicalKeyboardKey.metaLeft) ||
+                RawKeyboard.instance.keysPressed
+                    .contains(LogicalKeyboardKey.metaRight)));
+  }
+
+  bool _isShiftPressed() {
+    return RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.shiftLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.shiftRight);
+  }
+
+  void _handleShiftClickSelection(
+      FileExplorerController controller, FileTreeItem item) {
+    final allItems = _flattenItems(controller.rootItems);
+    final selectedItemIndex = allItems.indexOf(controller.selectedItem!);
+    final clickedItemIndex = allItems.indexOf(item);
+
+    if (selectedItemIndex != -1 && clickedItemIndex != -1) {
+      final startIndex = selectedItemIndex.compareTo(clickedItemIndex) < 0
+          ? selectedItemIndex
+          : clickedItemIndex;
+      final endIndex = selectedItemIndex.compareTo(clickedItemIndex) < 0
+          ? clickedItemIndex
+          : selectedItemIndex;
+
+      for (int i = startIndex; i <= endIndex; i++) {
+        controller.selectItem(allItems[i]);
+      }
+    }
   }
 
   void _handleItemLongPress(
@@ -270,15 +312,6 @@ class _FileExplorerContentState extends State<_FileExplorerContent>
       Offset.zero & overlay.size,
     );
     _showContextMenu(context, position, controller, item);
-  }
-
-  void _toggleItemSelection(
-      FileTreeItem item, FileExplorerController controller) {
-    if (controller.isItemSelected(item)) {
-      controller.deselectItem(item);
-    } else {
-      controller.selectItem(item);
-    }
   }
 
   KeyEventResult _handleKeyPress(
