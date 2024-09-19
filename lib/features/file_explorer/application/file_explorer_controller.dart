@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 // ignore: no_leading_underscores_for_library_prefixes
 import 'package:path/path.dart' as _path;
 import 'package:path_provider/path_provider.dart';
+import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/features/file_explorer/infrastructure/file_operation.dart';
 
 class FileExplorerController extends ChangeNotifier {
@@ -39,14 +40,16 @@ class FileExplorerController extends ChangeNotifier {
 
   // File operations
   Future<void> createFile(String parentPath, String fileName) async {
-    final newFile = File(_path.join(parentPath, fileName));
-    await newFile.create();
+    final newFilePath = _path.join(parentPath, fileName);
+    final file = File(newFilePath);
+    await file.create();
     await refreshDirectory();
   }
 
   Future<void> createFolder(String parentPath, String folderName) async {
-    final newFolder = Directory(_path.join(parentPath, folderName));
-    await newFolder.create();
+    final newFolderPath = _path.join(parentPath, folderName);
+    final directory = Directory(newFolderPath);
+    await directory.create();
     await refreshDirectory();
   }
 
@@ -80,6 +83,26 @@ class FileExplorerController extends ChangeNotifier {
       print('Error in moveToTemp: $e');
       rethrow;
     }
+  }
+
+  FileTreeItem? findItemByPath(String path) {
+    return _findItemByPathRecursive(rootItems, path);
+  }
+
+  FileTreeItem? _findItemByPathRecursive(
+      List<FileTreeItem> items, String path) {
+    for (var item in items) {
+      if (item.path == path) {
+        return item;
+      }
+      if (item.isDirectory) {
+        final found = _findItemByPathRecursive(item.children, path);
+        if (found != null) {
+          return found;
+        }
+      }
+    }
+    return null;
   }
 
   Future<void> clearTempDirectory() async {
@@ -424,25 +447,5 @@ class FileExplorerController extends ChangeNotifier {
   Future<void> dispose() async {
     await clearTempDirectory();
     super.dispose();
-  }
-}
-
-class FileTreeItem {
-  final FileSystemEntity entity;
-  final int level;
-  bool isExpanded;
-  List<FileTreeItem> children;
-  RenderBox? renderBox;
-  final FileTreeItem? parent;
-
-  FileTreeItem(this.entity, this.level, this.isExpanded, this.parent)
-      : children = [];
-
-  bool get isDirectory => entity is Directory;
-  String get name => _path.basename(path);
-  String get path => entity.path;
-
-  void setRenderBox(RenderBox box) {
-    renderBox = box;
   }
 }

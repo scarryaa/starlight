@@ -1,0 +1,787 @@
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:path/path.dart' as path;
+import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
+import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
+import 'package:starlight/features/file_explorer/infrastructure/file_operation.dart';
+import 'package:starlight/features/file_explorer/presentation/widgets/file_tree_item_widget.dart';
+import 'package:starlight/features/file_explorer/presentation/widgets/new_item_input.dart';
+import 'package:starlight/features/file_explorer/presentation/widgets/directory_selection_prompt.dart';
+import 'package:starlight/features/file_explorer/application/file_operation_manager.dart';
+import 'package:starlight/features/file_explorer/presentation/widgets/context_menu_builder.dart';
+import 'package:starlight/features/toasts/message_toast.dart';
+import 'package:starlight/features/file_explorer/infrastructure/services/file_service.dart';
+
+class FileExplorerContent extends StatefulWidget {
+  final Function(File) onFileSelected;
+  final Function(String?) onDirectorySelected;
+  final Function(String) onOpenInTerminal;
+
+  const FileExplorerContent({
+    super.key,
+    required this.onFileSelected,
+    required this.onDirectorySelected,
+    required this.onOpenInTerminal,
+  });
+
+  @override
+  _FileExplorerContentState createState() => _FileExplorerContentState();
+}
+
+class _FileExplorerContentState extends State<FileExplorerContent>
+    with AutomaticKeepAliveClientMixin {
+  static const double _itemHeight = 24.0;
+
+  late ScrollController _scrollController;
+  late FocusNode _explorerFocusNode;
+  late FileOperationManager _fileOperationManager;
+
+  bool _isCreatingNewItem = false;
+  FileTreeItem? _newItemParent;
+  bool _isCreatingFile = true;
+
+  @override
+  bool get wantKeepAlive => true;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController = ScrollController();
+    _explorerFocusNode = FocusNode();
+    _explorerFocusNode.addListener(_onExplorerFocusChange);
+    _fileOperationManager = FileOperationManager(context);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    _explorerFocusNode.removeListener(_onExplorerFocusChange);
+    _explorerFocusNode.dispose();
+    super.dispose();
+  }
+
+  void _onExplorerFocusChange() {
+    if (_explorerFocusNode.hasFocus) {
+      final controller = context.read<FileExplorerController>();
+      if (controller.selectedItem == null && controller.rootItems.isNotEmpty) {
+        controller.setSelectedItem(controller.rootItems.first);
+        _scrollToSelectedItem(ScrollDirection.forward);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    super.build(context);
+    final theme = Theme.of(context);
+    return Container(
+      color: theme.scaffoldBackgroundColor,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Consumer<FileExplorerController>(
+              builder: (context, controller, child) =>
+                  _buildFileExplorer(theme, controller),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFileExplorer(
+      ThemeData theme, FileExplorerController controller) {
+    if (controller.currentDirectory == null) {
+      return DirectorySelectionPrompt(onSelectDirectory: _pickDirectory);
+    }
+    return Theme(
+      data: theme.copyWith(
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: WidgetStateProperty.all(
+              theme.colorScheme.secondary.withOpacity(0.6)),
+          thickness: WidgetStateProperty.all(6.0),
+          radius: const Radius.circular(0),
+        ),
+      ),
+      child: Focus(
+        focusNode: _explorerFocusNode,
+        onKey: (node, event) => _handleKeyPress(event, controller),
+        child: GestureDetector(
+          onTap: () => _explorerFocusNode.requestFocus(),
+          onSecondaryTapUp: (details) =>
+              _handleEmptySpaceRightClick(context, details, controller),
+          behavior: HitTestBehavior.opaque,
+          child: Scrollbar(
+            controller: _scrollController,
+            child: ListView(
+              controller: _scrollController,
+              children: [
+                ..._buildFileTreeItems(controller.rootItems, controller),
+                if (_isCreatingNewItem && _newItemParent == null)
+                  NewItemInput(
+                    onItemCreated: (name, isFile) =>
+                        _handleNewItemCreation(controller, name, isFile),
+                    onCancel: _cancelNewItemCreation,
+                    parent: _newItemParent,
+                    isCreatingFile: _isCreatingFile,
+                  ),
+                const SizedBox(height: 24),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  List<Widget> _buildFileTreeItems(
+      List<FileTreeItem> items, FileExplorerController controller) {
+    return items.expand((item) {
+      final List<Widget> widgets = [
+        FileTreeItemWidget(
+          key: ValueKey(item.path),
+          item: item,
+          isSelected: controller.isItemSelected(item),
+          onItemSelected: (item) => _handleItemTap(item, controller),
+          onItemLongPress: () => _handleItemLongPress(item, controller),
+          onSecondaryTap: (details) =>
+              _handleItemSecondaryTap(context, details, item, controller),
+        ),
+      ];
+      if (item == _newItemParent && _isCreatingNewItem) {
+        widgets.add(NewItemInput(
+          onItemCreated: (name, isFile) =>
+              _handleNewItemCreation(controller, name, isFile),
+          onCancel: _cancelNewItemCreation,
+          parent: _newItemParent,
+          isCreatingFile: _isCreatingFile,
+        ));
+      }
+      if (item.isDirectory && item.isExpanded) {
+        widgets.addAll(_buildFileTreeItems(item.children, controller));
+      }
+      return widgets;
+    }).toList();
+  }
+
+  Future<void> _handleNewItemCreation(
+      FileExplorerController controller, String name, bool isFile) async {
+    if (name.isNotEmpty) {
+      try {
+        final parentPath =
+            _newItemParent?.path ?? controller.currentDirectory!.path;
+
+        print('Creating new item in: $parentPath');
+
+        final newItemPath = path.join(parentPath, name);
+        if (isFile) {
+          await controller.createFile(parentPath, name);
+        } else {
+          await controller.createFolder(parentPath, name);
+        }
+        await controller.refreshDirectory();
+        final newItem = controller.findItemByPath(newItemPath);
+        if (newItem != null) {
+          controller.setSelectedItem(newItem);
+          _scrollToSelectedItem(ScrollDirection.forward);
+        }
+        MessageToastManager.showToast(
+            context, '${isFile ? 'File' : 'Folder'} created successfully');
+      } catch (e) {
+        MessageToastManager.showToast(
+            context, 'Error creating ${isFile ? 'file' : 'folder'}: $e');
+      } finally {
+        _cancelNewItemCreation();
+      }
+    } else {
+      _cancelNewItemCreation();
+    }
+  }
+
+  void _cancelNewItemCreation() {
+    setState(() {
+      _isCreatingNewItem = false;
+      _newItemParent = null;
+      _isCreatingFile = true;
+      _explorerFocusNode.requestFocus();
+    });
+  }
+
+  void _handleEmptySpaceRightClick(BuildContext context, TapUpDetails details,
+      FileExplorerController controller) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(details.globalPosition, details.globalPosition),
+      Offset.zero & overlay.size,
+    );
+    showContextMenu(
+        context,
+        position,
+        controller,
+        null,
+        _startCreatingNewItem,
+        _copyItems,
+        _cutItems,
+        _renameItem,
+        _deleteItem,
+        _deleteItems,
+        _copyPath,
+        _revealInFinder,
+        widget.onOpenInTerminal,
+        _fileOperationManager);
+  }
+
+  void _handleItemTap(FileTreeItem item, FileExplorerController controller) {
+    _explorerFocusNode.requestFocus();
+    if (_isCtrlOrCmdPressed()) {
+      controller.toggleItemSelection(item);
+    } else if (_isShiftPressed() && controller.selectedItem != null) {
+      _handleShiftClickSelection(controller, item);
+    } else {
+      controller.clearSelectedItems();
+      controller.setSelectedItem(item);
+      if (item.isDirectory) {
+        controller.toggleDirectoryExpansion(item);
+      } else {
+        widget.onFileSelected(item.entity as File);
+      }
+    }
+    _scrollToSelectedItem(ScrollDirection.forward);
+  }
+
+  void _handleItemLongPress(
+      FileTreeItem item, FileExplorerController controller) {
+    controller.selectItem(item);
+  }
+
+  void _handleItemSecondaryTap(BuildContext context, TapUpDetails details,
+      FileTreeItem item, FileExplorerController controller) {
+    if (!controller.isItemSelected(item)) {
+      controller.clearSelectedItems();
+      controller.setSelectedItem(item);
+    }
+
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect position = RelativeRect.fromRect(
+      Rect.fromPoints(details.globalPosition, details.globalPosition),
+      Offset.zero & overlay.size,
+    );
+
+    showContextMenu(
+        context,
+        position,
+        controller,
+        item,
+        _startCreatingNewItem,
+        _copyItems,
+        _cutItems,
+        _renameItem,
+        _deleteItem,
+        _deleteItems,
+        _copyPath,
+        _revealInFinder,
+        widget.onOpenInTerminal,
+        _fileOperationManager);
+  }
+
+  void _startCreatingNewItem(bool isFile, FileTreeItem? parentItem) {
+    setState(() {
+      _isCreatingNewItem = true;
+      _newItemParent = parentItem;
+      _isCreatingFile = isFile;
+    });
+  }
+
+  KeyEventResult _handleKeyPress(
+      RawKeyEvent event, FileExplorerController controller) {
+    if (event is RawKeyDownEvent) {
+      final bool isShiftPressed = event.isShiftPressed;
+      final bool isCtrlPressed = event.isControlPressed || event.isMetaPressed;
+
+      if (isCtrlPressed && event.logicalKey == LogicalKeyboardKey.keyA) {
+        _selectAll(controller);
+        return KeyEventResult.handled;
+      }
+
+      if (isShiftPressed &&
+          (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+              event.logicalKey == LogicalKeyboardKey.arrowDown)) {
+        _handleShiftArrowSelection(
+            controller, event.logicalKey == LogicalKeyboardKey.arrowUp);
+        return KeyEventResult.handled;
+      }
+
+      if (_isCreatingNewItem) {
+        if (event.logicalKey == LogicalKeyboardKey.enter) {
+          _handleNewItemCreation(controller, '', true);
+          return KeyEventResult.handled;
+        }
+        return KeyEventResult.ignored;
+      }
+
+      switch (event.logicalKey) {
+        case LogicalKeyboardKey.arrowUp:
+          _navigateUp(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.arrowDown:
+          _navigateDown(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.arrowLeft:
+          _navigateLeft(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.arrowRight:
+          _navigateRight(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.enter:
+          _handleEnter(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.space:
+          _handleSpace(controller);
+          return KeyEventResult.handled;
+        case LogicalKeyboardKey.delete:
+        case LogicalKeyboardKey.backspace:
+          if (isCtrlPressed || isShiftPressed) {
+            _handleDelete(context, controller, isShiftPressed);
+            return KeyEventResult.handled;
+          }
+      }
+
+      if (isCtrlPressed) {
+        switch (event.logicalKey) {
+          case LogicalKeyboardKey.keyC:
+            _copyItems(context, controller);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyX:
+            _cutItems(context, controller);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyV:
+            _fileOperationManager.pasteItems(controller);
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyZ:
+            if (isShiftPressed) {
+              _fileOperationManager.redo(controller);
+            } else {
+              _fileOperationManager.undo(controller);
+            }
+            return KeyEventResult.handled;
+          case LogicalKeyboardKey.keyY:
+            _fileOperationManager.redo(controller);
+            return KeyEventResult.handled;
+        }
+      }
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _selectAll(FileExplorerController controller) {
+    controller.enterMultiSelectMode();
+    final allItems = _flattenItems(controller.rootItems);
+    for (var item in allItems) {
+      controller.selectItem(item);
+    }
+  }
+
+  void _handleShiftArrowSelection(
+      FileExplorerController controller, bool isUpArrow) {
+    if (!controller.isMultiSelectMode) {
+      controller.enterMultiSelectMode();
+    }
+
+    final allItems = _flattenItems(controller.rootItems);
+    final currentIndex = controller.selectedItem != null
+        ? allItems.indexOf(controller.selectedItem!)
+        : -1;
+
+    if (currentIndex != -1) {
+      int newIndex = isUpArrow ? currentIndex - 1 : currentIndex + 1;
+      if (newIndex >= 0 && newIndex < allItems.length) {
+        final itemsToSelect = isUpArrow
+            ? allItems.sublist(newIndex, currentIndex + 1).reversed
+            : allItems.sublist(currentIndex, newIndex + 1);
+
+        for (var item in itemsToSelect) {
+          controller.selectItem(item);
+        }
+
+        controller.setSelectedItem(allItems[newIndex]);
+        _scrollToSelectedItem(
+            isUpArrow ? ScrollDirection.reverse : ScrollDirection.forward);
+      }
+    }
+  }
+
+  void _scrollToSelectedItem(ScrollDirection direction) {
+    final controller = context.read<FileExplorerController>();
+    if (controller.selectedItem != null) {
+      final selectedItemIndex =
+          _findItemIndex(controller.rootItems, controller.selectedItem!);
+      if (selectedItemIndex != -1) {
+        final itemPosition = selectedItemIndex * _itemHeight;
+        final viewportHeight = _scrollController.position.viewportDimension;
+        final currentScrollOffset = _scrollController.offset;
+
+        double targetScrollOffset = currentScrollOffset;
+
+        if (direction == ScrollDirection.forward) {
+          final bottomEdge = currentScrollOffset + viewportHeight;
+          if (itemPosition + _itemHeight > bottomEdge) {
+            targetScrollOffset = itemPosition - viewportHeight + _itemHeight;
+          }
+        } else {
+          if (itemPosition < currentScrollOffset) {
+            targetScrollOffset = itemPosition;
+          }
+        }
+
+        targetScrollOffset = targetScrollOffset.clamp(
+          0.0,
+          _scrollController.position.maxScrollExtent,
+        );
+
+        if ((targetScrollOffset - currentScrollOffset).abs() > 1.0) {
+          _scrollController.animateTo(
+            targetScrollOffset,
+            duration: const Duration(milliseconds: 1),
+            curve: Curves.easeInOut,
+          );
+        }
+      }
+    }
+  }
+
+  int _findItemIndex(List<FileTreeItem> items, FileTreeItem target,
+      [int startIndex = 0]) {
+    for (var i = 0; i < items.length; i++) {
+      if (items[i] == target) {
+        return startIndex + i;
+      }
+      if (items[i].isDirectory && items[i].isExpanded) {
+        final childIndex =
+            _findItemIndex(items[i].children, target, startIndex + i + 1);
+        if (childIndex != -1) {
+          return childIndex;
+        }
+        startIndex += items[i].children.length;
+      }
+    }
+    return -1;
+  }
+
+  void _navigateUp(FileExplorerController controller) {
+    final allItems = _flattenItems(controller.rootItems);
+    final currentIndex = controller.selectedItem != null
+        ? allItems.indexOf(controller.selectedItem!)
+        : -1;
+    if (currentIndex > 0) {
+      controller.setSelectedItem(allItems[currentIndex - 1]);
+      _scrollToSelectedItem(ScrollDirection.reverse);
+    } else if (currentIndex == -1) {
+      controller.setSelectedItem(allItems.last);
+      _scrollToSelectedItem(ScrollDirection.reverse);
+    }
+  }
+
+  void _navigateDown(FileExplorerController controller) {
+    final allItems = _flattenItems(controller.rootItems);
+    final currentIndex = controller.selectedItem != null
+        ? allItems.indexOf(controller.selectedItem!)
+        : -1;
+    if (currentIndex < allItems.length - 1) {
+      controller.setSelectedItem(allItems[currentIndex + 1]);
+      _scrollToSelectedItem(ScrollDirection.forward);
+    } else if (currentIndex == -1) {
+      controller.setSelectedItem(allItems.first);
+      _scrollToSelectedItem(ScrollDirection.forward);
+    }
+  }
+
+  void _navigateLeft(FileExplorerController controller) {
+    if (controller.selectedItem?.isDirectory == true &&
+        controller.selectedItem!.isExpanded) {
+      controller.toggleDirectoryExpansion(controller.selectedItem!);
+    } else if (controller.selectedItem?.parent != null) {
+      controller.setSelectedItem(controller.selectedItem!.parent!);
+      _scrollToSelectedItem(ScrollDirection.reverse);
+    }
+  }
+
+  void _navigateRight(FileExplorerController controller) {
+    if (controller.selectedItem?.isDirectory == true) {
+      if (!controller.selectedItem!.isExpanded) {
+        controller.toggleDirectoryExpansion(controller.selectedItem!);
+      } else if (controller.selectedItem!.children.isNotEmpty) {
+        controller.setSelectedItem(controller.selectedItem!.children.first);
+        _scrollToSelectedItem(ScrollDirection.forward);
+      }
+    }
+  }
+
+  List<FileTreeItem> _flattenItems(List<FileTreeItem> items) {
+    return items.expand((item) {
+      final flattened = [item];
+      if (item.isDirectory && item.isExpanded) {
+        flattened.addAll(_flattenItems(item.children));
+      }
+      return flattened;
+    }).toList();
+  }
+
+  void _handleEnter(FileExplorerController controller) {
+    if (controller.selectedItem != null) {
+      if (controller.selectedItem!.isDirectory) {
+        controller.toggleDirectoryExpansion(controller.selectedItem!);
+      } else {
+        widget.onFileSelected(controller.selectedItem!.entity as File);
+      }
+    }
+  }
+
+  void _handleSpace(FileExplorerController controller) {
+    if (controller.selectedItem != null) {
+      controller.toggleItemSelection(controller.selectedItem!);
+    }
+  }
+
+  void _handleDelete(BuildContext context, FileExplorerController controller,
+      bool forceDelete) async {
+    if (controller.selectedItems.isNotEmpty) {
+      await _deleteItems(
+          context, controller, controller.selectedItems, forceDelete);
+    }
+  }
+
+  Future<void> _renameItem(BuildContext context,
+      FileExplorerController controller, FileTreeItem item) async {
+    final String? newName = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Rename ${item.isDirectory ? 'Folder' : 'File'}'),
+          content: TextField(
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Enter new name'),
+            controller: TextEditingController(text: item.name),
+          ),
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
+            TextButton(
+              child: const Text('Rename'),
+              onPressed: () => Navigator.of(context).pop((context
+                      .findAncestorWidgetOfExactType<TextField>() as TextField)
+                  .controller!
+                  .text),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (newName != null && newName.isNotEmpty && newName != item.name) {
+      try {
+        await controller.rename(item.path, newName);
+        MessageToastManager.showToast(context, 'Item renamed successfully');
+      } catch (e) {
+        MessageToastManager.showToast(context, 'Error renaming item: $e');
+      }
+    }
+  }
+
+  Future<void> _deleteItem(BuildContext context,
+      FileExplorerController controller, FileTreeItem item) async {
+    final bool confirmDelete =
+        await _showDeleteConfirmationDialog(context, [item]);
+
+    if (confirmDelete) {
+      try {
+        String tempPath = await controller.moveToTemp(item.path);
+        final deleteOperation =
+            FileOperation(OperationType.delete, item.path, tempPath);
+        _fileOperationManager.addToUndoStack([deleteOperation]);
+        await controller.refreshDirectory();
+        MessageToastManager.showToast(context,
+            '${item.isDirectory ? 'Folder' : 'File'} deleted successfully');
+      } catch (e) {
+        MessageToastManager.showToast(context,
+            'Error deleting ${item.isDirectory ? 'folder' : 'file'}: $e');
+      }
+    }
+  }
+
+  Future<void> _deleteItems(
+      BuildContext context,
+      FileExplorerController controller,
+      List<FileTreeItem> items,
+      bool forceDelete) async {
+    bool confirmDelete = forceDelete;
+    if (!forceDelete) {
+      confirmDelete = await _showDeleteConfirmationDialog(context, items);
+    }
+
+    if (confirmDelete) {
+      try {
+        List<FileOperation> deleteOperations = [];
+        for (var item in items) {
+          String tempPath = await controller.moveToTemp(item.path);
+          deleteOperations
+              .add(FileOperation(OperationType.delete, item.path, tempPath));
+        }
+        _fileOperationManager.addToUndoStack(deleteOperations);
+        await controller.refreshDirectory();
+        MessageToastManager.showToast(
+            context, '${items.length} item(s) deleted successfully');
+      } catch (e) {
+        MessageToastManager.showToast(context, 'Error deleting items: $e');
+      }
+    }
+  }
+
+  void _copyItems(BuildContext context, FileExplorerController controller) {
+    final selectedItems = controller.selectedItems;
+    if (selectedItems.isNotEmpty) {
+      controller.setCopiedItems(selectedItems);
+      MessageToastManager.showToast(
+          context, '${selectedItems.length} item(s) copied');
+    } else {
+      MessageToastManager.showToast(context, 'No items selected');
+    }
+  }
+
+  Future<bool> _showDeleteConfirmationDialog(
+      BuildContext context, List<FileTreeItem> items) async {
+    final itemCount = items.length;
+    final isMultipleItems = itemCount > 1;
+
+    String content;
+    if (isMultipleItems) {
+      content = 'Are you sure you want to delete these $itemCount item(s)?';
+    } else {
+      final item = items.first;
+      content = 'Are you sure you want to delete ${item.name}?';
+    }
+
+    return await showDialog<bool>(
+          context: context,
+          builder: (BuildContext context) {
+            return AlertDialog(
+              title: const Text('Confirm Delete'),
+              content: Text(content),
+              actions: <Widget>[
+                TextButton(
+                  child: const Text('Cancel'),
+                  onPressed: () => Navigator.of(context).pop(false),
+                ),
+                TextButton(
+                  child: const Text('Delete'),
+                  onPressed: () => Navigator.of(context).pop(true),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+  }
+
+  void _cutItems(BuildContext context, FileExplorerController controller) {
+    final selectedItems = controller.selectedItems;
+    if (selectedItems.isNotEmpty) {
+      controller.setCutItems(selectedItems);
+      MessageToastManager.showToast(
+          context, '${selectedItems.length} item(s) cut');
+    } else {
+      MessageToastManager.showToast(context, 'No items selected');
+    }
+  }
+
+  void _copyPath(BuildContext context, bool relative) {
+    final currentPath =
+        context.read<FileExplorerController>().currentDirectory!.path;
+    final pathToCopy = relative
+        ? path.relative(currentPath, from: path.dirname(currentPath))
+        : currentPath;
+    Clipboard.setData(ClipboardData(text: pathToCopy));
+    MessageToastManager.showToast(
+        context, '${relative ? 'Relative path' : 'Path'} copied to clipboard');
+  }
+
+  Future<void> _revealInFinder(BuildContext context) async {
+    final currentPath =
+        context.read<FileExplorerController>().currentDirectory!.path;
+    try {
+      if (Platform.isMacOS) {
+        await Process.run('open', [currentPath]);
+      } else if (Platform.isWindows) {
+        await Process.run('explorer', [currentPath]);
+      } else if (Platform.isLinux) {
+        await Process.run('xdg-open', [currentPath]);
+      } else {
+        throw UnsupportedError('Unsupported platform for reveal in finder');
+      }
+    } catch (e) {
+      MessageToastManager.showToast(context, 'Error revealing in finder: $e');
+    }
+  }
+
+  Future<void> _pickDirectory() async {
+    final controller = context.read<FileExplorerController>();
+    try {
+      String? selectedDirectory = await FileService.pickDirectory();
+      if (selectedDirectory != null) {
+        controller.setDirectory(Directory(selectedDirectory));
+        widget.onDirectorySelected(selectedDirectory);
+      }
+    } catch (e) {
+      print('Error picking directory: $e');
+      MessageToastManager.showToast(context, 'Error selecting directory: $e');
+    } finally {
+      controller.setLoading(false);
+    }
+  }
+
+  bool _isCtrlOrCmdPressed() {
+    return RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.controlLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.controlRight) ||
+        (Platform.isMacOS &&
+            (RawKeyboard.instance.keysPressed
+                    .contains(LogicalKeyboardKey.metaLeft) ||
+                RawKeyboard.instance.keysPressed
+                    .contains(LogicalKeyboardKey.metaRight)));
+  }
+
+  bool _isShiftPressed() {
+    return RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.shiftLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.shiftRight);
+  }
+
+  void _handleShiftClickSelection(
+      FileExplorerController controller, FileTreeItem item) {
+    final allItems = _flattenItems(controller.rootItems);
+    final selectedItemIndex = allItems.indexOf(controller.selectedItem!);
+    final clickedItemIndex = allItems.indexOf(item);
+
+    if (selectedItemIndex != -1 && clickedItemIndex != -1) {
+      final startIndex = selectedItemIndex.compareTo(clickedItemIndex) < 0
+          ? selectedItemIndex
+          : clickedItemIndex;
+      final endIndex = selectedItemIndex.compareTo(clickedItemIndex) < 0
+          ? clickedItemIndex
+          : selectedItemIndex;
+
+      for (int i = startIndex; i <= endIndex; i++) {
+        controller.selectItem(allItems[i]);
+      }
+    }
+  }
+}
