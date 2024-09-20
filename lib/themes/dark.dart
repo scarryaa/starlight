@@ -5,6 +5,7 @@ final ThemeData darkTheme = ThemeData(
   brightness: Brightness.dark,
   useMaterial3: true,
   typography: Typography.material2014(),
+  fontFamily: "SF Pro Display",
   primaryColor: primaryBlue,
   colorScheme: ColorScheme.dark(
     primary: primaryBlue,
