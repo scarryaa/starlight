@@ -67,7 +67,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     if (_explorerFocusNode.hasFocus) {
       final controller = context.read<FileExplorerController>();
       if (controller.selectedItem == null && controller.rootItems.isNotEmpty) {
-        controller.setSelectedItem(controller.rootItems.first);
         _scrollToSelectedItem(ScrollDirection.forward);
       }
     }
@@ -111,7 +110,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         focusNode: _explorerFocusNode,
         onKey: (node, event) => _handleKeyPress(event, controller),
         child: GestureDetector(
-          onTap: () => _explorerFocusNode.requestFocus(),
+          onTap: () => _handleEmptySpaceLeftClick(controller),
           onSecondaryTapUp: (details) =>
               _handleEmptySpaceRightClick(context, details, controller),
           behavior: HitTestBehavior.opaque,
@@ -128,6 +127,11 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         ),
       ),
     );
+  }
+
+  void _handleEmptySpaceLeftClick(FileExplorerController controller) {
+    controller.clearSelectedItems();
+    _explorerFocusNode.requestFocus();
   }
 
   List<Widget> _buildFileTreeItems(
@@ -201,6 +205,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         } else {
           await controller.createFolder(parentPath, name);
         }
+
         await controller.refreshDirectory();
         final newItem = controller.findItemByPath(newItemPath);
         if (newItem != null) {
@@ -261,13 +266,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       _isCreatingNewItem = true;
       _newItemParent = parentItem;
       _isCreatingFile = isFile;
-      if (_newItemParent == null) {
-        final controller = context.read<FileExplorerController>();
-        if (controller.rootItems.isNotEmpty &&
-            controller.rootItems.first != parentItem) {
-          _newItemParent = null;
-        }
-      }
     });
   }
 
