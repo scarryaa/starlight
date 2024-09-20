@@ -200,11 +200,13 @@ class CodeEditorState extends State<CodeEditor> {
     clipboardService = ClipboardService(textEditingService);
     _syntaxHighlighter = SyntaxHighlighter(
       {
-        'keyword':
-            const TextStyle(color: Colors.blue, fontWeight: FontWeight.bold),
+        'keyword': const TextStyle(
+          color: Colors.blue,
+        ),
         'type': const TextStyle(color: Colors.green),
-        'comment':
-            const TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+        'comment': const TextStyle(
+          color: Colors.grey,
+        ),
         'string': const TextStyle(color: Colors.red),
         'number': const TextStyle(color: Colors.purple),
         'function': const TextStyle(color: Colors.orange),
@@ -316,7 +318,7 @@ class CodeEditorState extends State<CodeEditor> {
                                       )
                                     : 0,
                                 textStyle: theme.textTheme.bodyMedium!.copyWith(
-                                  fontFamily: 'Courier',
+                                  fontFamily: 'SF Mono',
                                   color: defaultTextColor,
                                 ),
                                 selectionColor:
@@ -431,13 +433,12 @@ class CodeEditorState extends State<CodeEditor> {
     final theme = Theme.of(context);
     final defaultTextColor =
         theme.brightness == Brightness.dark ? Colors.white : Colors.black;
-
     _textPainter = TextPainter(
       textDirection: TextDirection.ltr,
       text: TextSpan(
         text: 'X',
         style: theme.textTheme.bodyMedium?.copyWith(
-          fontFamily: 'Courier',
+          fontFamily: 'SF Mono',
           color: defaultTextColor,
         ),
       ),

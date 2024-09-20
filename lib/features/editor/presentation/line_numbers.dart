@@ -102,7 +102,7 @@ class LineNumbers extends StatelessWidget {
           textStyle: textStyle ??
               theme.textTheme.bodySmall?.copyWith(
                 color: theme.textTheme.bodySmall?.color?.withOpacity(0.5),
-                fontFamily: 'Courier',
+                fontFamily: 'SF Mono',
               ),
         ),
       ),

@@ -33,8 +33,20 @@ dev_dependencies:
 
 
 flutter:
-
+  fonts:
+    - family: SF Mono
+      fonts:
+        - asset: assets/Fonts/SanFrancisco/SF-Mono-Regular.otf
+          weight: 400
+        - asset: assets/Fonts/SanFrancisco/SF-Mono-Medium.otf
+          weight: 500
+    - family: SF Pro Display
+      fonts:
+        - asset: assets/Fonts/SanFrancisco/SF-Pro-Display-Regular.otf
+          weight: 400
+        - asset: assets/Fonts/SanFrancisco/SF-Pro-Display-RegularItalic.otf
+          style: italic
+          weight: 400
   uses-material-design: true
-
   assets:
     - assets/

@@ -4,6 +4,7 @@ import 'package:starlight/themes/common.dart';
 final ThemeData lightTheme = ThemeData(
   brightness: Brightness.light,
   useMaterial3: true,
+  typography: Typography.material2014(),
   primaryColor: primaryBlue,
   colorScheme: ColorScheme.light(
     primary: primaryBlue,

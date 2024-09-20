@@ -113,14 +113,12 @@ class SyntaxHighlighter extends ChangeNotifier {
     _styles = {
       'keyword': TextStyle(
         color: isDark ? Colors.blue[300] : Colors.blue[800],
-        fontWeight: FontWeight.bold,
       ),
       'type': TextStyle(
         color: isDark ? Colors.green[300] : Colors.green[800],
       ),
       'comment': TextStyle(
         color: isDark ? Colors.grey[500] : Colors.grey[700],
-        fontStyle: FontStyle.italic,
       ),
       'string': TextStyle(
         color: isDark ? Colors.red[300] : Colors.red[800],

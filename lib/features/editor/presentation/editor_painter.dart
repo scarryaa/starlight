@@ -98,8 +98,10 @@ class CodeEditorPainter extends CustomPainter {
                   text: span.text,
                   style: span.style?.copyWith(
                           fontSize: fontSize * zoomLevel,
-                          fontFamily: "Courier") ??
-                      textStyle.copyWith(fontSize: fontSize * zoomLevel),
+                          fontFamily: "SF Mono") ??
+                      textStyle.copyWith(
+                          fontSize: fontSize * zoomLevel,
+                          fontFamily: "SF Mono"),
                 ))
             .toList(),
       ),
