@@ -21,4 +21,41 @@ class FileTreeItem {
   void setRenderBox(RenderBox box) {
     renderBox = box;
   }
+
+  void addChild(FileTreeItem child) {
+    children.add(child);
+  }
+
+  List<FileTreeItem> getParentPath() {
+    List<FileTreeItem> parentPath = [];
+    FileTreeItem? currentParent = parent;
+    while (currentParent != null) {
+      parentPath.insert(0, currentParent);
+      currentParent = currentParent.parent;
+    }
+    return parentPath;
+  }
+
+  FileTreeItem getRootItem() {
+    FileTreeItem current = this;
+    while (current.parent != null) {
+      current = current.parent!;
+    }
+    return current;
+  }
+
+  String getFullPath() {
+    return path;
+  }
+
+  bool isDescendantOf(FileTreeItem potentialAncestor) {
+    FileTreeItem? current = parent;
+    while (current != null) {
+      if (current == potentialAncestor) {
+        return true;
+      }
+      current = current.parent;
+    }
+    return false;
+  }
 }

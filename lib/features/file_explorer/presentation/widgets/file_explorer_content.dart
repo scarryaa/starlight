@@ -121,14 +121,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
               controller: _scrollController,
               children: [
                 ..._buildFileTreeItems(controller.rootItems, controller),
-                if (_isCreatingNewItem && _newItemParent == null)
-                  NewItemInput(
-                    onItemCreated: (name, isFile) =>
-                        _handleNewItemCreation(controller, name, isFile),
-                    onCancel: _cancelNewItemCreation,
-                    parent: _newItemParent,
-                    isCreatingFile: _isCreatingFile,
-                  ),
                 const SizedBox(height: 24),
               ],
             ),
@@ -140,8 +132,22 @@ class _FileExplorerContentState extends State<FileExplorerContent>
 
   List<Widget> _buildFileTreeItems(
       List<FileTreeItem> items, FileExplorerController controller) {
-    return items.expand((item) {
-      final List<Widget> widgets = [
+    List<Widget> widgets = [];
+
+    if (_isCreatingNewItem && _newItemParent == null) {
+      widgets.add(
+        NewItemInput(
+          onItemCreated: (name, isFile) =>
+              _handleNewItemCreation(controller, name, isFile),
+          onCancel: _cancelNewItemCreation,
+          parent: null,
+          isCreatingFile: _isCreatingFile,
+        ),
+      );
+    }
+
+    for (var item in items) {
+      widgets.add(
         FileTreeItemWidget(
           key: ValueKey(item.path),
           item: item,
@@ -151,32 +157,44 @@ class _FileExplorerContentState extends State<FileExplorerContent>
           onSecondaryTap: (details) =>
               _handleItemSecondaryTap(context, details, item, controller),
         ),
-      ];
-      if (item == _newItemParent && _isCreatingNewItem) {
-        widgets.add(NewItemInput(
-          onItemCreated: (name, isFile) =>
-              _handleNewItemCreation(controller, name, isFile),
-          onCancel: _cancelNewItemCreation,
-          parent: _newItemParent,
-          isCreatingFile: _isCreatingFile,
-        ));
+      );
+
+      if (_isCreatingNewItem && _newItemParent == item) {
+        widgets.add(
+          NewItemInput(
+            onItemCreated: (name, isFile) =>
+                _handleNewItemCreation(controller, name, isFile),
+            onCancel: _cancelNewItemCreation,
+            parent: _newItemParent,
+            isCreatingFile: _isCreatingFile,
+          ),
+        );
       }
+
       if (item.isDirectory && item.isExpanded) {
         widgets.addAll(_buildFileTreeItems(item.children, controller));
       }
-      return widgets;
-    }).toList();
+    }
+
+    return widgets;
   }
 
   Future<void> _handleNewItemCreation(
       FileExplorerController controller, String name, bool isFile) async {
     if (name.isNotEmpty) {
       try {
+        FileTreeItem? parentItem;
+        if (_newItemParent != null) {
+          parentItem = _newItemParent;
+        } else if (controller.selectedItem != null &&
+            controller.selectedItem!.isDirectory) {
+          parentItem = controller.selectedItem;
+        } else {
+          parentItem = null;
+        }
+
         final parentPath =
-            _newItemParent?.path ?? controller.currentDirectory!.path;
-
-        print('Creating new item in: $parentPath');
-
+            parentItem?.getFullPath() ?? controller.currentDirectory!.path;
         final newItemPath = path.join(parentPath, name);
         if (isFile) {
           await controller.createFile(parentPath, name);
@@ -186,6 +204,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         await controller.refreshDirectory();
         final newItem = controller.findItemByPath(newItemPath);
         if (newItem != null) {
+          controller.clearSelection();
           controller.setSelectedItem(newItem);
           _scrollToSelectedItem(ScrollDirection.forward);
         }
@@ -219,6 +238,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       Rect.fromPoints(details.globalPosition, details.globalPosition),
       Offset.zero & overlay.size,
     );
+
     showContextMenu(
         context,
         position,
@@ -234,6 +254,21 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         _revealInFinder,
         widget.onOpenInTerminal,
         _fileOperationManager);
+  }
+
+  void _startCreatingNewItem(bool isFile, FileTreeItem? parentItem) {
+    setState(() {
+      _isCreatingNewItem = true;
+      _newItemParent = parentItem;
+      _isCreatingFile = isFile;
+      if (_newItemParent == null) {
+        final controller = context.read<FileExplorerController>();
+        if (controller.rootItems.isNotEmpty &&
+            controller.rootItems.first != parentItem) {
+          _newItemParent = null;
+        }
+      }
+    });
   }
 
   void _handleItemTap(FileTreeItem item, FileExplorerController controller) {
@@ -288,14 +323,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         _revealInFinder,
         widget.onOpenInTerminal,
         _fileOperationManager);
-  }
-
-  void _startCreatingNewItem(bool isFile, FileTreeItem? parentItem) {
-    setState(() {
-      _isCreatingNewItem = true;
-      _newItemParent = parentItem;
-      _isCreatingFile = isFile;
-    });
   }
 
   KeyEventResult _handleKeyPress(
@@ -587,7 +614,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
 
     if (newName != null && newName.isNotEmpty && newName != item.name) {
       try {
-        await controller.rename(item.path, newName);
+        await controller.rename(item.getFullPath(), newName);
         MessageToastManager.showToast(context, 'Item renamed successfully');
       } catch (e) {
         MessageToastManager.showToast(context, 'Error renaming item: $e');

@@ -39,15 +39,21 @@ class FileExplorerController extends ChangeNotifier {
   }
 
   // File operations
-  Future<void> createFile(String parentPath, String fileName) async {
-    final newFilePath = _path.join(parentPath, fileName);
+  Future<void> createFile(String? parentPath, String name) async {
+    if (parentPath == null) {
+      throw Exception('Parent path is null');
+    }
+    final newFilePath = _path.join(parentPath, name);
     final file = File(newFilePath);
     await file.create();
     await refreshDirectory();
   }
 
-  Future<void> createFolder(String parentPath, String folderName) async {
-    final newFolderPath = _path.join(parentPath, folderName);
+  Future<void> createFolder(String? parentPath, String name) async {
+    if (parentPath == null) {
+      throw Exception('Parent path is null');
+    }
+    final newFolderPath = _path.join(parentPath, name);
     final directory = Directory(newFolderPath);
     await directory.create();
     await refreshDirectory();
