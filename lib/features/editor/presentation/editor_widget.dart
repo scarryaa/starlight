@@ -159,12 +159,6 @@ class EditorWidgetState extends State<EditorWidget> {
     widget.keyboardShortcutService.editorService.redo();
   }
 
-  void resetZoom() {
-    setState(() {
-      _zoomLevel = 1.0;
-    });
-  }
-
   void saveCurrentFile() {
     if (_selectedTabIndex.value != -1) {
       _saveTab(_selectedTabIndex.value);
@@ -229,15 +223,15 @@ class EditorWidgetState extends State<EditorWidget> {
   }
 
   void zoomIn() {
-    setState(() {
-      _zoomLevel = (_zoomLevel + _zoomStep).clamp(_minZoom, _maxZoom);
-    });
+    _handleZoomChange((_zoomLevel + _zoomStep).clamp(_minZoom, _maxZoom));
   }
 
   void zoomOut() {
-    setState(() {
-      _zoomLevel = (_zoomLevel - _zoomStep).clamp(_minZoom, _maxZoom);
-    });
+    _handleZoomChange((_zoomLevel - _zoomStep).clamp(_minZoom, _maxZoom));
+  }
+
+  void resetZoom() {
+    _handleZoomChange(1.0);
   }
 
   Widget _buildCodeEditor(int selectedIndex) {
@@ -261,6 +255,9 @@ class EditorWidgetState extends State<EditorWidget> {
       onUpdateReplaceTerm: _updateReplaceTerm,
       selectionStart: currentTab.selectionStart,
       selectionEnd: currentTab.selectionEnd,
+      onZoomChanged: (recalculateFunc) {
+        currentTab.triggerRecalculation = recalculateFunc;
+      },
       cursorPosition: currentTab.cursorPosition,
       keyboardShortcutService: widget.keyboardShortcutService,
       zoomLevel: _zoomLevel,
@@ -895,5 +892,16 @@ class EditorWidgetState extends State<EditorWidget> {
         _updateCodeEditorHighlights();
       });
     });
+  }
+
+  void _handleZoomChange(double newZoomLevel) {
+    setState(() {
+      _zoomLevel = newZoomLevel;
+    });
+    // Trigger recalculation in the CodeEditor
+    if (_selectedTabIndex.value != -1) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      currentTab.triggerRecalculation?.call(_zoomLevel);
+    }
   }
 }

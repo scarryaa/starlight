@@ -18,6 +18,7 @@ class FileTab {
   int? selectionEnd;
   int? cursorPosition;
   Widget? customWidget;
+  Function(double)? triggerRecalculation;
 
   FileTab({
     required this.filePath,
@@ -27,6 +28,7 @@ class FileTab {
     this.selectionEnd,
     this.cursorPosition,
     this.customWidget,
+    this.triggerRecalculation,
   })  : id = _uuid.v4(),
         _content = content,
         _originalContent = content;

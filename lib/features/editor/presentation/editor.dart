@@ -39,9 +39,10 @@ class CodeEditor extends StatefulWidget {
   final int? cursorPosition;
   final KeyboardShortcutService keyboardShortcutService;
   final Function(String) onContentChanged;
-  final double zoomLevel;
+  final Function(Function(double))? onZoomChanged;
+  double zoomLevel;
 
-  const CodeEditor({
+  CodeEditor({
     super.key,
     required this.initialCode,
     required this.filePath,
@@ -58,6 +59,7 @@ class CodeEditor extends StatefulWidget {
     required this.onContentChanged,
     required this.zoomLevel,
     required this.focusNode,
+    this.onZoomChanged,
     this.selectionStart,
     this.selectionEnd,
     this.cursorPosition,
@@ -230,6 +232,7 @@ class CodeEditorState extends State<CodeEditor> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _recalculateEditor();
     });
+    widget.onZoomChanged?.call(_recalculateEditorAfterZoom);
   }
 
   void maintainFocus() {
@@ -483,6 +486,24 @@ class CodeEditorState extends State<CodeEditor> {
     }
   }
 
+  void updateZoomLevel(double newZoomLevel) {
+    setState(() {
+      widget.zoomLevel = newZoomLevel;
+      editorService.scrollService.zoomLevel = newZoomLevel;
+      editorService.calculationService.zoomLevel = newZoomLevel;
+    });
+
+    // Recalculate layout
+    layoutService.calculateLineNumberWidth();
+    layoutService.updateMaxLineWidth();
+
+    // Ensure cursor visibility after zoom
+    editorService.scrollService.ensureCursorVisibility();
+
+    // Force a repaint
+    _recalculateEditor();
+  }
+
   void _recalculateEditor() {
     layoutService.calculateLineNumberWidth();
     layoutService.updateMaxLineWidth();
@@ -490,5 +511,20 @@ class CodeEditorState extends State<CodeEditor> {
     editorService.scrollService.ensureCursorVisibility();
     _syntaxHighlighter.invalidateCache();
     setState(() {});
+  }
+
+  void _recalculateEditorAfterZoom(double zoomLevel) {
+    setState(() {
+      // Update zoomLevel in necessary services
+      editorService.scrollService.zoomLevel = zoomLevel;
+      editorService.calculationService.zoomLevel = zoomLevel;
+
+      // Recalculate layout
+      layoutService.calculateLineNumberWidth();
+      layoutService.updateMaxLineWidth();
+
+      // Ensure cursor visibility after zoom
+      editorService.scrollService.ensureCursorVisibility();
+    });
   }
 }
