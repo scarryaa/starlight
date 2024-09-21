@@ -1,6 +1,5 @@
 import 'dart:math';
 import 'package:flutter/material.dart';
-import 'package:starlight/features/editor/domain/enums/selection_mode.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/utils/constants.dart';
 

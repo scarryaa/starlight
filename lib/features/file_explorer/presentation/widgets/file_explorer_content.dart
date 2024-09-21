@@ -34,7 +34,7 @@ class FileExplorerContent extends StatefulWidget {
 class _FileExplorerContentState extends State<FileExplorerContent>
     with AutomaticKeepAliveClientMixin {
   static const double _itemHeight = 24.0;
-
+  FileTreeItem? _highlightedItem;
   late ScrollController _scrollController;
   late FocusNode _explorerFocusNode;
   late FileOperationManager _fileOperationManager;
@@ -92,49 +92,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     );
   }
 
-  Widget _buildFileExplorer(
-      ThemeData theme, FileExplorerController controller) {
-    if (controller.currentDirectory == null) {
-      return DirectorySelectionPrompt(onSelectDirectory: _pickDirectory);
-    }
-    return Theme(
-      data: theme.copyWith(
-        scrollbarTheme: ScrollbarThemeData(
-          thumbColor: MaterialStateProperty.all(
-              theme.colorScheme.secondary.withOpacity(0.6)),
-          thickness: MaterialStateProperty.all(6.0),
-          radius: const Radius.circular(0),
-        ),
-      ),
-      child: Focus(
-        focusNode: _explorerFocusNode,
-        onKey: (node, event) => _handleKeyPress(event, controller),
-        child: DragTarget<FileTreeItem>(
-          onWillAccept: (data) => data != null,
-          onAccept: (data) => _handleItemDrop(data, null, controller),
-          builder: (context, candidateData, rejectedData) {
-            return GestureDetector(
-              onTap: () => _handleEmptySpaceLeftClick(controller),
-              onSecondaryTapUp: (details) =>
-                  _handleEmptySpaceRightClick(context, details, controller),
-              behavior: HitTestBehavior.opaque,
-              child: Scrollbar(
-                controller: _scrollController,
-                child: ListView(
-                  controller: _scrollController,
-                  children: [
-                    ..._buildFileTreeItems(controller.rootItems, controller),
-                    const SizedBox(height: 24),
-                  ],
-                ),
-              ),
-            );
-          },
-        ),
-      ),
-    );
-  }
-
   List<Widget> _buildFileTreeItems(
       List<FileTreeItem> items, FileExplorerController controller) {
     List<Widget> widgets = [];
@@ -178,15 +135,24 @@ class _FileExplorerContentState extends State<FileExplorerContent>
 
   Widget _buildDraggableItem(
       FileTreeItem item, FileExplorerController controller) {
-    return Draggable<FileTreeItem>(
-      data: item,
+    final isItemSelected = controller.isItemSelected(item);
+    final isMultipleSelection = controller.selectedItems.length > 1;
+
+    final itemsToDrag = isItemSelected && isMultipleSelection
+        ? controller.selectedItems
+        : [item];
+
+    return Draggable<List<FileTreeItem>>(
+      data: itemsToDrag,
       child: _buildDropTarget(item, controller),
       feedback: Material(
         elevation: 4.0,
         child: Container(
           padding: const EdgeInsets.all(8.0),
           color: Colors.grey[200],
-          child: Text(item.name),
+          child: Text(
+            itemsToDrag.length > 1 ? '${itemsToDrag.length} items' : item.name,
+          ),
         ),
       ),
       childWhenDragging: Opacity(
@@ -206,21 +172,126 @@ class _FileExplorerContentState extends State<FileExplorerContent>
 
   Widget _buildDropTarget(
       FileTreeItem item, FileExplorerController controller) {
-    return DragTarget<FileTreeItem>(
-      onWillAccept: (data) =>
-          data != null && data != item && _canAcceptDrop(data!, item),
-      onAccept: (data) => _handleItemDrop(data, item, controller),
+    return DragTarget<List<FileTreeItem>>(
+      onWillAccept: (data) {
+        bool canAccept = data != null &&
+            data.every((draggedItem) =>
+                draggedItem != item && _canAcceptDrop(draggedItem, item));
+        if (canAccept) {
+          setState(() {
+            _highlightedItem = item;
+          });
+        }
+        return canAccept;
+      },
+      onLeave: (data) {
+        setState(() {
+          _highlightedItem = null;
+        });
+      },
+      onAccept: (data) {
+        setState(() {
+          _highlightedItem = null;
+        });
+        _handleItemsDrop(data, item, controller);
+      },
       builder: (context, candidateData, rejectedData) {
-        return FileTreeItemWidget(
-          key: ValueKey(item.path),
-          item: item,
-          isSelected: controller.isItemSelected(item),
-          onItemSelected: (item) => _handleItemTap(item, controller),
-          onItemLongPress: () => _handleItemLongPress(item, controller),
-          onSecondaryTap: (details) =>
-              _handleItemSecondaryTap(context, details, item, controller),
+        return Container(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color:
+                  _highlightedItem == item ? Colors.blue : Colors.transparent,
+              width: 2,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: FileTreeItemWidget(
+            key: ValueKey(item.path),
+            item: item,
+            isSelected: controller.isItemSelected(item),
+            onItemSelected: (item) => _handleItemTap(item, controller),
+            onItemLongPress: () => _handleItemLongPress(item, controller),
+            onSecondaryTap: (details) =>
+                _handleItemSecondaryTap(context, details, item, controller),
+          ),
         );
       },
+    );
+  }
+
+  void _handleItemsDrop(List<FileTreeItem> draggedItems,
+      FileTreeItem? targetItem, FileExplorerController controller) async {
+    try {
+      final String destinationPath =
+          targetItem?.getFullPath() ?? controller.currentDirectory!.path;
+
+      for (var draggedItem in draggedItems) {
+        final String newPath =
+            path.join(destinationPath, path.basename(draggedItem.path));
+        await controller.moveItem(draggedItem.getFullPath(), newPath);
+      }
+      await controller.refreshDirectory();
+      MessageToastManager.showToast(context, 'Items moved successfully');
+    } catch (e) {
+      MessageToastManager.showToast(context, 'Error moving items: $e');
+    }
+  }
+
+  Widget _buildFileExplorer(
+      ThemeData theme, FileExplorerController controller) {
+    if (controller.currentDirectory == null) {
+      return DirectorySelectionPrompt(onSelectDirectory: _pickDirectory);
+    }
+    return Theme(
+      data: theme.copyWith(
+        scrollbarTheme: ScrollbarThemeData(
+          thumbColor: MaterialStateProperty.all(
+              theme.colorScheme.secondary.withOpacity(0.6)),
+          thickness: MaterialStateProperty.all(6.0),
+          radius: const Radius.circular(0),
+        ),
+      ),
+      child: Focus(
+        focusNode: _explorerFocusNode,
+        onKey: (node, event) => _handleKeyPress(event, controller),
+        child: DragTarget<List<FileTreeItem>>(
+          onWillAccept: (data) {
+            setState(() {
+              _highlightedItem = null; // Clear any previously highlighted item
+            });
+            return data != null;
+          },
+          onAccept: (data) => _handleItemsDrop(data, null, controller),
+          builder: (context, candidateData, rejectedData) {
+            return Container(
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: _highlightedItem == null && candidateData.isNotEmpty
+                      ? Colors.blue
+                      : Colors.transparent,
+                  width: 2,
+                ),
+              ),
+              child: GestureDetector(
+                onTap: () => _handleEmptySpaceLeftClick(controller),
+                onSecondaryTapUp: (details) =>
+                    _handleEmptySpaceRightClick(context, details, controller),
+                behavior: HitTestBehavior.opaque,
+                child: Scrollbar(
+                  controller: _scrollController,
+                  child: ListView(
+                    controller: _scrollController,
+                    children: [
+                      ..._buildFileTreeItems(controller.rootItems, controller),
+                      const SizedBox(height: 24),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
     );
   }
 
@@ -236,21 +307,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       }
     }
     return targetItem.isDirectory;
-  }
-
-  void _handleItemDrop(FileTreeItem draggedItem, FileTreeItem? targetItem,
-      FileExplorerController controller) async {
-    try {
-      final String destinationPath =
-          targetItem?.getFullPath() ?? controller.currentDirectory!.path;
-      final String newPath =
-          path.join(destinationPath, path.basename(draggedItem.path));
-      await controller.moveItem(draggedItem.getFullPath(), newPath);
-      await controller.refreshDirectory();
-      MessageToastManager.showToast(context, 'Item moved successfully');
-    } catch (e) {
-      MessageToastManager.showToast(context, 'Error moving item: $e');
-    }
   }
 
   void _handleEmptySpaceLeftClick(FileExplorerController controller) {
