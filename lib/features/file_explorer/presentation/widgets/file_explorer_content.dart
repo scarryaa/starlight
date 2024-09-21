@@ -100,38 +100,39 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     return Theme(
       data: theme.copyWith(
         scrollbarTheme: ScrollbarThemeData(
-          thumbColor: WidgetStateProperty.all(
+          thumbColor: MaterialStateProperty.all(
               theme.colorScheme.secondary.withOpacity(0.6)),
-          thickness: WidgetStateProperty.all(6.0),
+          thickness: MaterialStateProperty.all(6.0),
           radius: const Radius.circular(0),
         ),
       ),
       child: Focus(
         focusNode: _explorerFocusNode,
         onKey: (node, event) => _handleKeyPress(event, controller),
-        child: GestureDetector(
-          onTap: () => _handleEmptySpaceLeftClick(controller),
-          onSecondaryTapUp: (details) =>
-              _handleEmptySpaceRightClick(context, details, controller),
-          behavior: HitTestBehavior.opaque,
-          child: Scrollbar(
-            controller: _scrollController,
-            child: ListView(
-              controller: _scrollController,
-              children: [
-                ..._buildFileTreeItems(controller.rootItems, controller),
-                const SizedBox(height: 24),
-              ],
-            ),
-          ),
+        child: DragTarget<FileTreeItem>(
+          onWillAccept: (data) => data != null,
+          onAccept: (data) => _handleItemDrop(data, null, controller),
+          builder: (context, candidateData, rejectedData) {
+            return GestureDetector(
+              onTap: () => _handleEmptySpaceLeftClick(controller),
+              onSecondaryTapUp: (details) =>
+                  _handleEmptySpaceRightClick(context, details, controller),
+              behavior: HitTestBehavior.opaque,
+              child: Scrollbar(
+                controller: _scrollController,
+                child: ListView(
+                  controller: _scrollController,
+                  children: [
+                    ..._buildFileTreeItems(controller.rootItems, controller),
+                    const SizedBox(height: 24),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ),
     );
-  }
-
-  void _handleEmptySpaceLeftClick(FileExplorerController controller) {
-    controller.clearSelectedItems();
-    _explorerFocusNode.requestFocus();
   }
 
   List<Widget> _buildFileTreeItems(
@@ -152,15 +153,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
 
     for (var item in items) {
       widgets.add(
-        FileTreeItemWidget(
-          key: ValueKey(item.path),
-          item: item,
-          isSelected: controller.isItemSelected(item),
-          onItemSelected: (item) => _handleItemTap(item, controller),
-          onItemLongPress: () => _handleItemLongPress(item, controller),
-          onSecondaryTap: (details) =>
-              _handleItemSecondaryTap(context, details, item, controller),
-        ),
+        _buildDraggableItem(item, controller),
       );
 
       if (_isCreatingNewItem && _newItemParent == item) {
@@ -183,56 +176,86 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     return widgets;
   }
 
-  Future<void> _handleNewItemCreation(
-      FileExplorerController controller, String name, bool isFile) async {
-    if (name.isNotEmpty) {
-      try {
-        FileTreeItem? parentItem;
-        if (_newItemParent != null) {
-          parentItem = _newItemParent;
-        } else if (controller.selectedItem != null &&
-            controller.selectedItem!.isDirectory) {
-          parentItem = controller.selectedItem;
-        } else {
-          parentItem = null;
-        }
+  Widget _buildDraggableItem(
+      FileTreeItem item, FileExplorerController controller) {
+    return Draggable<FileTreeItem>(
+      data: item,
+      child: _buildDropTarget(item, controller),
+      feedback: Material(
+        elevation: 4.0,
+        child: Container(
+          padding: const EdgeInsets.all(8.0),
+          color: Colors.grey[200],
+          child: Text(item.name),
+        ),
+      ),
+      childWhenDragging: Opacity(
+        opacity: 0.5,
+        child: FileTreeItemWidget(
+          key: ValueKey(item.path),
+          item: item,
+          isSelected: controller.isItemSelected(item),
+          onItemSelected: (item) => _handleItemTap(item, controller),
+          onItemLongPress: () => _handleItemLongPress(item, controller),
+          onSecondaryTap: (details) =>
+              _handleItemSecondaryTap(context, details, item, controller),
+        ),
+      ),
+    );
+  }
 
-        final parentPath =
-            parentItem?.getFullPath() ?? controller.currentDirectory!.path;
-        final newItemPath = path.join(parentPath, name);
-        if (isFile) {
-          await controller.createFile(parentPath, name);
-        } else {
-          await controller.createFolder(parentPath, name);
-        }
+  Widget _buildDropTarget(
+      FileTreeItem item, FileExplorerController controller) {
+    return DragTarget<FileTreeItem>(
+      onWillAccept: (data) =>
+          data != null && data != item && _canAcceptDrop(data!, item),
+      onAccept: (data) => _handleItemDrop(data, item, controller),
+      builder: (context, candidateData, rejectedData) {
+        return FileTreeItemWidget(
+          key: ValueKey(item.path),
+          item: item,
+          isSelected: controller.isItemSelected(item),
+          onItemSelected: (item) => _handleItemTap(item, controller),
+          onItemLongPress: () => _handleItemLongPress(item, controller),
+          onSecondaryTap: (details) =>
+              _handleItemSecondaryTap(context, details, item, controller),
+        );
+      },
+    );
+  }
 
-        await controller.refreshDirectory();
-        final newItem = controller.findItemByPath(newItemPath);
-        if (newItem != null) {
-          controller.clearSelection();
-          controller.setSelectedItem(newItem);
-          _scrollToSelectedItem(ScrollDirection.forward);
+  bool _canAcceptDrop(FileTreeItem draggedItem, FileTreeItem targetItem) {
+    // Prevent dropping a directory into its own subdirectory
+    if (draggedItem.isDirectory) {
+      FileTreeItem? parent = targetItem;
+      while (parent != null) {
+        if (parent == draggedItem) {
+          return false;
         }
-        MessageToastManager.showToast(
-            context, '${isFile ? 'File' : 'Folder'} created successfully');
-      } catch (e) {
-        MessageToastManager.showToast(
-            context, 'Error creating ${isFile ? 'file' : 'folder'}: $e');
-      } finally {
-        _cancelNewItemCreation();
+        parent = parent.parent;
       }
-    } else {
-      _cancelNewItemCreation();
+    }
+    return targetItem.isDirectory;
+  }
+
+  void _handleItemDrop(FileTreeItem draggedItem, FileTreeItem? targetItem,
+      FileExplorerController controller) async {
+    try {
+      final String destinationPath =
+          targetItem?.getFullPath() ?? controller.currentDirectory!.path;
+      final String newPath =
+          path.join(destinationPath, path.basename(draggedItem.path));
+      await controller.moveItem(draggedItem.getFullPath(), newPath);
+      await controller.refreshDirectory();
+      MessageToastManager.showToast(context, 'Item moved successfully');
+    } catch (e) {
+      MessageToastManager.showToast(context, 'Error moving item: $e');
     }
   }
 
-  void _cancelNewItemCreation() {
-    setState(() {
-      _isCreatingNewItem = false;
-      _newItemParent = null;
-      _isCreatingFile = true;
-      _explorerFocusNode.requestFocus();
-    });
+  void _handleEmptySpaceLeftClick(FileExplorerController controller) {
+    controller.clearSelectedItems();
+    _explorerFocusNode.requestFocus();
   }
 
   void _handleEmptySpaceRightClick(BuildContext context, TapUpDetails details,
@@ -402,6 +425,58 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       }
     }
     return KeyEventResult.ignored;
+  }
+
+  Future<void> _handleNewItemCreation(
+      FileExplorerController controller, String name, bool isFile) async {
+    if (name.isNotEmpty) {
+      try {
+        FileTreeItem? parentItem;
+        if (_newItemParent != null) {
+          parentItem = _newItemParent;
+        } else if (controller.selectedItem != null &&
+            controller.selectedItem!.isDirectory) {
+          parentItem = controller.selectedItem;
+        } else {
+          parentItem = null;
+        }
+
+        final parentPath =
+            parentItem?.getFullPath() ?? controller.currentDirectory!.path;
+        final newItemPath = path.join(parentPath, name);
+        if (isFile) {
+          await controller.createFile(parentPath, name);
+        } else {
+          await controller.createFolder(parentPath, name);
+        }
+
+        await controller.refreshDirectory();
+        final newItem = controller.findItemByPath(newItemPath);
+        if (newItem != null) {
+          controller.clearSelection();
+          controller.setSelectedItem(newItem);
+          _scrollToSelectedItem(ScrollDirection.forward);
+        }
+        MessageToastManager.showToast(
+            context, '${isFile ? 'File' : 'Folder'} created successfully');
+      } catch (e) {
+        MessageToastManager.showToast(
+            context, 'Error creating ${isFile ? 'file' : 'folder'}: $e');
+      } finally {
+        _cancelNewItemCreation();
+      }
+    } else {
+      _cancelNewItemCreation();
+    }
+  }
+
+  void _cancelNewItemCreation() {
+    setState(() {
+      _isCreatingNewItem = false;
+      _newItemParent = null;
+      _isCreatingFile = true;
+      _explorerFocusNode.requestFocus();
+    });
   }
 
   void _selectAll(FileExplorerController controller) {

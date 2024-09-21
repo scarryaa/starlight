@@ -26,8 +26,9 @@ class FileTreeItemWidget extends StatelessWidget {
       child: Container(
         height: 24,
         padding: EdgeInsets.only(left: 8.0 * item.level),
-        color:
-            isSelected ? Theme.of(context).highlightColor : Colors.transparent,
+        color: isSelected
+            ? Theme.of(context).colorScheme.secondary.withOpacity(0.4)
+            : Colors.transparent,
         child: Row(
           children: [
             if (item.isDirectory)

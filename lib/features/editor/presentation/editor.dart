@@ -81,7 +81,7 @@ class CodeEditorState extends State<CodeEditor> {
   late SettingsService _settingsService;
 
   int firstVisibleLine = 0;
-  int visibleLineCount = 500;
+  int visibleLineCount = 800;
   double maxLineWidth = 0.0;
   double zoomLevel = 1.0;
   double lineNumberWidth = 0.0;
