@@ -38,7 +38,11 @@ class _FileExplorerContentState extends State<FileExplorerContent>
   late ScrollController _scrollController;
   late FocusNode _explorerFocusNode;
   late FileOperationManager _fileOperationManager;
-
+  late TextEditingController _searchController;
+  List<FileTreeItem> _filteredItems = [];
+  bool _isSearching = false;
+  bool _isSearchBarVisible = false;
+  final FocusNode _searchFocusNode = FocusNode();
   bool _isCreatingNewItem = false;
   FileTreeItem? _newItemParent;
   bool _isCreatingFile = true;
@@ -53,14 +57,70 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     _explorerFocusNode = FocusNode();
     _explorerFocusNode.addListener(_onExplorerFocusChange);
     _fileOperationManager = FileOperationManager(context);
+    _searchController = TextEditingController();
+    _searchController.addListener(_onSearchChanged);
+    _searchFocusNode.addListener(_onSearchFocusChanged);
+    _explorerFocusNode.addListener(_onExplorerFocusChanged);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
-    _explorerFocusNode.removeListener(_onExplorerFocusChange);
+    _searchController.removeListener(_onSearchChanged);
+    _searchController.dispose();
+    _searchFocusNode.removeListener(_onSearchFocusChanged);
+    _searchFocusNode.dispose();
+    _explorerFocusNode.removeListener(_onExplorerFocusChanged);
     _explorerFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onExplorerFocusChanged() {
+    if (_explorerFocusNode.hasFocus) {
+      final controller = context.read<FileExplorerController>();
+      if (controller.selectedItem == null && controller.rootItems.isNotEmpty) {
+        _scrollToSelectedItem(ScrollDirection.forward);
+      }
+    }
+  }
+
+  void _onSearchFocusChanged() {
+    if (!_searchFocusNode.hasFocus) {
+      setState(() {
+        if (_searchController.text.isEmpty) {
+          _isSearchBarVisible = false;
+          _isSearching = false;
+          _filteredItems = [];
+        }
+      });
+    }
+  }
+
+  void _onSearchChanged() {
+    final controller = context.read<FileExplorerController>();
+    final query = _searchController.text.toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _isSearching = false;
+        _filteredItems = [];
+      } else {
+        _isSearching = true;
+        _filteredItems = _searchItems(controller.rootItems, query);
+      }
+    });
+  }
+
+  List<FileTreeItem> _searchItems(List<FileTreeItem> items, String query) {
+    List<FileTreeItem> results = [];
+    for (var item in items) {
+      if (item.name.toLowerCase().contains(query)) {
+        results.add(item);
+      }
+      if (item.isDirectory) {
+        results.addAll(_searchItems(item.children, query));
+      }
+    }
+    return results;
   }
 
   void _onExplorerFocusChange() {
@@ -81,6 +141,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (_isSearchBarVisible) _buildSearchBar(),
           Expanded(
             child: Consumer<FileExplorerController>(
               builder: (context, controller, child) =>
@@ -92,9 +153,49 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     );
   }
 
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      child: KeyboardListener(
+        focusNode: FocusNode(),
+        onKeyEvent: (KeyEvent event) {
+          if (event is KeyDownEvent &&
+              event.logicalKey == LogicalKeyboardKey.escape) {
+            _closeSearch();
+          }
+        },
+        child: TextField(
+          controller: _searchController,
+          focusNode: _searchFocusNode,
+          decoration: InputDecoration(
+            isDense: true,
+            hintText: 'Search files and folders',
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(8.0),
+              borderSide: BorderSide.none,
+            ),
+            filled: true,
+            fillColor: Theme.of(context).colorScheme.surface,
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.clear),
+              onPressed: _closeSearch,
+            ),
+          ),
+          onSubmitted: (_) => _closeSearch(),
+          onEditingComplete: () {
+            _onSearchChanged();
+            _explorerFocusNode.requestFocus();
+          },
+        ),
+      ),
+    );
+  }
+
   List<Widget> _buildFileTreeItems(
       List<FileTreeItem> items, FileExplorerController controller) {
     List<Widget> widgets = [];
+    final itemsToDisplay = _isSearching ? _filteredItems : items;
 
     if (_isCreatingNewItem && _newItemParent == null) {
       widgets.add(
@@ -108,11 +209,10 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       );
     }
 
-    for (var item in items) {
+    for (var item in itemsToDisplay) {
       widgets.add(
         _buildDraggableItem(item, controller),
       );
-
       if (_isCreatingNewItem && _newItemParent == item) {
         widgets.add(
           NewItemInput(
@@ -125,7 +225,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         );
       }
 
-      if (item.isDirectory && item.isExpanded) {
+      if (!_isSearching && item.isDirectory && item.isExpanded) {
         widgets.addAll(_buildFileTreeItems(item.children, controller));
       }
     }
@@ -254,42 +354,47 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       child: Focus(
         focusNode: _explorerFocusNode,
         onKey: (node, event) => _handleKeyPress(event, controller),
-        child: DragTarget<List<FileTreeItem>>(
-          onWillAccept: (data) {
-            setState(() {
-              _highlightedItem = null; // Clear any previously highlighted item
-            });
-            return data != null;
-          },
-          onAccept: (data) => _handleItemsDrop(data, null, controller),
-          builder: (context, candidateData, rejectedData) {
-            return Container(
-              decoration: BoxDecoration(
-                border: Border.all(
-                  color: _highlightedItem == null && candidateData.isNotEmpty
-                      ? Colors.blue
-                      : Colors.transparent,
-                  width: 2,
-                ),
-              ),
-              child: GestureDetector(
-                onTap: () => _handleEmptySpaceLeftClick(controller),
-                onSecondaryTapUp: (details) =>
-                    _handleEmptySpaceRightClick(context, details, controller),
-                behavior: HitTestBehavior.opaque,
-                child: Scrollbar(
-                  controller: _scrollController,
-                  child: ListView(
-                    controller: _scrollController,
-                    children: [
-                      ..._buildFileTreeItems(controller.rootItems, controller),
-                      const SizedBox(height: 24),
-                    ],
+        child: GestureDetector(
+          onTap: () => _explorerFocusNode.requestFocus(),
+          child: DragTarget<List<FileTreeItem>>(
+            onWillAccept: (data) {
+              setState(() {
+                _highlightedItem =
+                    null; // Clear any previously highlighted item
+              });
+              return data != null;
+            },
+            onAccept: (data) => _handleItemsDrop(data, null, controller),
+            builder: (context, candidateData, rejectedData) {
+              return Container(
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: _highlightedItem == null && candidateData.isNotEmpty
+                        ? Colors.blue
+                        : Colors.transparent,
+                    width: 2,
                   ),
                 ),
-              ),
-            );
-          },
+                child: GestureDetector(
+                  onTap: () => _handleEmptySpaceLeftClick(controller),
+                  onSecondaryTapUp: (details) =>
+                      _handleEmptySpaceRightClick(context, details, controller),
+                  behavior: HitTestBehavior.opaque,
+                  child: Scrollbar(
+                    controller: _scrollController,
+                    child: ListView(
+                      controller: _scrollController,
+                      children: [
+                        ..._buildFileTreeItems(
+                            controller.rootItems, controller),
+                        const SizedBox(height: 24),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
         ),
       ),
     );
@@ -371,6 +476,16 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     controller.selectItem(item);
   }
 
+  void _closeSearch() {
+    setState(() {
+      _isSearchBarVisible = false;
+      _isSearching = false;
+      _filteredItems = [];
+    });
+    _searchController.clear();
+    _explorerFocusNode.requestFocus();
+  }
+
   void _handleItemSecondaryTap(BuildContext context, TapUpDetails details,
       FileTreeItem item, FileExplorerController controller) {
     if (!controller.isItemSelected(item)) {
@@ -407,6 +522,14 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     if (event is RawKeyDownEvent) {
       final bool isShiftPressed = event.isShiftPressed;
       final bool isCtrlPressed = event.isControlPressed || event.isMetaPressed;
+
+      // Handle Escape key to close search
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        if (_isSearchBarVisible) {
+          _closeSearch();
+          return KeyEventResult.handled;
+        }
+      }
 
       if (isCtrlPressed && event.logicalKey == LogicalKeyboardKey.keyA) {
         _selectAll(controller);
@@ -478,6 +601,24 @@ class _FileExplorerContentState extends State<FileExplorerContent>
             _fileOperationManager.redo(controller);
             return KeyEventResult.handled;
         }
+      }
+
+      // Handle typing to trigger search
+      if (event.logicalKey != LogicalKeyboardKey.enter &&
+          event.logicalKey != LogicalKeyboardKey.space &&
+          !event.isControlPressed &&
+          !event.isMetaPressed &&
+          !event.isAltPressed) {
+        if (!_isSearchBarVisible) {
+          setState(() {
+            _isSearchBarVisible = true;
+          });
+        }
+        _searchFocusNode.requestFocus();
+        _searchController.text += event.character ?? '';
+        _searchController.selection = TextSelection.fromPosition(
+            TextPosition(offset: _searchController.text.length));
+        return KeyEventResult.handled;
       }
     }
     return KeyEventResult.ignored;
