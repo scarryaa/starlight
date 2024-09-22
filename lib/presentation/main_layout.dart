@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/command_palette/command_palette.dart';
 import 'package:starlight/features/editor/presentation/editor_widget.dart';
+import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/features/file_explorer/presentation/file_explorer.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
 import 'package:starlight/features/terminal/terminal.dart';
@@ -101,26 +102,42 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                                 child: Column(
                                   children: [
                                     Expanded(
-                                      child: EditorWidget(
-                                        key: _editorService.editorKey,
-                                        onContentChanged: (String newContent) =>
-                                            _editorService.handleContentChanged(
-                                                newContent),
-                                        fileMenuActions: FileMenuActions(
-                                          newFile: _editorService.handleNewFile,
-                                          openFile:
-                                              _editorService.handleOpenFile,
-                                          save: _editorService
-                                              .handleSaveCurrentFile,
-                                          saveAs:
-                                              _editorService.handleSaveFileAs,
-                                          exit: (context) =>
-                                              SystemNavigator.pop(),
-                                        ),
-                                        rootDirectory: _fileExplorerService
-                                            .selectedDirectory,
-                                        keyboardShortcutService:
-                                            _keyboardShortcutService,
+                                      child: DragTarget<List<FileTreeItem>>(
+                                        onAccept: (List<FileTreeItem> data) {
+                                          for (var item in data) {
+                                            if (!item.isDirectory) {
+                                              _editorService.handleOpenFile(
+                                                  item.entity as File);
+                                            }
+                                          }
+                                        },
+                                        builder: (context, candidateData,
+                                            rejectedData) {
+                                          return EditorWidget(
+                                            key: _editorService.editorKey,
+                                            onContentChanged:
+                                                (String newContent) =>
+                                                    _editorService
+                                                        .handleContentChanged(
+                                                            newContent),
+                                            fileMenuActions: FileMenuActions(
+                                              newFile:
+                                                  _editorService.handleNewFile,
+                                              openFile:
+                                                  _editorService.handleOpenFile,
+                                              save: _editorService
+                                                  .handleSaveCurrentFile,
+                                              saveAs: _editorService
+                                                  .handleSaveFileAs,
+                                              exit: (context) =>
+                                                  SystemNavigator.pop(),
+                                            ),
+                                            rootDirectory: _fileExplorerService
+                                                .selectedDirectory,
+                                            keyboardShortcutService:
+                                                _keyboardShortcutService,
+                                          );
+                                        },
                                       ),
                                     ),
                                     if (settingsService.showTerminal)
