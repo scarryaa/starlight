@@ -1,5 +1,7 @@
 import 'dart:io';
 
+import 'package:cross_file/cross_file.dart';
+import 'package:desktop_drop/desktop_drop.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -34,28 +36,41 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   late final KeyboardShortcutService _keyboardShortcutService;
   bool _showCommandPalette = false;
   late final List<Command> _commands;
+  bool _dragging = false;
 
   @override
   Widget build(BuildContext context) {
     return Consumer<SettingsService>(
-        builder: (context, settingsService, child) {
-      return Focus(
-        focusNode: _mainFocusNode,
-        autofocus: true,
-        onKeyEvent: (FocusNode node, KeyEvent event) {
-          return _keyboardShortcutService.handleKeyEvent(event);
-        },
-        child: GestureDetector(
-          onTap: () {
-            _mainFocusNode.requestFocus();
+      builder: (context, settingsService, child) {
+        return Focus(
+          focusNode: _mainFocusNode,
+          autofocus: true,
+          onKeyEvent: (FocusNode node, KeyEvent event) {
+            return _keyboardShortcutService.handleKeyEvent(event);
           },
-          behavior: HitTestBehavior.translucent,
-          child: Consumer<UIService>(
-            builder: (context, uiService, child) {
-              return Scaffold(
-                body: Stack(
-                  children: [
-                    Column(
+          child: GestureDetector(
+            onTap: () {
+              _mainFocusNode.requestFocus();
+            },
+            behavior: HitTestBehavior.translucent,
+            child: Consumer<UIService>(
+              builder: (context, uiService, child) {
+                return DropTarget(
+                  onDragDone: (detail) {
+                    _handleFileDrop(detail.files);
+                  },
+                  onDragEntered: (detail) {
+                    setState(() {
+                      _dragging = true;
+                    });
+                  },
+                  onDragExited: (detail) {
+                    setState(() {
+                      _dragging = false;
+                    });
+                  },
+                  child: Scaffold(
+                    body: Column(
                       children: [
                         uiService.buildAppBar(
                           context,
@@ -126,23 +141,23 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
                         uiService.buildStatusBar(context),
                       ],
                     ),
-                    if (_showCommandPalette)
-                      CommandPalette(
-                        commands: _commands,
-                        onCommandSelected: (command) {
-                          command.action();
-                          _toggleCommandPalette();
-                        },
-                        onClose: _toggleCommandPalette,
-                      ),
-                  ],
-                ),
-              );
-            },
+                  ),
+                );
+              },
+            ),
           ),
-        ),
-      );
+        );
+      },
+    );
+  }
+
+  void _handleFileDrop(List<XFile> files) {
+    setState(() {
+      _dragging = false;
     });
+    for (var file in files) {
+      _editorService.handleOpenFile(File(file.path));
+    }
   }
 
   @override

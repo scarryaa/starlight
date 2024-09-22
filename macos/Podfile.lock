@@ -1,6 +1,8 @@
 PODS:
   - appkit_ui_element_colors (1.0.0):
     - FlutterMacOS
+  - desktop_drop (0.0.1):
+    - FlutterMacOS
   - flutter_pty (0.0.1):
     - FlutterMacOS
   - FlutterMacOS (1.0.0)
@@ -21,6 +23,7 @@ PODS:
 
 DEPENDENCIES:
   - appkit_ui_element_colors (from `Flutter/ephemeral/.symlinks/plugins/appkit_ui_element_colors/macos`)
+  - desktop_drop (from `Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos`)
   - flutter_pty (from `Flutter/ephemeral/.symlinks/plugins/flutter_pty/macos`)
   - FlutterMacOS (from `Flutter/ephemeral`)
   - macos_ui (from `Flutter/ephemeral/.symlinks/plugins/macos_ui/macos`)
@@ -33,6 +36,8 @@ DEPENDENCIES:
 EXTERNAL SOURCES:
   appkit_ui_element_colors:
     :path: Flutter/ephemeral/.symlinks/plugins/appkit_ui_element_colors/macos
+  desktop_drop:
+    :path: Flutter/ephemeral/.symlinks/plugins/desktop_drop/macos
   flutter_pty:
     :path: Flutter/ephemeral/.symlinks/plugins/flutter_pty/macos
   FlutterMacOS:
@@ -52,6 +57,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   appkit_ui_element_colors: 39bb2d80be3f19b152ccf4c70d5bbe6cba43d74a
+  desktop_drop: 69eeff437544aa619c8db7f4481b3a65f7696898
   flutter_pty: 41b6f848ade294be726a6b94cdd4a67c3bc52f59
   FlutterMacOS: 8f6f14fa908a6fb3fba0cd85dbd81ec4b251fb24
   macos_ui: 6229a8922cd97bafb7d9636c8eb8dfb0744183ca
