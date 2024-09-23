@@ -10,8 +10,7 @@ import 'package:starlight/themes/theme_provider.dart';
 import 'package:window_manager/window_manager.dart';
 
 Future<void> initializeWindow() async {
-  SettingsService settingsService = SettingsService();
-  await settingsService.init();
+  SettingsService settingsService = await SettingsService().init();
   WindowOptions windowOptions = WindowOptions(
     size: Size(settingsService.windowWidth, settingsService.windowHeight),
     minimumSize: const Size(700, 600),
@@ -30,20 +29,22 @@ Future<void> initializeWindow() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final settingsService = await SettingsService().init();
   await initializeWindow();
 
   runApp(MultiProvider(
     providers: [
+      ChangeNotifierProvider.value(value: settingsService),
       ChangeNotifierProvider(create: (_) => UIService()),
-      ChangeNotifierProvider(create: (_) => SettingsService()),
       ChangeNotifierProxyProvider<SettingsService, ThemeProvider>(
-        create: (context) => ThemeProvider(context.read<SettingsService>()),
+        create: (context) => ThemeProvider(settingsService),
         update: (context, settingsService, previous) =>
             previous ?? ThemeProvider(settingsService),
       ),
-      Provider<FileExplorerService>(
-        create: (_) => FileExplorerService(),
-        lazy: true,
+      ProxyProvider<SettingsService, FileExplorerService>(
+        create: (context) => FileExplorerService(settingsService),
+        update: (context, settingsService, previous) =>
+            previous ?? FileExplorerService(settingsService),
       ),
       Provider<EditorService>(
         create: (_) => EditorService(),

@@ -3,7 +3,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 class SettingsService extends ChangeNotifier {
   late SharedPreferences _prefs;
-
   bool _showFileExplorer = true;
   bool _showTerminal = false;
   bool _isFileExplorerOnLeft = true;
@@ -11,7 +10,21 @@ class SettingsService extends ChangeNotifier {
   double _windowHeight = 600;
   bool _isFullscreen = false;
   ThemeMode _themeMode = ThemeMode.system;
+  static const String _lastDirectoryKey = 'last_directory';
 
+  // Private constructor
+  SettingsService._();
+
+  // Singleton instance
+  static SettingsService? _instance;
+
+  // Factory constructor to return the same instance every time
+  factory SettingsService() {
+    _instance ??= SettingsService._();
+    return _instance!;
+  }
+
+  // Getters remain the same
   bool get showFileExplorer => _showFileExplorer;
   bool get showTerminal => _showTerminal;
   bool get isFileExplorerOnLeft => _isFileExplorerOnLeft;
@@ -20,16 +33,14 @@ class SettingsService extends ChangeNotifier {
   bool get isFullscreen => _isFullscreen;
   ThemeMode get themeMode => _themeMode;
 
-  SettingsService() {
-    _loadSettings();
-  }
-
-  Future<void> init() async {
+  // Initialize the service
+  Future<SettingsService> init() async {
+    _prefs = await SharedPreferences.getInstance();
     await _loadSettings();
+    return this;
   }
 
   Future<void> _loadSettings() async {
-    _prefs = await SharedPreferences.getInstance();
     _showFileExplorer = _prefs.getBool('showFileExplorer') ?? true;
     _showTerminal = _prefs.getBool('showTerminal') ?? false;
     _isFileExplorerOnLeft = _prefs.getBool('isFileExplorerOnLeft') ?? true;
@@ -39,6 +50,14 @@ class SettingsService extends ChangeNotifier {
     _themeMode =
         ThemeMode.values[_prefs.getInt('themeMode') ?? ThemeMode.system.index];
     notifyListeners();
+  }
+
+  Future<void> setLastDirectory(String directory) async {
+    await _prefs.setString(_lastDirectoryKey, directory);
+  }
+
+  String? getLastDirectory() {
+    return _prefs.getString(_lastDirectoryKey);
   }
 
   Future<void> saveSettings() async {
