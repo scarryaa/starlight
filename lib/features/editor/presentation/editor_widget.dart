@@ -3,11 +3,13 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide TabBar;
+import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/presentation/editor.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
 import 'package:starlight/features/tabs/presentation/tab.dart';
 import 'package:starlight/features/toasts/error_toast.dart';
 import 'package:starlight/presentation/screens/search_all_files.dart';
+import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
 
 class EditorContentKey extends ValueKey<String> {
@@ -42,6 +44,7 @@ class EditorWidgetState extends State<EditorWidget> {
   final TextEditingController _searchController = TextEditingController();
   bool _isReplaceVisible = false;
   final TextEditingController _replaceController = TextEditingController();
+  late FileExplorerService _fileExplorerService;
   String _searchTerm = '';
   String _replaceTerm = '';
   List<int> _matchPositions = [];
@@ -114,6 +117,7 @@ class EditorWidgetState extends State<EditorWidget> {
   @override
   void initState() {
     super.initState();
+    _fileExplorerService = context.read<FileExplorerService>();
     _currentEditorKey = const EditorContentKey('');
     _editorFocusNode = FocusNode();
     _toastManager = ErrorToastManager(context);
@@ -121,6 +125,19 @@ class EditorWidgetState extends State<EditorWidget> {
     widget.fileMenuActions.openFile = openFile;
     widget.fileMenuActions.save = saveCurrentFile;
     widget.fileMenuActions.saveAs = saveFileAs;
+  }
+
+  void _revealInAppFileExplorer() {
+    if (_selectedTabIndex.value != -1) {
+      final currentTab = _tabs[_selectedTabIndex.value];
+      if (currentTab.filePath != 'Untitled' &&
+          currentTab.filePath != 'Project Search') {
+        _fileExplorerService.revealFile(currentTab.filePath);
+      } else {
+        _toastManager.showErrorToast('Reveal in File Explorer',
+            'Cannot reveal unsaved or search files.');
+      }
+    }
   }
 
   void maintainFocus() {
@@ -516,6 +533,15 @@ class EditorWidgetState extends State<EditorWidget> {
         children: [
           Expanded(
             child: _buildCurrentFilePath(),
+          ),
+          IconButton(
+            iconSize: 20,
+            icon: Icon(
+              Icons.folder_open,
+              color: defaultIconColor,
+            ),
+            onPressed: _revealInAppFileExplorer,
+            tooltip: 'Reveal in File Explorer',
           ),
           IconButton(
             iconSize: 20,

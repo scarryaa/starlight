@@ -59,6 +59,38 @@ class FileExplorerController extends ChangeNotifier {
     await refreshDirectory();
   }
 
+  Future<void> expandAll() async {
+    await _expandRecursively(rootItems);
+    notifyListeners();
+  }
+
+  void collapseAll() {
+    _collapseRecursively(rootItems);
+    notifyListeners();
+  }
+
+  Future<void> _expandRecursively(List<FileTreeItem> items) async {
+    for (var item in items) {
+      if (item.isDirectory) {
+        item.isExpanded = true;
+        if (item.children.isEmpty) {
+          item.children = await _getDirectoryContents(
+              Directory(item.path), item.level + 1, item);
+        }
+        await _expandRecursively(item.children);
+      }
+    }
+  }
+
+  void _collapseRecursively(List<FileTreeItem> items) {
+    for (var item in items) {
+      if (item.isDirectory) {
+        item.isExpanded = false;
+        _collapseRecursively(item.children);
+      }
+    }
+  }
+
   Future<String> moveToTemp(String sourcePath) async {
     try {
       if (_tempDirectory == null) await initTempDirectory();

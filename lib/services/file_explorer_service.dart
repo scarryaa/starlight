@@ -1,7 +1,9 @@
 import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as path;
 import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
+import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/services/settings_service.dart';
 
 class FileExplorerService {
@@ -36,5 +38,59 @@ class FileExplorerService {
     if (lastDirectory != null) {
       handleDirectorySelected(lastDirectory);
     }
+  }
+
+  void revealFile(String filePath) {
+    if (selectedDirectory.value == null ||
+        !filePath.startsWith(selectedDirectory.value!)) {
+      print('File is not within the current directory structure');
+      return;
+    }
+
+    _expandToFile(filePath);
+    _highlightFile(filePath);
+  }
+
+  void _expandToFile(String filePath) {
+    List<String> pathParts =
+        path.split(path.relative(filePath, from: selectedDirectory.value!));
+    String currentPath = selectedDirectory.value!;
+
+    for (int i = 0; i < pathParts.length - 1; i++) {
+      currentPath = path.join(currentPath, pathParts[i]);
+      FileTreeItem? item = _findFileTreeItem(currentPath);
+      if (item != null && item.isDirectory && !item.isExpanded) {
+        _fileExplorerController.toggleDirectoryExpansion(item);
+      }
+    }
+  }
+
+  void _highlightFile(String filePath) {
+    FileTreeItem? fileItem = _findFileTreeItem(filePath);
+    if (fileItem != null) {
+      _fileExplorerController.clearSelectedItems();
+      _fileExplorerController.setSelectedItem(fileItem);
+    } else {
+      print('File not found in the current directory structure: $filePath');
+    }
+  }
+
+  FileTreeItem? _findFileTreeItem(String itemPath) {
+    return _searchFileTreeItem(_fileExplorerController.rootItems, itemPath);
+  }
+
+  FileTreeItem? _searchFileTreeItem(List<FileTreeItem> items, String itemPath) {
+    for (var item in items) {
+      if (item.path == itemPath) {
+        return item;
+      }
+      if (item.isDirectory && item.isExpanded) {
+        final result = _searchFileTreeItem(item.children, itemPath);
+        if (result != null) {
+          return result;
+        }
+      }
+    }
+    return null;
   }
 }

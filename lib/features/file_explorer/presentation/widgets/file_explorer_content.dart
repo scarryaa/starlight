@@ -155,6 +155,16 @@ class _FileExplorerContentState extends State<FileExplorerContent>
                 await controller.refreshDirectory();
                 MessageToastManager.showToast(context, 'Directory refreshed');
               },
+              onExpandAll: () async {
+                await controller.expandAll();
+                MessageToastManager.showToast(
+                    context, 'All directories expanded');
+              },
+              onCollapseAll: () {
+                controller.collapseAll();
+                MessageToastManager.showToast(
+                    context, 'All directories collapsed');
+              },
             ),
           ),
           Expanded(
