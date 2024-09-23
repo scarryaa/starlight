@@ -12,6 +12,7 @@ import 'package:starlight/features/file_explorer/presentation/widgets/new_item_i
 import 'package:starlight/features/file_explorer/presentation/widgets/directory_selection_prompt.dart';
 import 'package:starlight/features/file_explorer/application/file_operation_manager.dart';
 import 'package:starlight/features/file_explorer/presentation/widgets/context_menu_builder.dart';
+import 'package:starlight/features/file_explorer/presentation/widgets/quick_action_bar.dart';
 import 'package:starlight/features/toasts/message_toast.dart';
 import 'package:starlight/features/file_explorer/infrastructure/services/file_service.dart';
 
@@ -142,6 +143,20 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (_isSearchBarVisible) _buildSearchBar(),
+          Consumer<FileExplorerController>(
+            builder: (context, controller, child) => QuickActionBar(
+              onNewFolder: () => _startCreatingNewItem(false, null),
+              onNewFile: () => _startCreatingNewItem(true, null),
+              onCopy: _copyItems,
+              onCut: _cutItems,
+              onPaste: (controller) =>
+                  _fileOperationManager.pasteItems(controller),
+              onRefresh: () async {
+                await controller.refreshDirectory();
+                MessageToastManager.showToast(context, 'Directory refreshed');
+              },
+            ),
+          ),
           Expanded(
             child: Consumer<FileExplorerController>(
               builder: (context, controller, child) =>
