@@ -40,6 +40,27 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   bool _dragging = false;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _initializeServices();
+    _initializeCommands();
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _mainFocusNode.requestFocus());
+  }
+
+  void _initializeServices() {
+    _settingsService = context.read<SettingsService>();
+    _fileExplorerService = context.read<FileExplorerService>();
+    _editorService = context.read<EditorService>();
+    _keyboardShortcutService = context.read<KeyboardShortcutService>();
+    _keyboardShortcutService
+      ..setToggleCommandPalette(_toggleCommandPalette)
+      ..setToggleFileExplorer(_toggleFileExplorer)
+      ..setToggleTerminal(_toggleTerminal);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<SettingsService>(
       builder: (context, settingsService, child) {
@@ -47,125 +68,123 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           focusNode: _mainFocusNode,
           autofocus: true,
           onKeyEvent: (FocusNode node, KeyEvent event) {
-            return _keyboardShortcutService.handleKeyEvent(event);
+            final result = _keyboardShortcutService.handleKeyEvent(event);
+            // Assuming handleKeyEvent returns KeyEventResult
+            return result;
           },
           child: GestureDetector(
-            onTap: () {
-              _mainFocusNode.requestFocus();
-            },
+            onTap: () => _mainFocusNode.requestFocus(),
             behavior: HitTestBehavior.translucent,
-            child: Consumer<UIService>(
-              builder: (context, uiService, child) {
-                return DropTarget(
-                  onDragDone: (detail) {
-                    _handleFileDrop(detail.files);
-                  },
-                  onDragEntered: (detail) {
-                    setState(() {
-                      _dragging = true;
-                    });
-                  },
-                  onDragExited: (detail) {
-                    setState(() {
-                      _dragging = false;
-                    });
-                  },
-                  child: Scaffold(
-                    body: Column(
-                      children: [
-                        uiService.buildAppBar(
-                          context,
-                          Provider.of<ThemeProvider>(context),
-                          Theme.of(context).brightness == Brightness.dark,
-                          settingsService.isFullscreen,
-                        ),
-                        Expanded(
-                          child: Row(
-                            children: [
-                              if (settingsService.showFileExplorer)
-                                ResizableWidget(
-                                  maxSizePercentage: 0.9,
-                                  child: RepaintBoundary(
-                                    child: FileExplorer(
-                                      onFileSelected:
-                                          _editorService.handleOpenFile,
-                                      onDirectorySelected: _fileExplorerService
-                                          .handleDirectorySelected,
-                                      controller:
-                                          _fileExplorerService.controller,
-                                      onOpenInTerminal:
-                                          _openInIntegratedTerminal,
-                                    ),
-                                  ),
-                                ),
-                              Expanded(
-                                child: Column(
-                                  children: [
-                                    Expanded(
-                                      child: DragTarget<List<FileTreeItem>>(
-                                        onAccept: (List<FileTreeItem> data) {
-                                          for (var item in data) {
-                                            if (!item.isDirectory) {
-                                              _editorService.handleOpenFile(
-                                                  item.entity as File);
-                                            }
-                                          }
-                                        },
-                                        builder: (context, candidateData,
-                                            rejectedData) {
-                                          return EditorWidget(
-                                            key: _editorService.editorKey,
-                                            onContentChanged:
-                                                (String newContent) =>
-                                                    _editorService
-                                                        .handleContentChanged(
-                                                            newContent),
-                                            fileMenuActions: FileMenuActions(
-                                              newFile:
-                                                  _editorService.handleNewFile,
-                                              openFile:
-                                                  _editorService.handleOpenFile,
-                                              save: _editorService
-                                                  .handleSaveCurrentFile,
-                                              saveAs: _editorService
-                                                  .handleSaveFileAs,
-                                              exit: (context) =>
-                                                  SystemNavigator.pop(),
-                                            ),
-                                            rootDirectory: _fileExplorerService
-                                                .selectedDirectory,
-                                            keyboardShortcutService:
-                                                _keyboardShortcutService,
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                    if (settingsService.showTerminal)
-                                      ResizableWidget(
-                                        isTopResizable: true,
-                                        isHorizontal: false,
-                                        maxSizePercentage: 0.5,
-                                        child: IntegratedTerminal(
-                                          initialDirectory: _terminalDirectory,
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        uiService.buildStatusBar(context),
-                      ],
-                    ),
-                  ),
-                );
-              },
+            child: _buildScaffold(context, settingsService),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildScaffold(BuildContext context, SettingsService settingsService) {
+    return Consumer<UIService>(
+      builder: (context, uiService, child) {
+        return DropTarget(
+          onDragDone: (detail) => _handleFileDrop(detail.files),
+          onDragEntered: (_) => setState(() => _dragging = true),
+          onDragExited: (_) => setState(() => _dragging = false),
+          child: Scaffold(
+            body: Column(
+              children: [
+                _buildAppBar(context, uiService, settingsService),
+                Expanded(child: _buildMainContent(settingsService)),
+                uiService.buildStatusBar(context),
+              ],
             ),
           ),
         );
       },
     );
+  }
+
+  Widget _buildAppBar(BuildContext context, UIService uiService,
+      SettingsService settingsService) {
+    return uiService.buildAppBar(
+      context,
+      Provider.of<ThemeProvider>(context),
+      Theme.of(context).brightness == Brightness.dark,
+      settingsService.isFullscreen,
+    );
+  }
+
+  Widget _buildMainContent(SettingsService settingsService) {
+    return Row(
+      children: [
+        if (settingsService.showFileExplorer) _buildFileExplorer(),
+        Expanded(
+          child: Column(
+            children: [
+              Expanded(child: _buildEditor()),
+              if (settingsService.showTerminal) _buildTerminal(),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFileExplorer() {
+    return ResizableWidget(
+      maxSizePercentage: 0.9,
+      child: RepaintBoundary(
+        child: FileExplorer(
+          onFileSelected: _editorService.handleOpenFile,
+          onDirectorySelected: _fileExplorerService.handleDirectorySelected,
+          controller: _fileExplorerService.controller,
+          onOpenInTerminal: _openInIntegratedTerminal,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEditor() {
+    return DragTarget<List<FileTreeItem>>(
+      onAcceptWithDetails: (DragTargetDetails<List<FileTreeItem>> details) {
+        _handleDraggedFiles(details.data);
+      },
+      builder: (context, candidateData, rejectedData) {
+        return EditorWidget(
+          key: _editorService.editorKey,
+          onContentChanged: _editorService.handleContentChanged,
+          fileMenuActions: _buildFileMenuActions(),
+          rootDirectory: _fileExplorerService.selectedDirectory,
+          keyboardShortcutService: _keyboardShortcutService,
+        );
+      },
+    );
+  }
+
+  FileMenuActions _buildFileMenuActions() {
+    return FileMenuActions(
+      newFile: _editorService.handleNewFile,
+      openFile: _editorService.handleOpenFile,
+      save: _editorService.handleSaveCurrentFile,
+      saveAs: _editorService.handleSaveFileAs,
+      exit: (context) => SystemNavigator.pop(),
+    );
+  }
+
+  Widget _buildTerminal() {
+    return ResizableWidget(
+      isTopResizable: true,
+      isHorizontal: false,
+      maxSizePercentage: 0.5,
+      child: IntegratedTerminal(initialDirectory: _terminalDirectory),
+    );
+  }
+
+  void _handleDraggedFiles(List<FileTreeItem> data) {
+    for (var item in data) {
+      if (!item.isDirectory) {
+        _editorService.handleOpenFile(item.entity as File);
+      }
+    }
   }
 
   void _handleFileDrop(List<XFile> files) {
@@ -175,25 +194,6 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     for (var file in files) {
       _editorService.handleOpenFile(File(file.path));
     }
-  }
-
-  @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addObserver(this);
-    _settingsService = context.read<SettingsService>();
-    _fileExplorerService = context.read<FileExplorerService>();
-    _editorService = context.read<EditorService>();
-    _keyboardShortcutService = context.read<KeyboardShortcutService>();
-    _keyboardShortcutService.setToggleCommandPalette(_toggleCommandPalette);
-    _keyboardShortcutService.setToggleFileExplorer(_toggleFileExplorer);
-    _keyboardShortcutService.setToggleTerminal(_toggleTerminal);
-
-    _initializeCommands();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _mainFocusNode.requestFocus();
-    });
   }
 
   void _openInIntegratedTerminal(String directory) {

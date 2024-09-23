@@ -522,6 +522,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     if (event is RawKeyDownEvent) {
       final bool isShiftPressed = event.isShiftPressed;
       final bool isCtrlPressed = event.isControlPressed || event.isMetaPressed;
+      final bool isAltPressed = event.isAltPressed;
 
       // Handle Escape key to close search
       if (event.logicalKey == LogicalKeyboardKey.escape) {
@@ -603,25 +604,64 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         }
       }
 
+      // Handle Escape key to close search or cancel multi-select
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        if (_isSearchBarVisible) {
+          _closeSearch();
+          return KeyEventResult.handled;
+        } else if (controller.isMultiSelectMode) {
+          controller.clearSelectedItems();
+          return KeyEventResult.handled;
+        }
+      }
+
       // Handle typing to trigger search
-      if (event.logicalKey != LogicalKeyboardKey.enter &&
-          event.logicalKey != LogicalKeyboardKey.space &&
-          !event.isControlPressed &&
-          !event.isMetaPressed &&
-          !event.isAltPressed) {
+      if (!_isModifierKey(event.logicalKey) &&
+          !_isSpecialKey(event.logicalKey) &&
+          event.character != null &&
+          event.character!.isNotEmpty &&
+          !isCtrlPressed &&
+          !isAltPressed) {
         if (!_isSearchBarVisible) {
           setState(() {
             _isSearchBarVisible = true;
           });
         }
         _searchFocusNode.requestFocus();
-        _searchController.text += event.character ?? '';
+        _searchController.text += event.character!;
         _searchController.selection = TextSelection.fromPosition(
             TextPosition(offset: _searchController.text.length));
         return KeyEventResult.handled;
       }
     }
     return KeyEventResult.ignored;
+  }
+
+  bool _isModifierKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.shift ||
+        key == LogicalKeyboardKey.shiftLeft ||
+        key == LogicalKeyboardKey.shiftRight ||
+        key == LogicalKeyboardKey.control ||
+        key == LogicalKeyboardKey.controlLeft ||
+        key == LogicalKeyboardKey.controlRight ||
+        key == LogicalKeyboardKey.alt ||
+        key == LogicalKeyboardKey.altLeft ||
+        key == LogicalKeyboardKey.altRight ||
+        key == LogicalKeyboardKey.meta ||
+        key == LogicalKeyboardKey.metaLeft ||
+        key == LogicalKeyboardKey.metaRight;
+  }
+
+  bool _isSpecialKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.escape ||
+        key == LogicalKeyboardKey.tab ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.backspace ||
+        key == LogicalKeyboardKey.delete ||
+        key == LogicalKeyboardKey.arrowLeft ||
+        key == LogicalKeyboardKey.arrowRight ||
+        key == LogicalKeyboardKey.arrowUp ||
+        key == LogicalKeyboardKey.arrowDown;
   }
 
   Future<void> _handleNewItemCreation(
@@ -776,9 +816,11 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         ? allItems.indexOf(controller.selectedItem!)
         : -1;
     if (currentIndex > 0) {
+      controller.clearSelectedItems();
       controller.setSelectedItem(allItems[currentIndex - 1]);
       _scrollToSelectedItem(ScrollDirection.reverse);
     } else if (currentIndex == -1) {
+      controller.clearSelectedItems();
       controller.setSelectedItem(allItems.last);
       _scrollToSelectedItem(ScrollDirection.reverse);
     }
@@ -790,9 +832,11 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         ? allItems.indexOf(controller.selectedItem!)
         : -1;
     if (currentIndex < allItems.length - 1) {
+      controller.clearSelectedItems();
       controller.setSelectedItem(allItems[currentIndex + 1]);
       _scrollToSelectedItem(ScrollDirection.forward);
     } else if (currentIndex == -1) {
+      controller.clearSelectedItems();
       controller.setSelectedItem(allItems.first);
       _scrollToSelectedItem(ScrollDirection.forward);
     }
@@ -803,6 +847,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         controller.selectedItem!.isExpanded) {
       controller.toggleDirectoryExpansion(controller.selectedItem!);
     } else if (controller.selectedItem?.parent != null) {
+      controller.clearSelectedItems();
       controller.setSelectedItem(controller.selectedItem!.parent!);
       _scrollToSelectedItem(ScrollDirection.reverse);
     }
@@ -813,6 +858,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       if (!controller.selectedItem!.isExpanded) {
         controller.toggleDirectoryExpansion(controller.selectedItem!);
       } else if (controller.selectedItem!.children.isNotEmpty) {
+        controller.clearSelectedItems();
         controller.setSelectedItem(controller.selectedItem!.children.first);
         _scrollToSelectedItem(ScrollDirection.forward);
       }
