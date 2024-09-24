@@ -18,10 +18,19 @@ List<ContextMenuItem> buildContextMenuItems(
     Function(BuildContext, bool) copyPath,
     Function(BuildContext) revealInFinder,
     Function(String) onOpenInTerminal,
-    FileOperationManager fileOperationManager) {
+    FileOperationManager fileOperationManager,
+    bool isSearching,
+    Function(FileTreeItem)? showInExplorer) {
   final List<ContextMenuItem> menuItems = [];
   final bool isMultiSelectMode = controller.isMultiSelectMode;
   final List<FileTreeItem> selectedItems = controller.selectedItems;
+
+  if (isSearching && item != null && showInExplorer != null) {
+    menuItems.add(ContextMenuItem(
+      title: 'Show in Explorer',
+      onTap: () => showInExplorer(item),
+    ));
+  }
 
   if (item == null) {
     menuItems.addAll([
@@ -125,7 +134,9 @@ void showContextMenu(
     Function(BuildContext, bool) copyPath,
     Function(BuildContext) revealInFinder,
     Function(String) onOpenInTerminal,
-    FileOperationManager fileOperationManager) {
+    FileOperationManager fileOperationManager,
+    [bool isSearching = false,
+    Function(FileTreeItem)? showInExplorer]) {
   showMenu<void>(
     context: context,
     position: position,
@@ -151,6 +162,8 @@ void showContextMenu(
             revealInFinder,
             onOpenInTerminal,
             fileOperationManager,
+            isSearching,
+            showInExplorer,
           ),
         ),
       ),

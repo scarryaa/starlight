@@ -322,14 +322,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       },
       builder: (context, candidateData, rejectedData) {
         return Container(
-          decoration: BoxDecoration(
-            border: Border.all(
-              color:
-                  _highlightedItem == item ? Colors.blue : Colors.transparent,
-              width: 2,
-            ),
-            borderRadius: BorderRadius.circular(4),
-          ),
           child: FileTreeItemWidget(
             key: ValueKey(item.path),
             item: item,
@@ -414,7 +406,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
                     color: _highlightedItem == null && candidateData.isNotEmpty
                         ? Colors.blue
                         : Colors.transparent,
-                    width: 2,
                   ),
                 ),
                 child: GestureDetector(
@@ -542,20 +533,49 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     );
 
     showContextMenu(
-        context,
-        position,
-        controller,
-        item,
-        _startCreatingNewItem,
-        _copyItems,
-        _cutItems,
-        _renameItem,
-        _deleteItem,
-        _deleteItems,
-        _copyPath,
-        _revealInFinder,
-        widget.onOpenInTerminal,
-        _fileOperationManager);
+      context,
+      position,
+      controller,
+      item,
+      _startCreatingNewItem,
+      _copyItems,
+      _cutItems,
+      _renameItem,
+      _deleteItem,
+      _deleteItems,
+      _copyPath,
+      _revealInFinder,
+      widget.onOpenInTerminal,
+      _fileOperationManager,
+      _isSearching,
+      _isSearching ? _showInExplorer : null,
+    );
+  }
+
+  void _showInExplorer(FileTreeItem item) {
+    final controller = context.read<FileExplorerController>();
+    _closeSearch();
+    _navigateToItem(item, controller);
+  }
+
+  void _navigateToItem(FileTreeItem item, FileExplorerController controller) {
+    FileTreeItem? parent = item.parent;
+    List<FileTreeItem> pathToExpand = [];
+
+    while (parent != null) {
+      pathToExpand.insert(0, parent);
+      parent = parent.parent;
+    }
+
+    for (var folderItem in pathToExpand) {
+      if (!folderItem.isExpanded) {
+        controller.toggleDirectoryExpansion(folderItem);
+      }
+    }
+
+    controller.clearSelectedItems();
+    controller.setSelectedItem(item);
+    _scrollToSelectedItem(ScrollDirection.forward);
   }
 
   KeyEventResult _handleKeyPress(
