@@ -85,20 +85,32 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   Widget _buildScaffold(BuildContext context, SettingsService settingsService) {
     return Consumer<UIService>(
       builder: (context, uiService, child) {
-        return DropTarget(
-          onDragDone: (detail) => _handleFileDrop(detail.files),
-          onDragEntered: (_) => setState(() => _dragging = true),
-          onDragExited: (_) => setState(() => _dragging = false),
-          child: Scaffold(
-            body: Column(
-              children: [
-                _buildAppBar(context, uiService, settingsService),
-                Expanded(child: _buildMainContent(settingsService)),
-                uiService.buildStatusBar(context),
-              ],
+        var showCommandPalette = _showCommandPalette;
+        return Stack(children: [
+          DropTarget(
+            onDragDone: (detail) => _handleFileDrop(detail.files),
+            onDragEntered: (_) => setState(() => _dragging = true),
+            onDragExited: (_) => setState(() => _dragging = false),
+            child: Scaffold(
+              body: Column(
+                children: [
+                  _buildAppBar(context, uiService, settingsService),
+                  Expanded(child: _buildMainContent(settingsService)),
+                  uiService.buildStatusBar(context),
+                ],
+              ),
             ),
           ),
-        );
+          if (_showCommandPalette)
+            CommandPalette(
+              commands: _commands,
+              onClose: _toggleCommandPalette,
+              onCommandSelected: (command) {
+                command.action();
+                _toggleCommandPalette();
+              },
+            ),
+        ]);
       },
     );
   }
@@ -335,6 +347,34 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         icon: Icons.brightness_6,
         action: () =>
             Provider.of<ThemeProvider>(context, listen: false).toggleTheme(),
+      ),
+      Command(
+        name: 'Light Theme',
+        description: 'Switch to light theme',
+        icon: Icons.light_mode,
+        action: () => Provider.of<ThemeProvider>(context, listen: false)
+            .setTheme('light'),
+      ),
+      Command(
+        name: 'Dark Theme',
+        description: 'Switch to dark theme',
+        icon: Icons.dark_mode,
+        action: () =>
+            Provider.of<ThemeProvider>(context, listen: false).setTheme('dark'),
+      ),
+      Command(
+        name: 'Retro Terminal Theme',
+        description: 'Switch to retro terminal theme',
+        icon: Icons.terminal,
+        action: () => Provider.of<ThemeProvider>(context, listen: false)
+            .setTheme('retro'),
+      ),
+      Command(
+        name: 'Solarized Light Theme',
+        description: 'Switch to solarized light theme',
+        icon: Icons.wb_sunny,
+        action: () => Provider.of<ThemeProvider>(context, listen: false)
+            .setTheme('solarized'),
       ),
     ];
   }

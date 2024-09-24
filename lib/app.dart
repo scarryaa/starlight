@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/presentation/main_layout.dart';
 import 'package:starlight/services/settings_service.dart';
-import 'package:starlight/themes/dark.dart';
-import 'package:starlight/themes/light.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
 
@@ -16,12 +14,14 @@ class App extends StatefulWidget {
 
 class _AppState extends State<App> with WidgetsBindingObserver {
   late FileExplorerController _fileExplorerController;
+  late SettingsService _settingsService;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _fileExplorerController = FileExplorerController();
+    _settingsService = SettingsService();
     _initTempDirectory();
   }
 
@@ -54,14 +54,19 @@ class _AppState extends State<App> with WidgetsBindingObserver {
     return MultiProvider(
       providers: [
         ChangeNotifierProvider.value(value: _fileExplorerController),
+        ChangeNotifierProvider.value(value: _settingsService),
+        ChangeNotifierProxyProvider<SettingsService, ThemeProvider>(
+          create: (context) => ThemeProvider(_settingsService),
+          update: (context, settings, previous) =>
+              previous ?? ThemeProvider(settings),
+        ),
       ],
-      child: Consumer2<ThemeProvider, SettingsService>(
-        builder: (context, themeProvider, settingsService, child) {
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, child) {
           return MaterialApp(
             debugShowCheckedModeBanner: false,
-            theme: lightTheme,
-            darkTheme: darkTheme,
-            themeMode: settingsService.themeMode,
+            theme: themeProvider.currentThemeData,
+            themeMode: themeProvider.themeMode,
             home: const MainLayout(),
           );
         },

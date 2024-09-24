@@ -73,10 +73,8 @@ class FileExplorerController extends ChangeNotifier {
     for (var item in items) {
       if (item.isDirectory) {
         item.isExpanded = true;
-        if (item.children.isEmpty) {
-          item.children = await _getDirectoryContents(
-              Directory(item.path), item.level + 1, item);
-        }
+        item.children = await _getDirectoryContents(
+            Directory(item.path), item.level + 1, item);
         await _expandRecursively(item.children);
       }
     }

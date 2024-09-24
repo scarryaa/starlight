@@ -10,21 +10,19 @@ class SettingsService extends ChangeNotifier {
   double _windowHeight = 600;
   bool _isFullscreen = false;
   ThemeMode _themeMode = ThemeMode.system;
-  static const String _lastDirectoryKey = 'last_directory';
+  String _currentTheme = 'light';
+  static const String lastDirectoryKey = 'last_directory';
 
   // Private constructor
   SettingsService._();
 
   // Singleton instance
   static SettingsService? _instance;
-
-  // Factory constructor to return the same instance every time
   factory SettingsService() {
     _instance ??= SettingsService._();
     return _instance!;
   }
 
-  // Getters remain the same
   bool get showFileExplorer => _showFileExplorer;
   bool get showTerminal => _showTerminal;
   bool get isFileExplorerOnLeft => _isFileExplorerOnLeft;
@@ -32,6 +30,7 @@ class SettingsService extends ChangeNotifier {
   double get windowHeight => _windowHeight;
   bool get isFullscreen => _isFullscreen;
   ThemeMode get themeMode => _themeMode;
+  String get currentTheme => _currentTheme;
 
   // Initialize the service
   Future<SettingsService> init() async {
@@ -49,15 +48,16 @@ class SettingsService extends ChangeNotifier {
     _isFullscreen = _prefs.getBool('isFullscreen') ?? false;
     _themeMode =
         ThemeMode.values[_prefs.getInt('themeMode') ?? ThemeMode.system.index];
+    _currentTheme = _prefs.getString('currentTheme') ?? 'light';
     notifyListeners();
   }
 
   Future<void> setLastDirectory(String directory) async {
-    await _prefs.setString(_lastDirectoryKey, directory);
+    await _prefs.setString(lastDirectoryKey, directory);
   }
 
   String? getLastDirectory() {
-    return _prefs.getString(_lastDirectoryKey);
+    return _prefs.getString(lastDirectoryKey);
   }
 
   Future<void> saveSettings() async {
@@ -68,6 +68,7 @@ class SettingsService extends ChangeNotifier {
     await _prefs.setDouble('windowHeight', _windowHeight);
     await _prefs.setBool('isFullscreen', _isFullscreen);
     await _prefs.setInt('themeMode', _themeMode.index);
+    await _prefs.setString('currentTheme', _currentTheme);
   }
 
   void setShowFileExplorer(bool value) {
@@ -103,6 +104,12 @@ class SettingsService extends ChangeNotifier {
 
   void setThemeMode(ThemeMode mode) {
     _themeMode = mode;
+    saveSettings();
+    notifyListeners();
+  }
+
+  void setTheme(String themeName) {
+    _currentTheme = themeName;
     saveSettings();
     notifyListeners();
   }
