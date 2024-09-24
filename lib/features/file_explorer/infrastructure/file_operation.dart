@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'package:path/path.dart' as path;
+import 'package:path/path.dart' as _path;
 import 'package:starlight/features/file_explorer/application/file_explorer_controller.dart';
 
 enum OperationType { create, delete, move, copy, restore }
@@ -85,7 +85,7 @@ class FileOperation {
   Future<List<FileOperation>> _undoDelete(
       FileExplorerController controller) async {
     await controller.restoreFromTemp(sourcePath);
-    return [FileOperation(OperationType.delete, sourcePath, destinationPath)];
+    return [FileOperation(OperationType.restore, destinationPath, sourcePath)];
   }
 
   Future<List<FileOperation>> _redoMove() async {
@@ -103,13 +103,10 @@ class FileOperation {
       FileExplorerController controller) async {
     if (await File(controller.getTempPath(destinationPath)).exists()) {
       await controller.restoreFromTemp(destinationPath);
-      print('File restored: $destinationPath');
       return [
         FileOperation(OperationType.restore, destinationPath, sourcePath)
       ];
     } else {
-      print(
-          'Temp file not found for restoration: ${controller.getTempPath(destinationPath)}');
       return [];
     }
   }
@@ -130,12 +127,11 @@ class FileOperation {
     }
   }
 
-  // ignore: no_leading_underscores_for_local_identifiers
-  Future<void> _createFileSystemEntity(String _path) async {
-    if (path.extension(_path).isNotEmpty) {
-      await File(_path).create(recursive: true);
+  Future<void> _createFileSystemEntity(String path) async {
+    if (_path.extension(path).isNotEmpty) {
+      await File(path).create(recursive: true);
     } else {
-      await Directory(_path).create(recursive: true);
+      await Directory(path).create(recursive: true);
     }
   }
 }

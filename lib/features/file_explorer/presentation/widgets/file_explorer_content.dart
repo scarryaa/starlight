@@ -347,10 +347,14 @@ class _FileExplorerContentState extends State<FileExplorerContent>
   void _toggleSearchBar() {
     setState(() {
       _isSearchBarVisible = !_isSearchBarVisible;
+      _isSearching = _isSearchBarVisible;
+
       if (_isSearchBarVisible) {
         _searchFocusNode.requestFocus();
       } else {
-        _closeSearch();
+        _searchController.clear();
+        _filteredItems = [];
+        _explorerFocusNode.requestFocus();
       }
     });
   }
@@ -361,11 +365,19 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       final String destinationPath =
           targetItem?.getFullPath() ?? controller.currentDirectory!.path;
 
+      List<FileOperation> moveOperations = [];
       for (var draggedItem in draggedItems) {
+        final String sourcePath = draggedItem.getFullPath();
         final String newPath =
             path.join(destinationPath, path.basename(draggedItem.path));
-        await controller.moveItem(draggedItem.getFullPath(), newPath);
+
+        await controller.moveItem(sourcePath, newPath);
+        moveOperations
+            .add(FileOperation(OperationType.move, sourcePath, newPath));
       }
+
+      _fileOperationManager.addToUndoStack(moveOperations);
+
       await controller.refreshDirectory();
       MessageToastManager.showToast(context, 'Items moved successfully');
     } catch (e) {
