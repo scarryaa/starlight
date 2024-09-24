@@ -132,7 +132,7 @@ class EditorWidgetState extends State<EditorWidget> {
       final currentTab = _tabs[_selectedTabIndex.value];
       if (currentTab.filePath != 'Untitled' &&
           currentTab.filePath != 'Project Search') {
-        _fileExplorerService.revealFile(currentTab.filePath);
+        _fileExplorerService.revealAndExpandToFile(currentTab.filePath);
       } else {
         _toastManager.showErrorToast('Reveal in File Explorer',
             'Cannot reveal unsaved or search files.');

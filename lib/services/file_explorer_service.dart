@@ -40,28 +40,32 @@ class FileExplorerService {
     }
   }
 
-  void revealFile(String filePath) {
+  Future<void> revealAndExpandToFile(String filePath) async {
     if (selectedDirectory.value == null ||
         !filePath.startsWith(selectedDirectory.value!)) {
       print('File is not within the current directory structure');
       return;
     }
-
-    _expandToFile(filePath);
+    await _expandToFile(filePath);
     _highlightFile(filePath);
   }
 
-  void _expandToFile(String filePath) {
+  Future<void> _expandToFile(String filePath) async {
     List<String> pathParts =
         path.split(path.relative(filePath, from: selectedDirectory.value!));
     String currentPath = selectedDirectory.value!;
-
     for (int i = 0; i < pathParts.length - 1; i++) {
       currentPath = path.join(currentPath, pathParts[i]);
-      FileTreeItem? item = _findFileTreeItem(currentPath);
-      if (item != null && item.isDirectory && !item.isExpanded) {
-        _fileExplorerController.toggleDirectoryExpansion(item);
-      }
+      await expandDirectory(currentPath);
+    }
+  }
+
+  Future<void> expandDirectory(String dirPath) async {
+    FileTreeItem? item = _findFileTreeItem(dirPath);
+    if (item != null && item.isDirectory && !item.isExpanded) {
+      await _fileExplorerController.toggleDirectoryExpansion(item);
+      // Wait for the UI to update
+      await Future.delayed(const Duration(milliseconds: 100));
     }
   }
 

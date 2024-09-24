@@ -11,6 +11,7 @@ class QuickActionBar extends StatefulWidget {
   final Function() onRefresh;
   final Function() onExpandAll;
   final Function() onCollapseAll;
+  final Function() onSearch;
 
   const QuickActionBar({
     super.key,
@@ -22,6 +23,7 @@ class QuickActionBar extends StatefulWidget {
     required this.onRefresh,
     required this.onExpandAll,
     required this.onCollapseAll,
+    required this.onSearch,
   });
 
   @override
@@ -75,6 +77,11 @@ class _QuickActionBarState extends State<QuickActionBar> {
             category: 'Edit',
           ),
           const Spacer(),
+          _buildActionButton(
+            icon: Icons.search,
+            tooltip: 'Search',
+            onPressed: widget.onSearch,
+          ),
           _buildActionButton(
             icon: Icons.refresh,
             tooltip: 'Refresh',

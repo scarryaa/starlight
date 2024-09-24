@@ -3,6 +3,7 @@ import 'package:starlight/services/settings_service.dart';
 import 'package:starlight/themes/light.dart';
 import 'package:starlight/themes/dark.dart';
 import 'package:starlight/themes/retro.dart';
+import 'package:starlight/themes/solarized_dark.dart';
 import 'package:starlight/themes/solarized_light.dart';
 import 'package:starlight/themes/cyberpunk.dart';
 import 'package:starlight/themes/minimalist.dart';
@@ -23,8 +24,10 @@ class ThemeProvider extends ChangeNotifier {
         return darkTheme;
       case 'retro':
         return retroTerminalTheme;
-      case 'solarized':
+      case 'solarized_light':
         return solarizedLightTheme;
+      case 'solarized_dark':
+        return solarizedDarkTheme;
       case 'cyberpunk':
         return cyberpunkTheme;
       case 'minimalist':

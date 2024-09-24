@@ -367,7 +367,14 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         description: 'Switch to solarized light theme',
         icon: Icons.wb_sunny,
         action: () => Provider.of<ThemeProvider>(context, listen: false)
-            .setTheme('solarized'),
+            .setTheme('solarized_light'),
+      ),
+      Command(
+        name: 'Solarized Dark Theme',
+        description: 'Switch to solarized dark theme',
+        icon: Icons.wb_sunny,
+        action: () => Provider.of<ThemeProvider>(context, listen: false)
+            .setTheme('solarized_dark'),
       ),
     ];
   }

@@ -142,7 +142,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (_isSearchBarVisible) _buildSearchBar(),
           Consumer<FileExplorerController>(
             builder: (context, controller, child) => QuickActionBar(
               onNewFolder: () => _startCreatingNewItem(false, null),
@@ -165,8 +164,10 @@ class _FileExplorerContentState extends State<FileExplorerContent>
                 MessageToastManager.showToast(
                     context, 'All directories collapsed');
               },
+              onSearch: _toggleSearchBar,
             ),
           ),
+          if (_isSearchBarVisible) _buildSearchBar(),
           Expanded(
             child: Consumer<FileExplorerController>(
               builder: (context, controller, child) =>
@@ -180,7 +181,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
 
   Widget _buildSearchBar() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+      padding: const EdgeInsets.symmetric(horizontal: 2.0, vertical: 0),
       child: KeyboardListener(
         focusNode: FocusNode(),
         onKeyEvent: (KeyEvent event) {
@@ -192,20 +193,21 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         child: TextField(
           controller: _searchController,
           focusNode: _searchFocusNode,
+          style: TextStyle(fontSize: 13),
           decoration: InputDecoration(
             isDense: true,
             hintText: 'Search files and folders',
+            hintStyle: TextStyle(fontSize: 13),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(8.0),
               borderSide: BorderSide.none,
             ),
-            filled: true,
-            fillColor: Theme.of(context).colorScheme.surface,
-            prefixIcon: const Icon(Icons.search),
+            prefixIcon: const Icon(Icons.search, size: 18),
             suffixIcon: IconButton(
-              icon: const Icon(Icons.clear),
+              icon: const Icon(Icons.clear, size: 18),
               onPressed: _closeSearch,
             ),
+            contentPadding: EdgeInsets.symmetric(vertical: 8, horizontal: 12),
           ),
           onSubmitted: (_) => _closeSearch(),
           onEditingComplete: () {
@@ -271,7 +273,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       data: itemsToDrag,
       child: _buildDropTarget(item, controller),
       feedback: Material(
-        elevation: 4.0,
         child: Container(
           padding: const EdgeInsets.all(8.0),
           color: Colors.grey[200],
@@ -344,6 +345,17 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     );
   }
 
+  void _toggleSearchBar() {
+    setState(() {
+      _isSearchBarVisible = !_isSearchBarVisible;
+      if (_isSearchBarVisible) {
+        _searchFocusNode.requestFocus();
+      } else {
+        _closeSearch();
+      }
+    });
+  }
+
   void _handleItemsDrop(List<FileTreeItem> draggedItems,
       FileTreeItem? targetItem, FileExplorerController controller) async {
     try {
@@ -392,6 +404,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
             onAccept: (data) => _handleItemsDrop(data, null, controller),
             builder: (context, candidateData, rejectedData) {
               return Container(
+                padding: EdgeInsets.zero,
                 decoration: BoxDecoration(
                   border: Border.all(
                     color: _highlightedItem == null && candidateData.isNotEmpty
@@ -401,22 +414,21 @@ class _FileExplorerContentState extends State<FileExplorerContent>
                   ),
                 ),
                 child: GestureDetector(
-                  onTap: () => _handleEmptySpaceLeftClick(controller),
-                  onSecondaryTapUp: (details) =>
-                      _handleEmptySpaceRightClick(context, details, controller),
-                  behavior: HitTestBehavior.opaque,
-                  child: Scrollbar(
-                    controller: _scrollController,
-                    child: ListView(
-                      controller: _scrollController,
-                      children: [
-                        ..._buildFileTreeItems(
-                            controller.rootItems, controller),
-                        const SizedBox(height: 24),
-                      ],
-                    ),
-                  ),
-                ),
+                    onTap: () => _handleEmptySpaceLeftClick(controller),
+                    onSecondaryTapUp: (details) => _handleEmptySpaceRightClick(
+                        context, details, controller),
+                    behavior: HitTestBehavior.opaque,
+                    child: Scrollbar(
+                        controller: _scrollController,
+                        child: ListView(
+                          controller: _scrollController,
+                          padding: EdgeInsets.zero,
+                          children: [
+                            ..._buildFileTreeItems(
+                                controller.rootItems, controller),
+                            const SizedBox(height: 24),
+                          ],
+                        ))),
               );
             },
           ),
