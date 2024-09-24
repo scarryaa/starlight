@@ -12,6 +12,7 @@ class SettingsService extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   String _currentTheme = 'light';
   static const String lastDirectoryKey = 'last_directory';
+  bool _hideSystemFiles = true;
 
   // Private constructor
   SettingsService._();
@@ -31,6 +32,7 @@ class SettingsService extends ChangeNotifier {
   bool get isFullscreen => _isFullscreen;
   ThemeMode get themeMode => _themeMode;
   String get currentTheme => _currentTheme;
+  bool get hideSystemFiles => _hideSystemFiles;
 
   // Initialize the service
   Future<SettingsService> init() async {
@@ -49,6 +51,7 @@ class SettingsService extends ChangeNotifier {
     _themeMode =
         ThemeMode.values[_prefs.getInt('themeMode') ?? ThemeMode.system.index];
     _currentTheme = _prefs.getString('currentTheme') ?? 'light';
+    _hideSystemFiles = _prefs.getBool('hideSystemFiles') ?? true;
     notifyListeners();
   }
 
@@ -69,6 +72,7 @@ class SettingsService extends ChangeNotifier {
     await _prefs.setBool('isFullscreen', _isFullscreen);
     await _prefs.setInt('themeMode', _themeMode.index);
     await _prefs.setString('currentTheme', _currentTheme);
+    await _prefs.setBool('hideSystemFiles', _hideSystemFiles);
   }
 
   void setShowFileExplorer(bool value) {
@@ -110,6 +114,12 @@ class SettingsService extends ChangeNotifier {
 
   void setTheme(String themeName) {
     _currentTheme = themeName;
+    saveSettings();
+    notifyListeners();
+  }
+
+  void setHideSystemFiles(bool value) {
+    _hideSystemFiles = value;
     saveSettings();
     notifyListeners();
   }

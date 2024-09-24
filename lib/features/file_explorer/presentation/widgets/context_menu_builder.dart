@@ -34,10 +34,6 @@ List<ContextMenuItem> buildContextMenuItems(
         onTap: () => startCreatingNewItem(false, null),
       ),
       ContextMenuItem(
-        title: 'Refresh',
-        onTap: () => controller.refreshDirectory(),
-      ),
-      ContextMenuItem(
         title: 'Paste',
         onTap: () => fileOperationManager.pasteItems(controller),
       ),

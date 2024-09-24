@@ -150,10 +150,6 @@ class _FileExplorerContentState extends State<FileExplorerContent>
               onCut: _cutItems,
               onPaste: (controller) =>
                   _fileOperationManager.pasteItems(controller),
-              onRefresh: () async {
-                await controller.refreshDirectory();
-                MessageToastManager.showToast(context, 'Directory refreshed');
-              },
               onExpandAll: () async {
                 await controller.expandAll();
                 MessageToastManager.showToast(

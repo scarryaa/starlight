@@ -9,6 +9,8 @@ import 'package:starlight/features/file_explorer/infrastructure/file_operation.d
 import 'package:crypto/crypto.dart';
 import 'dart:convert';
 
+import 'package:starlight/services/settings_service.dart';
+
 class FileExplorerController extends ChangeNotifier {
   Directory? _currentDirectory;
   List<FileTreeItem> _rootItems = [];
@@ -19,11 +21,11 @@ class FileExplorerController extends ChangeNotifier {
   final Set<FileTreeItem> _selectedItems = {};
   bool _isMultiSelectMode = false;
   Directory? _tempDirectory;
-  bool _hideSystemFiles = true;
-  bool get hideSystemFiles => _hideSystemFiles;
+  bool get hideSystemFiles => _settingsService.hideSystemFiles;
   Timer? _pollingTimer;
   bool _isRefreshCoolingDown = false;
   String? _lastDirectoryHash;
+  final SettingsService _settingsService = SettingsService();
 
   // Getters
   Directory? get currentDirectory => _currentDirectory;
@@ -39,7 +41,7 @@ class FileExplorerController extends ChangeNotifier {
   }
 
   void toggleHideSystemFiles() {
-    _hideSystemFiles = !_hideSystemFiles;
+    _settingsService.setHideSystemFiles(!_settingsService.hideSystemFiles);
     refreshDirectoryImmediately();
   }
 
@@ -225,17 +227,6 @@ class FileExplorerController extends ChangeNotifier {
     }
   }
 
-  Map<String, bool> _getDirectoryStructure(String path) {
-    Map<String, bool> structure = {};
-    final dir = Directory(path);
-    for (var entity in dir.listSync(recursive: true)) {
-      if (!_shouldIgnore(entity.path)) {
-        structure[entity.path] = entity is Directory;
-      }
-    }
-    return structure;
-  }
-
   bool _shouldIgnore(String path) {
     return path.contains('.git') ||
         path.contains('node_modules') ||
@@ -249,7 +240,8 @@ class FileExplorerController extends ChangeNotifier {
     final dir = Directory(dirPath);
     for (var entity in dir.listSync(recursive: true, followLinks: false)) {
       if (!_shouldIgnore(entity.path) &&
-          (!_hideSystemFiles || !_isSystemFile(_path.basename(entity.path)))) {
+          (!_settingsService.hideSystemFiles ||
+              !_isSystemFile(_path.basename(entity.path)))) {
         fileList.add(
             '${entity.path}|${entity is Directory}|${entity.statSync().modified.millisecondsSinceEpoch}');
       }
@@ -257,35 +249,6 @@ class FileExplorerController extends ChangeNotifier {
     fileList.sort();
     final String concatenatedPaths = fileList.join(',');
     return sha256.convert(utf8.encode(concatenatedPaths)).toString();
-  }
-
-  Map<String, bool> _getExistingStructure(List<FileTreeItem> items) {
-    Map<String, bool> structure = {};
-    for (var item in items) {
-      structure[item.path] = item.isDirectory;
-      if (item.isDirectory) {
-        structure.addAll(_getExistingStructure(item.children));
-      }
-    }
-    return structure;
-  }
-
-  bool _compareStructures(
-      Map<String, bool> current, Map<String, bool> existing) {
-    bool isEqual = true;
-    Set<String> allKeys = {...current.keys, ...existing.keys};
-
-    for (var key in allKeys) {
-      if (current[key] != existing[key]) {
-        print('Difference found: $key');
-        print('  Current: ${current[key]}');
-        print('  Existing: ${existing[key]}');
-        isEqual = false;
-      }
-    }
-
-    print('Structures equal: $isEqual');
-    return isEqual;
   }
 
   Future<void> clearTempDirectory() async {
@@ -386,16 +349,6 @@ class FileExplorerController extends ChangeNotifier {
       }
     }
     return state;
-  }
-
-  void _restoreExpansionState(
-      List<FileTreeItem> items, Map<String, bool> state) {
-    for (var item in items) {
-      if (item.isDirectory && state.containsKey(item.path)) {
-        item.isExpanded = state[item.path]!;
-        _restoreExpansionState(item.children, state);
-      }
-    }
   }
 
   Future<void> rename(String oldPath, String newName) async {
@@ -630,7 +583,8 @@ class FileExplorerController extends ChangeNotifier {
     try {
       final entities = await directory.list().toList();
       for (var entity in entities) {
-        if (!_hideSystemFiles || !_isSystemFile(_path.basename(entity.path))) {
+        if (!_settingsService.hideSystemFiles ||
+            !_isSystemFile(_path.basename(entity.path))) {
           final item = FileTreeItem(entity, level, false, parent);
           if (item.isDirectory &&
               expansionState != null &&

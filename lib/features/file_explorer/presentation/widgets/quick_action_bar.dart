@@ -8,7 +8,6 @@ class QuickActionBar extends StatefulWidget {
   final Function(BuildContext, FileExplorerController) onCopy;
   final Function(BuildContext, FileExplorerController) onCut;
   final Function(FileExplorerController) onPaste;
-  final Function() onRefresh;
   final Function() onExpandAll;
   final Function() onCollapseAll;
   final Function() onSearch;
@@ -21,7 +20,6 @@ class QuickActionBar extends StatefulWidget {
     required this.onCopy,
     required this.onCut,
     required this.onPaste,
-    required this.onRefresh,
     required this.onExpandAll,
     required this.onCollapseAll,
     required this.onSearch,
@@ -83,11 +81,6 @@ class _QuickActionBarState extends State<QuickActionBar> {
             icon: Icons.search,
             tooltip: 'Search',
             onPressed: widget.onSearch,
-          ),
-          _buildActionButton(
-            icon: Icons.refresh,
-            tooltip: 'Refresh',
-            onPressed: widget.onRefresh,
           ),
         ],
       ),
