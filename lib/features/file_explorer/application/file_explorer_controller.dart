@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 // ignore: no_leading_underscores_for_library_prefixes
 import 'package:path/path.dart' as _path;
@@ -46,15 +45,39 @@ class FileExplorerController extends ChangeNotifier {
 
   Future<void> refreshDirectoryImmediately() async {
     print('Refreshing directory immediately (bypassing cooldown)');
+    await _refreshDirectoryInternal();
+  }
+
+  Future<void> _refreshDirectoryInternal() async {
     if (_currentDirectory != null) {
+      final selectedPaths = _getSelectedPaths();
       Map<String, bool> expansionState = _getExpansionState(_rootItems);
+
       _rootItems = await _getDirectoryContents(
           _currentDirectory!, 0, null, expansionState);
       _sortFileTree(_rootItems);
+
+      _restoreSelection(selectedPaths);
+
       notifyListeners();
 
       // Update the hash after refresh
       _lastDirectoryHash = _computeDirectoryHash(_currentDirectory!.path);
+    }
+  }
+
+  void _restoreSelection(List<String> selectedPaths) {
+    _selectedItems.clear();
+    for (var path in selectedPaths) {
+      final item = findItemByPath(path);
+      if (item != null) {
+        _selectedItems.add(item);
+      }
+    }
+    if (_selectedItems.isNotEmpty) {
+      _selectedItem = _selectedItems.last;
+    } else {
+      _selectedItem = null;
     }
   }
 
@@ -176,7 +199,7 @@ class FileExplorerController extends ChangeNotifier {
 
   void _startPolling() {
     _pollingTimer?.cancel();
-    _pollingTimer = Timer.periodic(Duration(seconds: 5), (_) {
+    _pollingTimer = Timer.periodic(const Duration(seconds: 5), (_) {
       _pollDirectory(_currentDirectory!.path);
     });
   }
@@ -309,20 +332,13 @@ class FileExplorerController extends ChangeNotifier {
       return;
     }
 
-    print('Actually refreshing directory');
-    if (_currentDirectory != null) {
-      Map<String, bool> expansionState = _getExpansionState(_rootItems);
-      _rootItems = await _getDirectoryContents(
-          _currentDirectory!, 0, null, expansionState);
-      _sortFileTree(_rootItems);
-      notifyListeners();
+    await _refreshDirectoryInternal();
 
-      // Set cooldown
-      _isRefreshCoolingDown = true;
-      Future.delayed(Duration(seconds: 5), () {
-        _isRefreshCoolingDown = false;
-      });
-    }
+    // Set cooldown
+    _isRefreshCoolingDown = true;
+    Future.delayed(const Duration(seconds: 5), () {
+      _isRefreshCoolingDown = false;
+    });
   }
 
   Future<void> deleteToTemp(String sourcePath) async {
@@ -477,8 +493,14 @@ class FileExplorerController extends ChangeNotifier {
     _stopPolling();
     _currentDirectory = directory;
     _lastDirectoryHash = null; // Reset the hash when changing directories
+    _selectedItems.clear();
+    _selectedItem = null;
     await refreshDirectory();
     _startPolling();
+  }
+
+  List<String> _getSelectedPaths() {
+    return _selectedItems.map((item) => item.path).toList();
   }
 
   void setLoading(bool loading) {
@@ -591,11 +613,11 @@ class FileExplorerController extends ChangeNotifier {
   Future<void> toggleDirectoryExpansion(FileTreeItem item) async {
     if (item.isDirectory) {
       item.isExpanded = !item.isExpanded;
-      if (item.isExpanded) {
-        if (item.children.isEmpty) {
-          item.children = await _getDirectoryContents(
-              Directory(item.path), item.level + 1, item);
-        }
+      if (item.isExpanded && item.children.isEmpty) {
+        final selectedPaths = _getSelectedPaths();
+        item.children = await _getDirectoryContents(
+            Directory(item.path), item.level + 1, item);
+        _restoreSelection(selectedPaths);
       }
       notifyListeners();
     }
