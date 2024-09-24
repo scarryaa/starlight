@@ -36,6 +36,12 @@ class ThemeProvider extends ChangeNotifier {
 
   void setTheme(String themeName) {
     _settingsService.setTheme(themeName);
+
+    ThemeData selectedTheme = currentThemeData;
+    _settingsService.setThemeMode(selectedTheme.brightness == Brightness.light
+        ? ThemeMode.light
+        : ThemeMode.dark);
+
     notifyListeners();
   }
 

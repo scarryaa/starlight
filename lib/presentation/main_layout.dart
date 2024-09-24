@@ -342,13 +342,6 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
         action: _editorService.resetZoom,
       ),
       Command(
-        name: 'Toggle Dark Mode',
-        description: 'Switch between light and dark themes',
-        icon: Icons.brightness_6,
-        action: () =>
-            Provider.of<ThemeProvider>(context, listen: false).toggleTheme(),
-      ),
-      Command(
         name: 'Light Theme',
         description: 'Switch to light theme',
         icon: Icons.light_mode,
