@@ -365,20 +365,13 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       final String destinationPath =
           targetItem?.getFullPath() ?? controller.currentDirectory!.path;
 
-      List<FileOperation> moveOperations = [];
       for (var draggedItem in draggedItems) {
-        final String sourcePath = draggedItem.getFullPath();
         final String newPath =
             path.join(destinationPath, path.basename(draggedItem.path));
-
-        await controller.moveItem(sourcePath, newPath);
-        moveOperations
-            .add(FileOperation(OperationType.move, sourcePath, newPath));
+        await controller.moveItem(draggedItem.getFullPath(), newPath);
       }
-
-      _fileOperationManager.addToUndoStack(moveOperations);
-
-      await controller.refreshDirectory();
+      await controller.refreshDirectoryImmediately();
+      setState(() {});
       MessageToastManager.showToast(context, 'Items moved successfully');
     } catch (e) {
       MessageToastManager.showToast(context, 'Error moving items: $e');
@@ -638,6 +631,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
             return KeyEventResult.handled;
           case LogicalKeyboardKey.keyV:
             _fileOperationManager.pasteItems(controller);
+            controller.refreshDirectoryImmediately();
             return KeyEventResult.handled;
           case LogicalKeyboardKey.keyZ:
             if (isShiftPressed) {
@@ -645,9 +639,11 @@ class _FileExplorerContentState extends State<FileExplorerContent>
             } else {
               _fileOperationManager.undo(controller);
             }
+            controller.refreshDirectoryImmediately();
             return KeyEventResult.handled;
           case LogicalKeyboardKey.keyY:
             _fileOperationManager.redo(controller);
+            controller.refreshDirectoryImmediately();
             return KeyEventResult.handled;
         }
       }
@@ -735,7 +731,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
           await controller.createFolder(parentPath, name);
         }
 
-        await controller.refreshDirectory();
+        await controller.refreshDirectoryImmediately();
         final newItem = controller.findItemByPath(newItemPath);
         if (newItem != null) {
           controller.clearSelection();
@@ -997,7 +993,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
         final deleteOperation =
             FileOperation(OperationType.delete, item.path, tempPath);
         _fileOperationManager.addToUndoStack([deleteOperation]);
-        await controller.refreshDirectory();
+        await controller.refreshDirectoryImmediately();
         MessageToastManager.showToast(context,
             '${item.isDirectory ? 'Folder' : 'File'} deleted successfully');
       } catch (e) {
@@ -1026,7 +1022,7 @@ class _FileExplorerContentState extends State<FileExplorerContent>
               .add(FileOperation(OperationType.delete, item.path, tempPath));
         }
         _fileOperationManager.addToUndoStack(deleteOperations);
-        await controller.refreshDirectory();
+        await controller.refreshDirectoryImmediately();
         MessageToastManager.showToast(
             context, '${items.length} item(s) deleted successfully');
       } catch (e) {
