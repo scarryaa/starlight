@@ -26,6 +26,8 @@ dependencies:
   shared_preferences: ^2.3.2
   desktop_drop: ^0.5.0
   cross_file: ^0.3.4+2
+  collection: ^1.18.0
+  crypto: ^3.0.5
 
 dev_dependencies:
   flutter_test:

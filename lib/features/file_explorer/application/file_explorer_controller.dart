@@ -1,10 +1,14 @@
+import 'dart:async';
 import 'dart:io';
+import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
 // ignore: no_leading_underscores_for_library_prefixes
 import 'package:path/path.dart' as _path;
 import 'package:path_provider/path_provider.dart';
 import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/features/file_explorer/infrastructure/file_operation.dart';
+import 'package:crypto/crypto.dart';
+import 'dart:convert';
 
 class FileExplorerController extends ChangeNotifier {
   Directory? _currentDirectory;
@@ -18,6 +22,9 @@ class FileExplorerController extends ChangeNotifier {
   Directory? _tempDirectory;
   bool _hideSystemFiles = true;
   bool get hideSystemFiles => _hideSystemFiles;
+  Timer? _pollingTimer;
+  bool _isRefreshCoolingDown = false;
+  String? _lastDirectoryHash;
 
   // Getters
   Directory? get currentDirectory => _currentDirectory;
@@ -34,7 +41,21 @@ class FileExplorerController extends ChangeNotifier {
 
   void toggleHideSystemFiles() {
     _hideSystemFiles = !_hideSystemFiles;
-    refreshDirectory();
+    refreshDirectoryImmediately();
+  }
+
+  Future<void> refreshDirectoryImmediately() async {
+    print('Refreshing directory immediately (bypassing cooldown)');
+    if (_currentDirectory != null) {
+      Map<String, bool> expansionState = _getExpansionState(_rootItems);
+      _rootItems = await _getDirectoryContents(
+          _currentDirectory!, 0, null, expansionState);
+      _sortFileTree(_rootItems);
+      notifyListeners();
+
+      // Update the hash after refresh
+      _lastDirectoryHash = _computeDirectoryHash(_currentDirectory!.path);
+    }
   }
 
   bool _isSystemFile(String fileName) {
@@ -153,6 +174,97 @@ class FileExplorerController extends ChangeNotifier {
     return null;
   }
 
+  void _startPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = Timer.periodic(Duration(seconds: 5), (_) {
+      _pollDirectory(_currentDirectory!.path);
+    });
+  }
+
+  void _stopPolling() {
+    _pollingTimer?.cancel();
+    _pollingTimer = null;
+  }
+
+  Future<void> _pollDirectory(String path) async {
+    if (_isRefreshCoolingDown) {
+      print('Polling skipped due to cooldown');
+      return;
+    }
+
+    final currentHash = _computeDirectoryHash(path);
+    if (_lastDirectoryHash != currentHash) {
+      print('Directory hash changed, scheduling refresh...');
+      _lastDirectoryHash = currentHash;
+      await refreshDirectory();
+    } else {
+      print('No change detected');
+    }
+  }
+
+  Map<String, bool> _getDirectoryStructure(String path) {
+    Map<String, bool> structure = {};
+    final dir = Directory(path);
+    for (var entity in dir.listSync(recursive: true)) {
+      if (!_shouldIgnore(entity.path)) {
+        structure[entity.path] = entity is Directory;
+      }
+    }
+    return structure;
+  }
+
+  bool _shouldIgnore(String path) {
+    return path.contains('.git') ||
+        path.contains('node_modules') ||
+        path.contains('.plugin_symlinks') ||
+        path.contains('.idea') ||
+        path.contains('.DS_Store');
+  }
+
+  String _computeDirectoryHash(String dirPath) {
+    final List<String> fileList = [];
+    final dir = Directory(dirPath);
+    for (var entity in dir.listSync(recursive: true, followLinks: false)) {
+      if (!_shouldIgnore(entity.path) &&
+          (!_hideSystemFiles || !_isSystemFile(_path.basename(entity.path)))) {
+        fileList.add(
+            '${entity.path}|${entity is Directory}|${entity.statSync().modified.millisecondsSinceEpoch}');
+      }
+    }
+    fileList.sort();
+    final String concatenatedPaths = fileList.join(',');
+    return sha256.convert(utf8.encode(concatenatedPaths)).toString();
+  }
+
+  Map<String, bool> _getExistingStructure(List<FileTreeItem> items) {
+    Map<String, bool> structure = {};
+    for (var item in items) {
+      structure[item.path] = item.isDirectory;
+      if (item.isDirectory) {
+        structure.addAll(_getExistingStructure(item.children));
+      }
+    }
+    return structure;
+  }
+
+  bool _compareStructures(
+      Map<String, bool> current, Map<String, bool> existing) {
+    bool isEqual = true;
+    Set<String> allKeys = {...current.keys, ...existing.keys};
+
+    for (var key in allKeys) {
+      if (current[key] != existing[key]) {
+        print('Difference found: $key');
+        print('  Current: ${current[key]}');
+        print('  Existing: ${existing[key]}');
+        isEqual = false;
+      }
+    }
+
+    print('Structures equal: $isEqual');
+    return isEqual;
+  }
+
   Future<void> clearTempDirectory() async {
     if (_tempDirectory != null && await _tempDirectory!.exists()) {
       await _tempDirectory!.delete(recursive: true);
@@ -186,20 +298,31 @@ class FileExplorerController extends ChangeNotifier {
     return operations;
   }
 
-  Future<void> toggleDirectoryExpansion(FileTreeItem item) async {
-    if (item.isDirectory) {
-      item.isExpanded = !item.isExpanded;
-      if (item.isExpanded && item.children.isEmpty) {
-        item.children = await _getDirectoryContents(
-            Directory(item.path), item.level + 1, item);
-      }
-      notifyListeners();
-    }
-  }
-
   Future<void> copyItem(String sourcePath, String destinationPath) async {
     await _copyItem(sourcePath, destinationPath);
     await refreshDirectory();
+  }
+
+  Future<void> refreshDirectory() async {
+    if (_isRefreshCoolingDown) {
+      print('Refresh on cooldown, skipping');
+      return;
+    }
+
+    print('Actually refreshing directory');
+    if (_currentDirectory != null) {
+      Map<String, bool> expansionState = _getExpansionState(_rootItems);
+      _rootItems = await _getDirectoryContents(
+          _currentDirectory!, 0, null, expansionState);
+      _sortFileTree(_rootItems);
+      notifyListeners();
+
+      // Set cooldown
+      _isRefreshCoolingDown = true;
+      Future.delayed(Duration(seconds: 5), () {
+        _isRefreshCoolingDown = false;
+      });
+    }
   }
 
   Future<void> deleteToTemp(String sourcePath) async {
@@ -346,14 +469,28 @@ class FileExplorerController extends ChangeNotifier {
   }
 
   // Navigation methods
-  void setDirectory(Directory directory) async {
+  Future<void> setDirectory(Directory directory) async {
+    if (_currentDirectory?.path == directory.path) {
+      print('Already in this directory, skipping setDirectory');
+      return;
+    }
+    _stopPolling();
     _currentDirectory = directory;
+    _lastDirectoryHash = null; // Reset the hash when changing directories
     await refreshDirectory();
+    _startPolling();
   }
 
   void setLoading(bool loading) {
     _isLoading = loading;
     notifyListeners();
+  }
+
+  @override
+  Future<void> dispose() async {
+    _pollingTimer?.cancel();
+    await clearTempDirectory();
+    super.dispose();
   }
 
   // Helper methods
@@ -451,12 +588,15 @@ class FileExplorerController extends ChangeNotifier {
     }
   }
 
-  Future<void> refreshDirectory() async {
-    if (_currentDirectory != null) {
-      Map<String, bool> expansionState = _getExpansionState(_rootItems);
-      _rootItems = await _getDirectoryContents(
-          _currentDirectory!, 0, null, expansionState);
-      _sortFileTree(_rootItems);
+  Future<void> toggleDirectoryExpansion(FileTreeItem item) async {
+    if (item.isDirectory) {
+      item.isExpanded = !item.isExpanded;
+      if (item.isExpanded) {
+        if (item.children.isEmpty) {
+          item.children = await _getDirectoryContents(
+              Directory(item.path), item.level + 1, item);
+        }
+      }
       notifyListeners();
     }
   }
@@ -522,11 +662,5 @@ class FileExplorerController extends ChangeNotifier {
       if (!a.isDirectory && b.isDirectory) return 1;
       return a.path.toLowerCase().compareTo(b.path.toLowerCase());
     });
-  }
-
-  @override
-  Future<void> dispose() async {
-    await clearTempDirectory();
-    super.dispose();
   }
 }
