@@ -165,6 +165,9 @@ class _FileExplorerContentState extends State<FileExplorerContent>
                     context, 'All directories collapsed');
               },
               onSearch: _toggleSearchBar,
+              onToggleSystemFiles: () => context
+                  .read<FileExplorerController>()
+                  .toggleHideSystemFiles(),
             ),
           ),
           if (_isSearchBarVisible) _buildSearchBar(),

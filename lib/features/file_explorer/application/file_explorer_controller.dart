@@ -16,6 +16,8 @@ class FileExplorerController extends ChangeNotifier {
   final Set<FileTreeItem> _selectedItems = {};
   bool _isMultiSelectMode = false;
   Directory? _tempDirectory;
+  bool _hideSystemFiles = true;
+  bool get hideSystemFiles => _hideSystemFiles;
 
   // Getters
   Directory? get currentDirectory => _currentDirectory;
@@ -28,6 +30,16 @@ class FileExplorerController extends ChangeNotifier {
   // Initialization
   Future<void> initialize() async {
     await initTempDirectory();
+  }
+
+  void toggleHideSystemFiles() {
+    _hideSystemFiles = !_hideSystemFiles;
+    refreshDirectory();
+  }
+
+  bool _isSystemFile(String fileName) {
+    return fileName.startsWith('.') ||
+        ['Thumbs.db', 'desktop.ini', '.DS_Store'].contains(fileName);
   }
 
   Future<void> initTempDirectory() async {
@@ -226,11 +238,24 @@ class FileExplorerController extends ChangeNotifier {
     await dir.delete(recursive: true);
   }
 
-  Future<void> refreshDirectory() async {
-    if (_currentDirectory != null) {
-      _rootItems = await _getDirectoryContents(_currentDirectory!, 0, null);
-      _sortFileTree(_rootItems);
-      notifyListeners();
+  Map<String, bool> _getExpansionState(List<FileTreeItem> items) {
+    Map<String, bool> state = {};
+    for (var item in items) {
+      if (item.isDirectory) {
+        state[item.path] = item.isExpanded;
+        state.addAll(_getExpansionState(item.children));
+      }
+    }
+    return state;
+  }
+
+  void _restoreExpansionState(
+      List<FileTreeItem> items, Map<String, bool> state) {
+    for (var item in items) {
+      if (item.isDirectory && state.containsKey(item.path)) {
+        item.isExpanded = state[item.path]!;
+        _restoreExpansionState(item.children, state);
+      }
     }
   }
 
@@ -426,14 +451,34 @@ class FileExplorerController extends ChangeNotifier {
     }
   }
 
+  Future<void> refreshDirectory() async {
+    if (_currentDirectory != null) {
+      Map<String, bool> expansionState = _getExpansionState(_rootItems);
+      _rootItems = await _getDirectoryContents(
+          _currentDirectory!, 0, null, expansionState);
+      _sortFileTree(_rootItems);
+      notifyListeners();
+    }
+  }
+
   Future<List<FileTreeItem>> _getDirectoryContents(
-      Directory directory, int level, FileTreeItem? parent) async {
+      Directory directory, int level, FileTreeItem? parent,
+      [Map<String, bool>? expansionState]) async {
     List<FileTreeItem> items = [];
     try {
       final entities = await directory.list().toList();
       for (var entity in entities) {
-        final item = FileTreeItem(entity, level, false, parent);
-        items.add(item);
+        if (!_hideSystemFiles || !_isSystemFile(_path.basename(entity.path))) {
+          final item = FileTreeItem(entity, level, false, parent);
+          if (item.isDirectory &&
+              expansionState != null &&
+              expansionState[item.path] == true) {
+            item.isExpanded = true;
+            item.children = await _getDirectoryContents(
+                Directory(item.path), level + 1, item, expansionState);
+          }
+          items.add(item);
+        }
       }
     } catch (e) {
       print('Error reading directory contents: $e');

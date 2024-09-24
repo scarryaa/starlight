@@ -12,6 +12,7 @@ class QuickActionBar extends StatefulWidget {
   final Function() onExpandAll;
   final Function() onCollapseAll;
   final Function() onSearch;
+  final Function() onToggleSystemFiles;
 
   const QuickActionBar({
     super.key,
@@ -24,6 +25,7 @@ class QuickActionBar extends StatefulWidget {
     required this.onExpandAll,
     required this.onCollapseAll,
     required this.onSearch,
+    required this.onToggleSystemFiles,
   });
 
   @override
@@ -170,6 +172,15 @@ class _QuickActionBarState extends State<QuickActionBar> {
             icon: Icons.compress,
             tooltip: 'Collapse All',
             onPressed: widget.onCollapseAll,
+          ),
+          _buildActionButton(
+            icon: controller.hideSystemFiles
+                ? Icons.visibility_off
+                : Icons.visibility,
+            tooltip: controller.hideSystemFiles
+                ? 'Show System Files'
+                : 'Hide System Files',
+            onPressed: widget.onToggleSystemFiles,
           ),
         ];
       case 'Edit':
