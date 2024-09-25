@@ -13,17 +13,20 @@ class CodeEditorScrollService {
   bool _isHorizontalScrolling = false;
 
   late TextEditingCore editingCore;
-  late int firstVisibleLine;
+  int firstVisibleLine = 1;
   late int visibleLineCount;
   late double lineNumberWidth;
   late double zoomLevel;
+  final Function(int)? onFirstVisibleLineChanged;
 
   CodeEditorScrollService({
     required this.editingCore,
     required this.zoomLevel,
     required this.lineNumberWidth,
+    this.onFirstVisibleLineChanged,
   }) {
     initializeScrollControllers();
+    updateVisibleLines();
   }
 
   void initializeScrollControllers() {
@@ -42,21 +45,16 @@ class CodeEditorScrollService {
     horizontalScrollbarController.dispose();
   }
 
-  void _onCodeScroll() {
-    if (!_scrollingCode && !_scrollingLineNumbers) {
-      _scrollingCode = true;
-      lineNumberScrollController.jumpTo(codeScrollController.offset);
-      _scrollingCode = false;
-      updateVisibleLines();
-    }
-  }
+  void updateFirstVisibleLine() {
+    if (codeScrollController.hasClients) {
+      final scrollPosition = codeScrollController.offset;
+      final lineHeight = CodeEditorConstants.lineHeight * zoomLevel;
+      final newFirstVisibleLine = (scrollPosition / lineHeight).floor() + 1;
 
-  void _onLineNumberScroll() {
-    if (!_scrollingLineNumbers && !_scrollingCode) {
-      _scrollingLineNumbers = true;
-      codeScrollController.jumpTo(lineNumberScrollController.offset);
-      _scrollingLineNumbers = false;
-      updateVisibleLines();
+      if (newFirstVisibleLine != firstVisibleLine) {
+        firstVisibleLine = newFirstVisibleLine;
+        onFirstVisibleLineChanged?.call(firstVisibleLine);
+      }
     }
   }
 
@@ -80,20 +78,47 @@ class CodeEditorScrollService {
     }
   }
 
+  void _onCodeScroll() {
+    if (!_scrollingCode && !_scrollingLineNumbers) {
+      _scrollingCode = true;
+      lineNumberScrollController.jumpTo(codeScrollController.offset);
+      _scrollingCode = false;
+      updateVisibleLines();
+      updateFirstVisibleLine();
+    }
+  }
+
+  void _onLineNumberScroll() {
+    if (!_scrollingLineNumbers && !_scrollingCode) {
+      _scrollingLineNumbers = true;
+      codeScrollController.jumpTo(lineNumberScrollController.offset);
+      _scrollingLineNumbers = false;
+      updateVisibleLines();
+      updateFirstVisibleLine();
+    }
+  }
+
   void updateVisibleLines() {
     if (!codeScrollController.hasClients) return;
+
     final totalLines = editingCore.lineCount;
     final viewportHeight = codeScrollController.position.viewportDimension;
-    firstVisibleLine = (codeScrollController.offset /
-            (CodeEditorConstants.lineHeight * zoomLevel))
-        .floor()
-        .clamp(0, totalLines == 0 ? 0 : totalLines - 1);
-    visibleLineCount =
-        (viewportHeight / (CodeEditorConstants.lineHeight * zoomLevel)).ceil() +
-            1;
+    final scaledLineHeight = CodeEditorConstants.lineHeight * zoomLevel;
+
+    int newFirstVisibleLine =
+        (codeScrollController.offset / scaledLineHeight).floor();
+    newFirstVisibleLine = newFirstVisibleLine.clamp(1, totalLines - 1);
+
+    if (newFirstVisibleLine != firstVisibleLine) {
+      firstVisibleLine = newFirstVisibleLine;
+      onFirstVisibleLineChanged?.call(firstVisibleLine);
+    }
+
+    visibleLineCount = (viewportHeight / scaledLineHeight).ceil() + 1;
     if (firstVisibleLine + visibleLineCount > totalLines) {
       visibleLineCount = totalLines - firstVisibleLine;
     }
+    visibleLineCount = visibleLineCount.clamp(1, totalLines);
   }
 
   void autoScrollOnDrag(Offset position, Size size) {

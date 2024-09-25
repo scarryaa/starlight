@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
+import 'package:starlight/utils/constants.dart';
 
 class CodeEditorPainter extends CustomPainter {
   static const double lineHeight = 24.0;
@@ -15,6 +16,7 @@ class CodeEditorPainter extends CustomPainter {
   final double horizontalOffset;
   final int version;
   final double viewportWidth;
+  final double viewportHeight;
   final double lineNumberWidth;
   final TextStyle textStyle;
   final Color selectionColor;
@@ -40,6 +42,7 @@ class CodeEditorPainter extends CustomPainter {
     required this.lineNumberWidth,
     required this.version,
     required this.viewportWidth,
+    required this.viewportHeight,
     required this.textStyle,
     required this.selectionColor,
     required this.cursorColor,
@@ -60,11 +63,12 @@ class CodeEditorPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final lineCount = editingCore.lineCount;
-    final visibleEndLine =
-        min(firstVisibleLine + visibleLineCount + lineBuffer, lineCount);
-    final scaledLineHeight = lineHeight * zoomLevel;
+    final scaledLineHeight = CodeEditorConstants.lineHeight * zoomLevel;
+    final totalVisibleLines = (viewportHeight / scaledLineHeight).ceil() + 1;
+    final lastVisibleLine =
+        min(firstVisibleLine + totalVisibleLines, editingCore.lineCount);
 
-    for (int i = firstVisibleLine; i < visibleEndLine; i++) {
+    for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
       final lineContent = _getLineContent(i);
       // Paint search highlights
       _paintSearchHighlights(canvas, i, lineContent);
