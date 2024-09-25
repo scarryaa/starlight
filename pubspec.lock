@@ -184,6 +184,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.0.1"
+  json_annotation:
+    dependency: transitive
+    description:
+      name: json_annotation
+      sha256: "1ce844379ca14835a50d2f019a3099f419082cfdd231cd86a142af94dd5c6bb1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.9.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -216,6 +224,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0"
+  lsp_client:
+    dependency: "direct main"
+    description:
+      name: lsp_client
+      sha256: "806cadb39478e5ca0b4f922c03e849ad9575bc79a6abee2e78b75527917d8cfd"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.2"
   macos_ui:
     dependency: "direct main"
     description:

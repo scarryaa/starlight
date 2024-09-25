@@ -28,6 +28,7 @@ dependencies:
   cross_file: ^0.3.4+2
   collection: ^1.18.0
   crypto: ^3.0.5
+  lsp_client: ^0.1.2
 
 dev_dependencies:
   flutter_test:

@@ -251,9 +251,7 @@ class CodeEditorState extends State<CodeEditor> {
 
     return NotificationListener<ScrollNotification>(
       onNotification: (ScrollNotification notification) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _handleScroll(notification);
-        });
+        _handleScroll(notification);
         return true;
       },
       child: GestureDetector(
@@ -281,9 +279,6 @@ class CodeEditorState extends State<CodeEditor> {
               ),
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    _updateVisibleLineCount();
-                  });
                   return Stack(
                     children: [
                       Scrollbar(
