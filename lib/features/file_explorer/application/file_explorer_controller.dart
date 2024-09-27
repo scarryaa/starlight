@@ -147,6 +147,28 @@ class FileExplorerController extends ChangeNotifier {
     }
   }
 
+  Future<void> loadDirectoryContents(FileTreeItem directory) async {
+    if (!directory.isDirectory) return;
+
+    final dir = Directory(directory.path);
+    final List<FileSystemEntity> entities = await dir.list().toList();
+
+    directory.children = entities
+        .where((entity) =>
+            !_settingsService.hideSystemFiles ||
+            !_isSystemFile(_path.basename(entity.path)))
+        .map((entity) => FileTreeItem(
+              entity,
+              directory.level + 1,
+              false,
+              directory,
+            ))
+        .toList();
+
+    _sortFileTree(directory.children);
+    notifyListeners();
+  }
+
   Future<String> moveToTemp(String sourcePath) async {
     try {
       if (_tempDirectory == null) await initTempDirectory();

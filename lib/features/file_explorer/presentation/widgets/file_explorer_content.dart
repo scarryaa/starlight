@@ -97,31 +97,53 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     }
   }
 
-  void _onSearchChanged() {
-    final controller = context.read<FileExplorerController>();
-    final query = _searchController.text.toLowerCase();
-    setState(() {
-      if (query.isEmpty) {
-        _isSearching = false;
-        _filteredItems = [];
-      } else {
-        _isSearching = true;
-        _filteredItems = _searchItems(controller.rootItems, query);
-      }
-    });
-  }
-
-  List<FileTreeItem> _searchItems(List<FileTreeItem> items, String query) {
+  Future<List<FileTreeItem>> _searchAllItems(
+      FileTreeItem item, String query) async {
     List<FileTreeItem> results = [];
-    for (var item in items) {
-      if (item.name.toLowerCase().contains(query)) {
-        results.add(item);
+    final fileName = path.basename(item.name).toLowerCase();
+    if (fileName.contains(query.toLowerCase())) {
+      results.add(item);
+    }
+
+    if (item.isDirectory) {
+      // Load directory contents if not already loaded
+      if (item.children.isEmpty) {
+        await context
+            .read<FileExplorerController>()
+            .loadDirectoryContents(item);
       }
-      if (item.isDirectory) {
-        results.addAll(_searchItems(item.children, query));
+
+      for (var child in item.children) {
+        results.addAll(await _searchAllItems(child, query));
       }
     }
+
     return results;
+  }
+
+  Future<void> _onSearchChanged() async {
+    final controller = context.read<FileExplorerController>();
+    final query = _searchController.text.toLowerCase();
+
+    if (query.isEmpty) {
+      setState(() {
+        _isSearching = false;
+        _filteredItems = [];
+      });
+    } else {
+      setState(() {
+        _isSearching = true;
+      });
+
+      List<FileTreeItem> results = [];
+      for (var rootItem in controller.rootItems) {
+        results.addAll(await _searchAllItems(rootItem, query));
+      }
+
+      setState(() {
+        _filteredItems = results;
+      });
+    }
   }
 
   void _onExplorerFocusChange() {
