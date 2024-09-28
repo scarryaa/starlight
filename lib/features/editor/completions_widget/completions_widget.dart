@@ -72,31 +72,30 @@ class _CompletionsWidgetState extends State<CompletionsWidget> {
   }
 
   void _scrollToSelectedItem() {
-    final double scrollOffset = _scrollController.offset;
+    final double selectedOffset = _selectedIndex * kCompletionItemHeight;
+    final double currentOffset = _scrollController.offset;
     final double visibleHeight = context.size?.height ?? 0;
-    final int visibleItemCount =
-        (visibleHeight / kCompletionItemHeight).floor();
 
-    double targetOffset;
-    if (_selectedIndex < scrollOffset / kCompletionItemHeight) {
-      // Keep the selected item at the top, showing one item above it if possible
-      targetOffset = (_selectedIndex - 1) * kCompletionItemHeight;
-      targetOffset = targetOffset.clamp(0.0, double.infinity);
-    } else if (_selectedIndex < widget.completions.length - 1 &&
-        _selectedIndex > visibleItemCount - 2) {
-      // Keep only the next item visible at the bottom
+    double targetOffset = currentOffset;
+
+    if (_selectedIndex < currentOffset / kCompletionItemHeight) {
+      targetOffset = _selectedIndex * kCompletionItemHeight;
+    } else if (selectedOffset >
+        currentOffset + visibleHeight - kCompletionItemHeight) {
       targetOffset =
           (_selectedIndex + 1) * kCompletionItemHeight - visibleHeight;
-    } else {
-      // No change in scroll position
-      return;
     }
 
-    _scrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 1),
-      curve: Curves.easeInOut,
-    );
+    targetOffset =
+        targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent);
+
+    if (targetOffset != currentOffset) {
+      _scrollController.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 20),
+        curve: Curves.easeInOut,
+      );
+    }
   }
 
   void _confirmSelection() {
