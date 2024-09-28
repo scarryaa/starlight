@@ -578,7 +578,7 @@ class CodeEditorState extends State<CodeEditor> {
         onDismiss: _hideCompletionsList,
       ),
     );
-    Overlay.of(context)?.insert(_completionsOverlay!);
+    Overlay.of(context).insert(_completionsOverlay!);
   }
 
   Offset _calculateCompletionPosition(int line, int character) {

@@ -44,7 +44,7 @@ class CodeEditorService {
     if (tappedLine < scrollService.editingCore.lineCount) {
       final scaledLineNumberWidth =
           scrollService.lineNumberWidth * scrollService.zoomLevel;
-      final textStartX = scaledLineNumberWidth / 8;
+      final textStartX = scaledLineNumberWidth - 30;
       final adjustedTappedOffset =
           (adjustedOffset.dx - textStartX).clamp(0, double.infinity);
       final column = (adjustedTappedOffset /
