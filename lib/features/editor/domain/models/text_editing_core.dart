@@ -70,13 +70,18 @@ class TextEditingCore extends ChangeNotifier {
     return rope.slice(start, end);
   }
 
-  int getLineEndIndex(int lineIndex) {
-    return rope.findLineEnd(lineIndex);
-  }
-
   int getLineStartIndex(int lineIndex) {
     if (lineIndex < 0) lineIndex = 0;
+    if (lineIndex >= rope.lineCount) lineIndex = rope.lineCount - 1;
     return rope.findLineStart(lineIndex);
+  }
+
+  int getLineEndIndex(int lineIndex) {
+    if (lineIndex < 0) lineIndex = 0;
+    if (lineIndex >= rope.lineCount) lineIndex = rope.lineCount - 1;
+    return lineIndex < rope.lineCount - 1
+        ? rope.findLineStart(lineIndex + 1) - 1
+        : rope.length;
   }
 
   String getSelectedText() {
@@ -180,11 +185,33 @@ class TextEditingCore extends ChangeNotifier {
   }
 
   void replaceRange(int start, int end, String replacement) {
-    rope = rope.delete(start, end - start);
-    rope = rope.insert(start, replacement);
-    incrementVersion();
-    checkModificationStatus();
-    notifyListeners();
+    print(
+        "replaceRange called with start: $start, end: $end, replacement: '$replacement'");
+    print("Current rope content: '${rope.toString()}'");
+
+    if (start < 0 || end < 0 || start > rope.length || end > rope.length) {
+      print(
+          "Error: Invalid range. start: $start, end: $end, rope length: ${rope.length}");
+      return;
+    }
+
+    if (start > end) {
+      print("Error: Start index ($start) is greater than end index ($end)");
+      return;
+    }
+
+    try {
+      rope = rope.delete(start, end);
+      rope = rope.insert(start, replacement);
+      cursorPosition = start + replacement.length;
+      _updateLastModifiedLine(cursorPosition);
+      incrementVersion();
+      checkModificationStatus();
+      print("replaceRange completed. New rope content: '${rope.toString()}'");
+      notifyListeners();
+    } catch (e) {
+      print("Error in replaceRange: $e");
+    }
   }
 
   void setCursorToStart() {

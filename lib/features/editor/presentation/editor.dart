@@ -3,7 +3,9 @@ import 'dart:math';
 
 import 'package:flutter/material.dart' hide TabBar, Tab;
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:starlight/features/editor/completions_widget/completions_widget.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
@@ -13,6 +15,7 @@ import 'package:starlight/features/editor/services/editor_service.dart';
 import 'package:starlight/features/editor/services/gesture_handling_service.dart';
 import 'package:starlight/features/editor/services/keyboard_handler_service.dart';
 import 'package:starlight/features/editor/services/layout_service.dart';
+import 'package:starlight/features/editor/services/lsp_client.dart';
 import 'package:starlight/features/editor/services/scroll_service.dart';
 import 'package:starlight/features/editor/services/selection_service.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
@@ -79,6 +82,10 @@ class CodeEditorState extends State<CodeEditor> {
   late KeyboardHandlingService keyboardHandlingService;
   late ClipboardService clipboardService;
   late SettingsService _settingsService;
+  late LspClient _lspClient;
+  List<CompletionItem> _completions = [];
+  CompletionsWidget? _completionsWidget;
+  OverlayEntry? _completionsOverlay;
 
   int firstVisibleLine = 0;
   int visibleLineCount = 800;
@@ -92,26 +99,77 @@ class CodeEditorState extends State<CodeEditor> {
 
   @override
   Widget build(BuildContext context) {
-    _initializeTextPainter(context);
-    _syntaxHighlighter.updateTheme(_settingsService.themeMode, context);
-    final theme = Theme.of(context);
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return ColoredBox(
-          color: theme.scaffoldBackgroundColor,
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildLineNumbers(constraints),
-              Expanded(
-                child: _buildCodeArea(constraints),
+    return Stack(
+      children: [
+        // Your existing code editor widget
+        LayoutBuilder(
+          builder: (context, constraints) {
+            return ColoredBox(
+              color: Theme.of(context).scaffoldBackgroundColor,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLineNumbers(constraints),
+                  Expanded(
+                    child: _buildCodeArea(constraints),
+                  ),
+                ],
               ),
-            ],
-          ),
-        );
-      },
+            );
+          },
+        ),
+      ],
     );
+  }
+
+  void _applyCompletion(CompletionItem completion) {
+    print("Applying completion: ${completion.label}");
+    final cursorPosition = editingCore.cursorPosition;
+    final line = _getLineForPosition(cursorPosition);
+    final lineStartIndex = editingCore.getLineStartIndex(line);
+    final lineEndIndex = editingCore.getLineEndIndex(line);
+    final lineText =
+        editingCore.getText().substring(lineStartIndex, lineEndIndex);
+
+    print("Current line text: '$lineText'");
+    print("Cursor position: $cursorPosition");
+
+    // Find the start of the word being completed
+    int wordStart = cursorPosition - lineStartIndex;
+    while (wordStart > 0 &&
+        RegExp(r'[a-zA-Z0-9_]').hasMatch(lineText[wordStart - 1])) {
+      wordStart--;
+    }
+
+    // Calculate the range to be replaced
+    final startPosition = lineStartIndex + wordStart;
+    final endPosition = cursorPosition;
+
+    print("Start position: $startPosition");
+    print("End position: $endPosition");
+
+    // Get the text to be inserted
+    final insertText = completion.insertText ?? completion.label;
+    print("Text to be inserted: '$insertText'");
+
+    // Replace the text
+    editingCore.replaceRange(startPosition, endPosition, insertText);
+
+    // Ensure the changes are reflected
+    setState(() {});
+
+    // Hide the completions list
+    _hideCompletionsList();
+
+    // Ensure the cursor is visible after applying the completion
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      editorService.scrollService.ensureCursorVisibility();
+    });
+
+    // Notify the LSP server of the change
+    _sendDocumentChanges();
+
+    print("Completion applied. New text: '${editingCore.getText()}'");
   }
 
   @override
@@ -139,6 +197,7 @@ class CodeEditorState extends State<CodeEditor> {
     editingCore.dispose();
     _textPainter.dispose();
     _settingsService.removeListener(_onSettingsChanged);
+    _lspClient.stop();
     super.dispose();
   }
 
@@ -239,6 +298,35 @@ class CodeEditorState extends State<CodeEditor> {
       editorService.scrollService.visibleLineCount = visibleLineCount;
     });
     widget.onZoomChanged?.call(_recalculateEditorAfterZoom);
+    _initializeLspClient();
+  }
+
+  Future<void> _initializeLspClient() async {
+    _lspClient = LspClient();
+
+    const dartCommand = '/Users/scarlet/flutter/bin/dart';
+    final arguments = ['language-server', '--protocol=lsp'];
+
+    try {
+      await _lspClient.start(dartCommand, arguments);
+
+      // Send the initialized notification
+      await _lspClient.sendRequest('initialized', {});
+
+      // Open the document
+      await _lspClient.sendRequest('textDocument/didOpen', {
+        'textDocument': {
+          'uri': 'file://${widget.filePath}',
+          'languageId': 'dart',
+          'version': 1,
+          'text': editingCore.getText()
+        }
+      });
+
+      print("LSP server initialized successfully");
+    } catch (e) {
+      print("Error initializing LSP client: $e");
+    }
   }
 
   void maintainFocus() {
@@ -438,11 +526,125 @@ class CodeEditorState extends State<CodeEditor> {
   }
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
-    if (keyboardHandlingService.handleKeyPress(event)) {
-      editorService.scrollService.ensureCursorVisibility();
-      return KeyEventResult.handled;
+    if (event is KeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.space &&
+          HardwareKeyboard.instance.isControlPressed) {
+        _showCompletionsList();
+        return KeyEventResult.handled;
+      } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _hideCompletionsList();
+        return KeyEventResult.handled;
+      }
+
+      // Handle regular typing and other key events
+      if (keyboardHandlingService.handleKeyPress(event)) {
+        editorService.scrollService.ensureCursorVisibility();
+        _hideCompletionsList(); // Hide completions when typing
+        return KeyEventResult.handled;
+      }
     }
     return KeyEventResult.ignored;
+  }
+
+  void _showCompletionsList() async {
+    final cursorPosition = editingCore.cursorPosition;
+    final line = _getLineForPosition(cursorPosition);
+    final lineStartIndex = editingCore.getLineStartIndex(line);
+    final character = cursorPosition - lineStartIndex;
+
+    try {
+      _completions = await getCompletions(line, character);
+    } catch (e) {
+      print("Error fetching completions: $e");
+      _completions = _getFallbackCompletions();
+    }
+
+    if (_completions.isNotEmpty) {
+      final position = _calculateCompletionPosition(line, character);
+      _showCompletionsOverlay(position);
+    } else {
+      print("No completions available");
+    }
+  }
+
+  void _showCompletionsOverlay(Offset position) {
+    _completionsOverlay?.remove();
+    _completionsOverlay = OverlayEntry(
+      builder: (context) => CompletionsWidget(
+        completions: _completions,
+        onSelected: _applyCompletion,
+        position: position,
+        editorFocusNode: widget.focusNode,
+        onDismiss: _hideCompletionsList,
+      ),
+    );
+    Overlay.of(context)?.insert(_completionsOverlay!);
+  }
+
+  Offset _calculateCompletionPosition(int line, int character) {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox != null) {
+      final editorOffset = renderBox.localToGlobal(Offset.zero);
+      final scrollOffset =
+          editorService.scrollService.codeScrollController.offset;
+      final horizontalScrollOffset =
+          editorService.scrollService.horizontalController.offset;
+
+      // Calculate the position considering the scroll offsets
+      final cursorX =
+          (character * CodeEditorConstants.charWidth * widget.zoomLevel) -
+              horizontalScrollOffset +
+              editorService.scrollService.lineNumberWidth * widget.zoomLevel;
+      final cursorY =
+          (line * CodeEditorConstants.lineHeight * widget.zoomLevel) -
+              scrollOffset;
+
+      return Offset(
+        editorOffset.dx + cursorX,
+        editorOffset.dy +
+            cursorY +
+            CodeEditorConstants.lineHeight * widget.zoomLevel,
+      );
+    }
+
+    print("RenderBox is null, cannot calculate completion position");
+    return Offset.zero;
+  }
+
+  void _hideCompletionsList() {
+    _completionsOverlay?.remove();
+    _completionsOverlay = null;
+  }
+
+  List<CompletionItem> _getFallbackCompletions() {
+    return [
+      CompletionItem(label: "if", detail: "if statement"),
+      CompletionItem(label: "for", detail: "for loop"),
+      CompletionItem(label: "while", detail: "while loop"),
+      CompletionItem(label: "class", detail: "class definition"),
+      CompletionItem(label: "function", detail: "function definition"),
+    ];
+  }
+
+  int _getLineForPosition(int position) {
+    int line = 0;
+    int currentPosition = 0;
+    while (currentPosition < position && line < editingCore.lineCount) {
+      currentPosition = editingCore.getLineEndIndex(line) + 1;
+      if (currentPosition <= position) {
+        line++;
+      }
+    }
+    return line;
+  }
+
+  void _replaceText(int start, int end, String replacement) {
+    editingCore.replaceRange(start, end, replacement);
+    editingCore.cursorPosition = start + replacement.length;
+    editingCore.clearSelection();
+    editingCore.incrementVersion();
+    editingCore.checkModificationStatus();
+    setState(() {});
   }
 
   void _handleTap(TapDownDetails details) {
@@ -491,6 +693,7 @@ class CodeEditorState extends State<CodeEditor> {
   }
 
   void _onTextChanged() {
+    print("Text changed. New version: ${editingCore.version}");
     if (_lastKnownVersion != editingCore.version) {
       _syntaxHighlighter.updateLine(
           editingCore.lastModifiedLine, editingCore.version);
@@ -501,6 +704,34 @@ class CodeEditorState extends State<CodeEditor> {
         widget.focusNode.requestFocus();
       });
       _lastKnownVersion = editingCore.version;
+      _sendDocumentChanges();
+    }
+  }
+
+  void _sendDocumentChanges() {
+    _lspClient.sendRequest('textDocument/didChange', {
+      'textDocument': {
+        'uri': 'file://${widget.filePath}',
+        'version': editingCore.version,
+      },
+      'contentChanges': [
+        {'text': editingCore.getText()}
+      ]
+    });
+  }
+
+  Future<List<CompletionItem>> getCompletions(int line, int character) async {
+    try {
+      final response = await _lspClient.sendRequest('textDocument/completion', {
+        'textDocument': {'uri': 'file://${widget.filePath}'},
+        'position': {'line': line, 'character': character},
+      }).timeout(const Duration(seconds: 5)); // Add a 5-second timeout
+
+      final items = response['result']['items'] as List<dynamic>;
+      return items.map((item) => CompletionItem.fromJson(item)).toList();
+    } catch (e) {
+      print("Error getting completions: $e");
+      return _getFallbackCompletions();
     }
   }
 
