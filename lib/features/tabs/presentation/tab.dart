@@ -336,8 +336,6 @@ class _TabBarState extends State<TabBar> {
   }
 }
 
-// ... [Previous code remains unchanged]
-
 class _TabState extends State<Tab> {
   bool _isHovered = false;
 

@@ -608,6 +608,7 @@ class EditorController {
     int existingTabIndex = _tabs.indexWhere((tab) => tab.filePath == file.path);
     if (existingTabIndex != -1) {
       _selectedTabIndex.value = existingTabIndex;
+      _currentEditorKey = EditorContentKey(_tabs[existingTabIndex].content);
     } else {
       String content = file.readAsStringSync();
       _tabs.add(FileTab(filePath: file.path, content: content));
