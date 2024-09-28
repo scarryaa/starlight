@@ -654,7 +654,8 @@ class EditorController {
     if (index >= 0 && index < _tabs.length) {
       final currentTab = _tabs[index];
       if (currentTab.filePath != 'Untitled') {
-        await File(currentTab.filePath).writeAsString(currentTab.content);
+        await File(currentTab.filePath)
+            .writeAsString(currentTab.content.replaceFirst('\n', ''));
         currentTab.markAsSaved();
       } else {
         await saveFileAs();
