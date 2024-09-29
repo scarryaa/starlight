@@ -42,25 +42,6 @@ class LineNumberPainter extends CustomPainter {
     for (int i = firstVisibleLine;
         i < firstVisibleLine + visibleLineCount + 5 && i < lineCount;
         i++) {
-      // Draw line number
-      final lineNumberText = '${i + 1}';
-      textPainter.text = TextSpan(
-        text: lineNumberText,
-        style: textStyle?.copyWith(
-          fontSize: (textStyle?.fontSize ?? 12) * zoomLevel,
-          color: Colors.grey[600],
-        ),
-      );
-      textPainter.layout(maxWidth: scaledLineNumberWidth - padding * 2);
-      final double xOffset =
-          scaledLineNumberWidth - textPainter.width - padding;
-      final double yOffset =
-          i * scaledLineHeight + (scaledLineHeight - textPainter.height) / 2;
-      textPainter.paint(
-        canvas,
-        Offset(xOffset, yOffset),
-      );
-
       // Draw folding icon if this line is the start of a folding region
       final foldingRegion = foldingRegions.firstWhere(
         (region) =>
@@ -69,24 +50,47 @@ class LineNumberPainter extends CustomPainter {
         orElse: () => FoldingRegion(
             startLine: -1, endLine: -1, startColumn: -1, endColumn: -1),
       );
+      double iconSpace = scaledLineHeight * 0.6 + padding;
+
+      final lineNumberText = '${i + 1}';
+      textPainter.text = TextSpan(
+        text: lineNumberText,
+        style: textStyle?.copyWith(
+          fontSize: (textStyle?.fontSize ?? 12) * zoomLevel,
+          color: Colors.grey[600],
+        ),
+      );
+
+      // Calculate text layout
+      textPainter.layout(
+          maxWidth: scaledLineNumberWidth - padding * 2 - iconSpace);
+
+      // Align to the right
+      final double xOffset =
+          scaledLineNumberWidth - textPainter.width - padding - iconSpace;
+
+      final double yOffset =
+          i * scaledLineHeight + (scaledLineHeight - textPainter.height) / 2;
+      textPainter.paint(canvas, Offset(xOffset, yOffset));
+
       if (foldingRegion.startLine != -1) {
         final iconSize = scaledLineHeight * 0.6;
         final iconRect = Rect.fromLTWH(
-          padding,
+          scaledLineNumberWidth - iconSize + 5 - padding,
           i * scaledLineHeight + (scaledLineHeight - iconSize) / 2,
           iconSize,
           iconSize,
         );
         final iconPaint = Paint()
           ..color =
-              foldingRegion.isFolded ? Colors.blue[400]! : Colors.grey[400]!
+              foldingRegion.isFolded ? Colors.blue[600]! : Colors.grey[600]!
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5 * zoomLevel;
+          ..strokeWidth = 1.5 * zoomLevel
+          ..strokeCap = StrokeCap.round; // Rounded stroke ends
 
-        // Draw chevron
         final path = Path();
         if (foldingRegion.isFolded) {
-          // Right-pointing chevron
+          // Right-pointing chevron (>)
           path.moveTo(iconRect.left + iconRect.width * 0.3,
               iconRect.top + iconRect.height * 0.25);
           path.lineTo(iconRect.left + iconRect.width * 0.7,
@@ -94,7 +98,7 @@ class LineNumberPainter extends CustomPainter {
           path.lineTo(iconRect.left + iconRect.width * 0.3,
               iconRect.top + iconRect.height * 0.75);
         } else {
-          // Down-pointing chevron
+          // Down-pointing chevron (∨)
           path.moveTo(iconRect.left + iconRect.width * 0.25,
               iconRect.top + iconRect.height * 0.3);
           path.lineTo(iconRect.left + iconRect.width * 0.5,
@@ -102,6 +106,8 @@ class LineNumberPainter extends CustomPainter {
           path.lineTo(iconRect.left + iconRect.width * 0.75,
               iconRect.top + iconRect.height * 0.3);
         }
+
+        // Draw the chevron path
         canvas.drawPath(path, iconPaint);
       }
     }
