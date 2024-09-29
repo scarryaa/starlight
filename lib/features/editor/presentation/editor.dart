@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -73,6 +74,7 @@ class CodeEditor extends StatefulWidget {
 }
 
 class CodeEditorState extends State<CodeEditor> {
+  late ScrollController _completionsScrollController;
   late TextEditingCore editingCore;
   late TextEditingService textEditingService;
   late CodeEditorSelectionService selectionService;
@@ -84,8 +86,14 @@ class CodeEditorState extends State<CodeEditor> {
   late SettingsService _settingsService;
   late LspClient _lspClient;
   List<CompletionItem> _completions = [];
-  CompletionsWidget? _completionsWidget;
-  OverlayEntry? _completionsOverlay;
+  int _lastCompletionPosition = -1;
+  bool _isBackspacing = false;
+  final bool _shortcutHandled = false;
+  Timer? _suggestionsTimer;
+  bool _showingSuggestions = false;
+  int _selectedSuggestionIndex = 0;
+  String _currentWord = '';
+  late List<String> _dartKeywords;
 
   int firstVisibleLine = 0;
   int visibleLineCount = 800;
@@ -101,7 +109,6 @@ class CodeEditorState extends State<CodeEditor> {
   Widget build(BuildContext context) {
     return Stack(
       children: [
-        // Your existing code editor widget
         LayoutBuilder(
           builder: (context, constraints) {
             return ColoredBox(
@@ -118,58 +125,19 @@ class CodeEditorState extends State<CodeEditor> {
             );
           },
         ),
+        if (_showingSuggestions)
+          CompletionsWidget(
+            completions: _completions,
+            onSelected: _applyCompletion,
+            position: _calculateCompletionPosition(
+              _getLineForPosition(editingCore.cursorPosition),
+              _getCharacterForPosition(editingCore.cursorPosition),
+            ),
+            selectedIndex: _selectedSuggestionIndex,
+            scrollController: _completionsScrollController,
+          ),
       ],
     );
-  }
-
-  void _applyCompletion(CompletionItem completion) {
-    print("Applying completion: ${completion.label}");
-    final cursorPosition = editingCore.cursorPosition;
-    final line = _getLineForPosition(cursorPosition);
-    final lineStartIndex = editingCore.getLineStartIndex(line);
-    final lineEndIndex = editingCore.getLineEndIndex(line);
-    final lineText =
-        editingCore.getText().substring(lineStartIndex, lineEndIndex);
-
-    print("Current line text: '$lineText'");
-    print("Cursor position: $cursorPosition");
-
-    // Find the start of the word being completed
-    int wordStart = cursorPosition - lineStartIndex;
-    while (wordStart > 0 &&
-        RegExp(r'[a-zA-Z0-9_]').hasMatch(lineText[wordStart - 1])) {
-      wordStart--;
-    }
-
-    // Calculate the range to be replaced
-    final startPosition = lineStartIndex + wordStart;
-    final endPosition = cursorPosition;
-
-    print("Start position: $startPosition");
-    print("End position: $endPosition");
-
-    // Get the text to be inserted
-    final insertText = completion.insertText ?? completion.label;
-    print("Text to be inserted: '$insertText'");
-
-    // Replace the text
-    editingCore.replaceRange(startPosition, endPosition, insertText);
-
-    // Ensure the changes are reflected
-    setState(() {});
-
-    // Hide the completions list
-    _hideCompletionsList();
-
-    // Ensure the cursor is visible after applying the completion
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      editorService.scrollService.ensureCursorVisibility();
-    });
-
-    // Notify the LSP server of the change
-    _sendDocumentChanges();
-
-    print("Completion applied. New text: '${editingCore.getText()}'");
   }
 
   @override
@@ -198,6 +166,8 @@ class CodeEditorState extends State<CodeEditor> {
     _textPainter.dispose();
     _settingsService.removeListener(_onSettingsChanged);
     _lspClient.stop();
+    _suggestionsTimer?.cancel();
+    editingCore.removeListener(_onTextChangedForSuggestions);
     super.dispose();
   }
 
@@ -239,6 +209,73 @@ class CodeEditorState extends State<CodeEditor> {
 
     clipboardService = ClipboardService(textEditingService);
 
+    _dartKeywords = [
+      'abstract',
+      'as',
+      'assert',
+      'async',
+      'await',
+      'break',
+      'case',
+      'catch',
+      'class',
+      'const',
+      'continue',
+      'covariant',
+      'default',
+      'deferred',
+      'do',
+      'dynamic',
+      'else',
+      'enum',
+      'export',
+      'extends',
+      'extension',
+      'external',
+      'factory',
+      'false',
+      'final',
+      'finally',
+      'for',
+      'Function',
+      'get',
+      'hide',
+      'if',
+      'implements',
+      'import',
+      'in',
+      'interface',
+      'is',
+      'late',
+      'library',
+      'mixin',
+      'new',
+      'null',
+      'on',
+      'operator',
+      'part',
+      'required',
+      'rethrow',
+      'return',
+      'set',
+      'show',
+      'static',
+      'super',
+      'switch',
+      'sync',
+      'this',
+      'throw',
+      'true',
+      'try',
+      'typedef',
+      'var',
+      'void',
+      'while',
+      'with',
+      'yield'
+    ];
+
+    _completionsScrollController = ScrollController();
     keyboardHandlingService = KeyboardHandlingService(
         textEditingService: textEditingService,
         clipboardService: clipboardService,
@@ -299,6 +336,7 @@ class CodeEditorState extends State<CodeEditor> {
     });
     widget.onZoomChanged?.call(_recalculateEditorAfterZoom);
     _initializeLspClient();
+    editingCore.addListener(_onTextChangedForSuggestions);
   }
 
   Future<void> _initializeLspClient() async {
@@ -527,58 +565,319 @@ class CodeEditorState extends State<CodeEditor> {
 
   KeyEventResult _handleKeyPress(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.space &&
-          HardwareKeyboard.instance.isControlPressed) {
-        _showCompletionsList();
-        return KeyEventResult.handled;
-      } else if (event.logicalKey == LogicalKeyboardKey.escape) {
-        _hideCompletionsList();
-        return KeyEventResult.handled;
+      if (_showingSuggestions) {
+        if (event.logicalKey == LogicalKeyboardKey.arrowDown) {
+          _selectNextSuggestion();
+          return KeyEventResult.handled;
+        } else if (event.logicalKey == LogicalKeyboardKey.arrowUp) {
+          _selectPreviousSuggestion();
+          return KeyEventResult.handled;
+        } else if (event.logicalKey == LogicalKeyboardKey.enter) {
+          _applySelectedSuggestion();
+          return KeyEventResult.handled;
+        } else if (event.logicalKey == LogicalKeyboardKey.escape) {
+          _hideCompletionsList();
+          return KeyEventResult.handled;
+        }
       }
+
+      // Set the backspacing flag
+      _isBackspacing = event.logicalKey == LogicalKeyboardKey.backspace;
 
       // Handle regular typing and other key events
       if (keyboardHandlingService.handleKeyPress(event)) {
         editorService.scrollService.ensureCursorVisibility();
-        _hideCompletionsList(); // Hide completions when typing
+        if (!_shouldPreventCompletions(event)) {
+          _onTextChangedForSuggestions();
+        } else {
+          _hideCompletionsList();
+        }
         return KeyEventResult.handled;
       }
+    } else if (event is KeyUpEvent) {
+      // Reset the backspacing flag on key up
+      if (event.logicalKey == LogicalKeyboardKey.backspace) {
+        _isBackspacing = false;
+      }
     }
+
+    // Allow default behavior for unhandled keys
     return KeyEventResult.ignored;
   }
 
-  void _showCompletionsList() async {
+  void _applyCompletion(CompletionItem completion) {
+    print("Applying completion: ${completion.label}");
+    final cursorPosition = editingCore.cursorPosition;
+    final line = _getLineForPosition(cursorPosition);
+    final lineStartIndex = editingCore.getLineStartIndex(line);
+    final lineEndIndex = editingCore.getLineEndIndex(line);
+    final lineText =
+        editingCore.getText().substring(lineStartIndex, lineEndIndex);
+
+    print("Current line text: '$lineText'");
+    print("Cursor position: $cursorPosition");
+
+    // Find the start of the word being completed
+    int wordStart = cursorPosition - lineStartIndex;
+    while (wordStart > 0 &&
+        RegExp(r'[a-zA-Z0-9_]').hasMatch(lineText[wordStart - 1])) {
+      wordStart--;
+    }
+
+    // Calculate the range to be replaced
+    final startPosition = lineStartIndex + wordStart;
+    final endPosition = cursorPosition;
+
+    print("Start position: $startPosition");
+    print("End position: $endPosition");
+
+    // Get the text to be inserted
+    final insertText = completion.insertText ?? completion.label;
+    print("Text to be inserted: '$insertText'");
+
+    // Replace the text
+    editingCore.replaceRange(startPosition, endPosition, insertText);
+
+    // Update the last completion position
+    _lastCompletionPosition = startPosition + insertText.length;
+
+    // Ensure the changes are reflected
+    setState(() {});
+
+    // Hide the completions list
+    _hideCompletionsList();
+
+    // Ensure the cursor is visible after applying the completion
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      editorService.scrollService.ensureCursorVisibility();
+    });
+
+    // Notify the LSP server of the change
+    _sendDocumentChanges();
+  }
+
+  bool _shouldPreventCompletions(KeyEvent event) {
+    return event.logicalKey == LogicalKeyboardKey.arrowLeft ||
+        event.logicalKey == LogicalKeyboardKey.arrowRight ||
+        event.logicalKey == LogicalKeyboardKey.escape ||
+        event.logicalKey == LogicalKeyboardKey.tab ||
+        event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.space ||
+        event.logicalKey == LogicalKeyboardKey.backspace;
+  }
+
+  void _onTextChangedForSuggestions() {
+    _suggestionsTimer?.cancel();
+    _suggestionsTimer = Timer(const Duration(milliseconds: 50), () {
+      final currentChar = _getCurrentChar();
+      if (currentChar == ' ' || currentChar == '\n' || _isBackspacing) {
+        _hideCompletionsList();
+      } else if (_shouldShowSuggestions()) {
+        _showSuggestions();
+      }
+    });
+  }
+
+  bool _shouldShowSuggestions() {
+    if (_isBackspacing) {
+      return false;
+    }
+
+    final cursorPosition = editingCore.cursorPosition;
+
+    // Check if we've moved past the last completion position
+    if (cursorPosition > _lastCompletionPosition) {
+      return true;
+    }
+
+    // Check if we've moved to a different line
+    final currentLine = _getLineForPosition(cursorPosition);
+    final lastCompletionLine = _getLineForPosition(_lastCompletionPosition);
+    if (currentLine != lastCompletionLine) {
+      return true;
+    }
+
+    // Don't show suggestions if we're still at or before the last completion position
+    return false;
+  }
+
+  String _getCurrentChar() {
+    final cursorPosition = editingCore.cursorPosition;
+    if (cursorPosition > 0 && cursorPosition <= editingCore.getText().length) {
+      return editingCore.getText()[cursorPosition - 1];
+    }
+    return '';
+  }
+
+  void _showSuggestions() async {
     final cursorPosition = editingCore.cursorPosition;
     final line = _getLineForPosition(cursorPosition);
     final lineStartIndex = editingCore.getLineStartIndex(line);
     final character = cursorPosition - lineStartIndex;
 
+    _currentWord = _getCurrentWord(line, character);
+    print("Current word: '$_currentWord'"); // Debugging
+
     try {
       _completions = await getCompletions(line, character);
+      print("Fetched ${_completions.length} completions:"); // Debugging
+      for (var completion in _completions) {
+        print("  Label: ${completion.label}");
+        if (completion.detail != null) print("  Detail: ${completion.detail}");
+      }
     } catch (e) {
       print("Error fetching completions: $e");
       _completions = _getFallbackCompletions();
     }
 
-    if (_completions.isNotEmpty) {
-      final position = _calculateCompletionPosition(line, character);
-      _showCompletionsOverlay(position);
-    } else {
-      print("No completions available");
+    _filterCompletions();
+    print("After filtering: ${_completions.length} completions"); // Debugging
+
+    setState(() {
+      _showingSuggestions = _completions.isNotEmpty;
+      _selectedSuggestionIndex = 0;
+    });
+
+    print("Showing suggestions: $_showingSuggestions"); // Debugging
+  }
+
+  void _filterCompletions() {
+    if (_currentWord.isNotEmpty) {
+      final lowercaseWord = _currentWord.toLowerCase();
+      print("Filtering completions for word: '$lowercaseWord'"); // Debugging
+
+      // First, add matching Dart keywords
+      List<CompletionItem> keywordCompletions = _dartKeywords
+          .where((keyword) => keyword.toLowerCase().startsWith(lowercaseWord))
+          .map((keyword) =>
+              CompletionItem(label: keyword, detail: "Dart keyword"))
+          .toList();
+
+      // Then, add other completions
+      List<CompletionItem> otherCompletions = _completions.where((completion) {
+        final lowercaseLabel = completion.label.toLowerCase();
+        final parts = lowercaseLabel.split('/');
+        bool matches = parts.any((part) => part.startsWith(lowercaseWord));
+
+        if (lowercaseLabel.startsWith('package:')) {
+          final packageName = parts.length > 1 ? parts[1] : '';
+          matches = matches || packageName.startsWith(lowercaseWord);
+        }
+
+        return matches;
+      }).toList();
+
+      // Combine keyword completions and other completions
+      _completions = [...keywordCompletions, ...otherCompletions];
+
+      // Sort completions
+      _completions.sort((a, b) {
+        // Prioritize exact matches
+        if (a.label.toLowerCase() == lowercaseWord) return -1;
+        if (b.label.toLowerCase() == lowercaseWord) return 1;
+
+        // Then prioritize starts with
+        if (a.label.toLowerCase().startsWith(lowercaseWord) &&
+            !b.label.toLowerCase().startsWith(lowercaseWord)) return -1;
+        if (b.label.toLowerCase().startsWith(lowercaseWord) &&
+            !a.label.toLowerCase().startsWith(lowercaseWord)) return 1;
+
+        // Then sort alphabetically
+        return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+      });
+    }
+    print(
+        "Filtered completions: ${_completions.map((c) => c.label).join(', ')}"); // Debugging
+  }
+
+  List<CompletionItem> _getFallbackCompletions() {
+    return _dartKeywords
+        .map(
+            (keyword) => CompletionItem(label: keyword, detail: "Dart keyword"))
+        .toList();
+  }
+
+  String _getCurrentWord(int line, int character) {
+    final lineText = editingCore.getLineContent(line);
+    int end = character;
+    int start = end - 1;
+
+    // Move start to the beginning of the word
+    while (start >= 0 && _isValidIdentifierChar(lineText[start])) {
+      start--;
+    }
+    start++; // Adjust because we've gone one character too far
+
+    // Move end to the end of the word
+    while (end < lineText.length && _isValidIdentifierChar(lineText[end])) {
+      end++;
+    }
+
+    String word = lineText.substring(start, end);
+    print(
+        "getCurrentWord: line=$line, character=$character, word='$word'"); // Debugging
+    return word;
+  }
+
+  bool _isValidIdentifierChar(String char) {
+    return RegExp(r'[a-zA-Z0-9_]').hasMatch(char);
+  }
+
+  bool _hasNonSpaceBeforeCaret(int line, int character) {
+    if (character == 0) return false;
+    final lineText = editingCore.getLineContent(line);
+    return character > 0 && lineText[character - 1].trim().isNotEmpty;
+  }
+
+  void _selectNextSuggestion() {
+    setState(() {
+      _selectedSuggestionIndex =
+          (_selectedSuggestionIndex + 1) % _completions.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedSuggestion();
+      });
+    });
+  }
+
+  void _selectPreviousSuggestion() {
+    setState(() {
+      _selectedSuggestionIndex =
+          (_selectedSuggestionIndex - 1 + _completions.length) %
+              _completions.length;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToSelectedSuggestion();
+      });
+    });
+  }
+
+  void _scrollToSelectedSuggestion() {
+    if (!_completionsScrollController.hasClients) {
+      return;
+    }
+
+    final itemPosition = _selectedSuggestionIndex * kCompletionItemHeight;
+    final listHeight =
+        min(_completions.length, kMaxVisibleItems) * kCompletionItemHeight;
+
+    if (itemPosition < _completionsScrollController.offset) {
+      _completionsScrollController.jumpTo(itemPosition);
+    } else if (itemPosition + kCompletionItemHeight >
+        _completionsScrollController.offset + listHeight) {
+      _completionsScrollController
+          .jumpTo(itemPosition + kCompletionItemHeight - listHeight);
     }
   }
 
-  void _showCompletionsOverlay(Offset position) {
-    _completionsOverlay?.remove();
-    _completionsOverlay = OverlayEntry(
-      builder: (context) => CompletionsWidget(
-        completions: _completions,
-        onSelected: _applyCompletion,
-        position: position,
-        editorFocusNode: widget.focusNode,
-        onDismiss: _hideCompletionsList,
-      ),
-    );
-    Overlay.of(context).insert(_completionsOverlay!);
+  void _applySelectedSuggestion() {
+    if (_completions.isNotEmpty) {
+      _applyCompletion(_completions[_selectedSuggestionIndex]);
+    }
+  }
+
+  void _hideCompletionsList() {
+    setState(() {
+      _showingSuggestions = false;
+    });
   }
 
   Offset _calculateCompletionPosition(int line, int character) {
@@ -590,7 +889,6 @@ class CodeEditorState extends State<CodeEditor> {
       final horizontalScrollOffset =
           editorService.scrollService.horizontalController.offset;
 
-      // Calculate the position considering the scroll offsets
       final cursorX =
           (character * CodeEditorConstants.charWidth * widget.zoomLevel) -
               horizontalScrollOffset +
@@ -599,31 +897,20 @@ class CodeEditorState extends State<CodeEditor> {
           (line * CodeEditorConstants.lineHeight * widget.zoomLevel) -
               scrollOffset;
 
+      final adjustedY =
+          cursorY + CodeEditorConstants.lineHeight * widget.zoomLevel;
+
+      final screenSize = MediaQuery.of(context).size;
+      final maxX = screenSize.width - 200;
+      final maxY = screenSize.height - 300;
+
       return Offset(
-        editorOffset.dx + cursorX,
-        editorOffset.dy +
-            cursorY +
-            CodeEditorConstants.lineHeight * widget.zoomLevel,
+        min(editorOffset.dx + cursorX, maxX) - 250,
+        min(editorOffset.dy + adjustedY, maxY) - 118,
       );
     }
-
     print("RenderBox is null, cannot calculate completion position");
     return Offset.zero;
-  }
-
-  void _hideCompletionsList() {
-    _completionsOverlay?.remove();
-    _completionsOverlay = null;
-  }
-
-  List<CompletionItem> _getFallbackCompletions() {
-    return [
-      CompletionItem(label: "if", detail: "if statement"),
-      CompletionItem(label: "for", detail: "for loop"),
-      CompletionItem(label: "while", detail: "while loop"),
-      CompletionItem(label: "class", detail: "class definition"),
-      CompletionItem(label: "function", detail: "function definition"),
-    ];
   }
 
   int _getLineForPosition(int position) {
@@ -636,6 +923,12 @@ class CodeEditorState extends State<CodeEditor> {
       }
     }
     return line;
+  }
+
+  int _getCharacterForPosition(int position) {
+    final line = _getLineForPosition(position);
+    final lineStartIndex = editingCore.getLineStartIndex(line);
+    return position - lineStartIndex;
   }
 
   void _replaceText(int start, int end, String replacement) {
@@ -725,7 +1018,8 @@ class CodeEditorState extends State<CodeEditor> {
       final response = await _lspClient.sendRequest('textDocument/completion', {
         'textDocument': {'uri': 'file://${widget.filePath}'},
         'position': {'line': line, 'character': character},
-      }).timeout(const Duration(seconds: 5)); // Add a 5-second timeout
+        'context': {'triggerKind': 1} // Invoked
+      }).timeout(const Duration(seconds: 2));
 
       final items = response['result']['items'] as List<dynamic>;
       return items.map((item) => CompletionItem.fromJson(item)).toList();

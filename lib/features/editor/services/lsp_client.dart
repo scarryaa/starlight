@@ -10,14 +10,18 @@ class LspClient {
   final _responseCompleters = <int, Completer<Map<String, dynamic>>>{};
   Completer<void> _serverReady = Completer<void>();
   List<int> _buffer = [];
+  bool _verbose = false;
 
   Future<void> start(String command, List<String> arguments) async {
     try {
-      print("Starting LSP process: $command ${arguments.join(' ')}");
+      if (_verbose)
+        print("Starting LSP process: $command ${arguments.join(' ')}");
       _process = await Process.start(command, arguments);
 
       _process.exitCode.then((exitCode) {
-        print("LSP process exited with code: $exitCode");
+        if (exitCode != 0) {
+          print("LSP process exited with code: $exitCode");
+        }
         if (!_serverReady.isCompleted) {
           _serverReady.completeError("LSP process exited unexpectedly");
         }
@@ -37,15 +41,18 @@ class LspClient {
       await sendRequest('initialize',
           {'processId': null, 'rootUri': null, 'capabilities': {}});
 
-      print("LSP process started and initialized");
+      if (_verbose) print("LSP process started and initialized");
     } catch (e) {
       print("Error starting LSP process: $e");
       rethrow;
     }
   }
 
+  void setVerboseLogging(bool verbose) {
+    _verbose = verbose;
+  }
+
   void _handleServerOutput(List<int> data) {
-    print("Received raw data: ${utf8.decode(data)}");
     _buffer.addAll(data);
     _processBuffer();
   }
@@ -80,8 +87,8 @@ class LspClient {
         Map<String, dynamic> message = json.decode(jsonStr);
         _handleMessage(message);
       } catch (e) {
-        print("Error parsing JSON: $e");
-        print("Received data: $jsonStr");
+        if (_verbose) print("Error parsing JSON: $e");
+        if (_verbose) print("Received data: $jsonStr");
       }
     }
   }
@@ -114,7 +121,7 @@ class LspClient {
   }
 
   void _handleMessage(Map<String, dynamic> message) {
-    print("Received message: $message");
+    if (_verbose) print("Received message: $message");
     if (message.containsKey('id')) {
       int id = message['id'];
       final completer = _responseCompleters.remove(id);
@@ -123,7 +130,7 @@ class LspClient {
         _serverReady.complete();
       }
     } else if (message.containsKey('method')) {
-      print('Server notification: ${message['method']}');
+      if (_verbose) print('Server notification: ${message['method']}');
     }
   }
 
@@ -143,7 +150,7 @@ class LspClient {
     final jsonRequest = json.encode(request);
     final message = 'Content-Length: ${jsonRequest.length}\r\n\r\n$jsonRequest';
 
-    print("Sending request to LSP server: $message");
+    if (_verbose) print("Sending request to LSP server: $message");
 
     try {
       _process.stdin.add(utf8.encode(message));

@@ -186,8 +186,10 @@ class KeyboardHandlingService {
       case LogicalKeyboardKey.tab:
         textEditingService.insertText('    '); // 4 spaces for tab
         return true;
+      case LogicalKeyboardKey.escape:
+        return true;
       default:
-        if (event.character != null) {
+        if (event.character != null && event.character != '') {
           textEditingService.insertText(event.character!);
           return true;
         }
