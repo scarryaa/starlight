@@ -4,6 +4,7 @@ class FoldingRegion {
   final int startColumn;
   final int endColumn;
   bool isFolded;
+  bool isHidden;
 
   FoldingRegion({
     required this.startLine,
@@ -11,6 +12,7 @@ class FoldingRegion {
     required this.startColumn,
     required this.endColumn,
     this.isFolded = false,
+    this.isHidden = false,
   });
 }
 

@@ -597,6 +597,7 @@ class CodeEditorState extends State<CodeEditor> {
               startColumn: startItem.column,
               endColumn: line.indexOf('}', j),
               isFolded: false,
+              isHidden: false,
             ));
           }
         }
@@ -637,6 +638,7 @@ class CodeEditorState extends State<CodeEditor> {
               ),
               foldingRegions: foldingRegions,
               onFoldingToggle: _toggleFolding,
+              isLineVisible: _isLineVisible,
             ),
           ),
         ),
@@ -644,13 +646,45 @@ class CodeEditorState extends State<CodeEditor> {
     );
   }
 
+  bool _isLineVisible(int line) {
+    for (var region in foldingRegions) {
+      if (region.isFolded &&
+          line > region.startLine &&
+          line <= region.endLine) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   void _toggleFolding(FoldingRegion region) {
     setState(() {
       region.isFolded = !region.isFolded;
+      if (region.isFolded) {
+        _updateNestedFoldingRegions(region, true);
+      } else {
+        _updateNestedFoldingRegions(region, false);
+      }
     });
 
     repaintNotifier.value = !repaintNotifier.value;
     _updateVisibleLineCount();
+  }
+
+  void _updateNestedFoldingRegions(FoldingRegion parentRegion, bool isFolded) {
+    for (var nestedRegion in foldingRegions) {
+      if (nestedRegion.startLine > parentRegion.startLine &&
+          nestedRegion.endLine <= parentRegion.endLine) {
+        if (isFolded) {
+          // When folding, hide all nested regions
+          nestedRegion.isFolded = true;
+          nestedRegion.isHidden = true;
+        } else {
+          // When unfolding, restore previous state of nested regions
+          nestedRegion.isHidden = false;
+        }
+      }
+    }
   }
 
   void _updateScrollPosition() {

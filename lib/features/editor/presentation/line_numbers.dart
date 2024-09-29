@@ -14,6 +14,7 @@ class LineNumberPainter extends CustomPainter {
   final Function(FoldingRegion) onFoldingToggle;
   final ScrollController scrollController;
   final ValueNotifier<bool> repaintNotifier;
+  final bool Function(int) isLineVisible; // Add this line
 
   LineNumberPainter({
     required this.lineCount,
@@ -27,6 +28,7 @@ class LineNumberPainter extends CustomPainter {
     required this.onFoldingToggle,
     required this.scrollController,
     required this.repaintNotifier,
+    required this.isLineVisible, // Add this line
   }) : super(repaint: repaintNotifier);
 
   @override
@@ -42,11 +44,11 @@ class LineNumberPainter extends CustomPainter {
     for (int i = firstVisibleLine;
         i < firstVisibleLine + visibleLineCount + 5 && i < lineCount;
         i++) {
+      if (!isLineVisible(i + 1)) continue; // Now this line will work
+
       // Draw folding icon if this line is the start of a folding region
       final foldingRegion = foldingRegions.firstWhere(
-        (region) =>
-            region.startLine ==
-            i + 1, // Adjusted to match one-based line numbers
+        (region) => region.startLine == i + 1 && !region.isHidden,
         orElse: () => FoldingRegion(
             startLine: -1, endLine: -1, startColumn: -1, endColumn: -1),
       );
@@ -86,7 +88,7 @@ class LineNumberPainter extends CustomPainter {
               foldingRegion.isFolded ? Colors.blue[600]! : Colors.grey[600]!
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1.5 * zoomLevel
-          ..strokeCap = StrokeCap.round; // Rounded stroke ends
+          ..strokeCap = StrokeCap.round;
 
         final path = Path();
         if (foldingRegion.isFolded) {
@@ -123,7 +125,8 @@ class LineNumberPainter extends CustomPainter {
         textStyle != oldDelegate.textStyle ||
         zoomLevel != oldDelegate.zoomLevel ||
         !listEquals(foldingRegions, oldDelegate.foldingRegions) ||
-        scrollController != oldDelegate.scrollController;
+        scrollController != oldDelegate.scrollController ||
+        isLineVisible != oldDelegate.isLineVisible; // Add this line
   }
 }
 
@@ -138,6 +141,7 @@ class LineNumbers extends StatefulWidget {
   final List<FoldingRegion> foldingRegions;
   final Function(FoldingRegion) onFoldingToggle;
   final ScrollController? scrollController; // Make scrollController optional
+  final bool Function(int) isLineVisible;
 
   const LineNumbers({
     Key? key,
@@ -149,6 +153,7 @@ class LineNumbers extends StatefulWidget {
     required this.zoomLevel,
     required this.foldingRegions,
     required this.onFoldingToggle,
+    required this.isLineVisible,
     this.scrollController, // Optional scrollController
     this.textStyle,
   }) : super(key: key);
@@ -186,7 +191,11 @@ class _LineNumbersState extends State<LineNumbers> {
           startColumn: region.startColumn,
           endColumn: region.endColumn,
           isFolded: !region.isFolded,
+          isHidden: region.isHidden, // Preserve the hidden state
         );
+
+        // Update nested regions
+        _updateNestedRegions(_foldingRegions[index]);
       }
     });
 
@@ -194,6 +203,23 @@ class _LineNumbersState extends State<LineNumbers> {
 
     // Notify the CustomPainter to repaint
     _repaintNotifier.value = !_repaintNotifier.value;
+  }
+
+  void _updateNestedRegions(FoldingRegion parentRegion) {
+    for (int i = 0; i < _foldingRegions.length; i++) {
+      FoldingRegion region = _foldingRegions[i];
+      if (region.startLine > parentRegion.startLine &&
+          region.endLine <= parentRegion.endLine) {
+        _foldingRegions[i] = FoldingRegion(
+          startLine: region.startLine,
+          endLine: region.endLine,
+          startColumn: region.startColumn,
+          endColumn: region.endColumn,
+          isFolded: region.isFolded,
+          isHidden: parentRegion.isFolded,
+        );
+      }
+    }
   }
 
   @override
@@ -221,6 +247,7 @@ class _LineNumbersState extends State<LineNumbers> {
               onFoldingToggle: _handleFoldToggle,
               scrollController: widget.scrollController ?? ScrollController(),
               repaintNotifier: _repaintNotifier, // Pass the notifier
+              isLineVisible: widget.isLineVisible,
             ),
           ),
         ),
