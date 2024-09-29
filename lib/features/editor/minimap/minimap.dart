@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
+import 'package:starlight/utils/constants.dart';
 
 class Minimap extends StatefulWidget {
   final TextEditingCore editingCore;
@@ -37,6 +38,18 @@ class _MinimapState extends State<Minimap> {
   }
 
   @override
+  void dispose() {
+    widget.scrollController.removeListener(_handleScroll);
+    super.dispose();
+  }
+
+  void _handleScroll() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  @override
   void didUpdateWidget(Minimap oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.editorHeight != widget.editorHeight ||
@@ -44,12 +57,6 @@ class _MinimapState extends State<Minimap> {
     if (oldWidget.scrollController != widget.scrollController) {
       oldWidget.scrollController.removeListener(_handleScroll);
       widget.scrollController.addListener(_handleScroll);
-    }
-  }
-
-  void _handleScroll() {
-    if (mounted) {
-      setState(() {});
     }
   }
 
@@ -138,12 +145,6 @@ class _MinimapState extends State<Minimap> {
       ),
     );
   }
-
-  @override
-  void dispose() {
-    widget.scrollController.removeListener(_handleScroll);
-    super.dispose();
-  }
 }
 
 class MinimapPainter extends CustomPainter {
@@ -167,24 +168,24 @@ class MinimapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    const lineHeight = 1.0;
-    final totalLines = editingCore.lineCount;
-    final maxWidth = size.width;
+    final scaleFactor = size.height / editorHeight;
 
-    for (int i = 0; i < totalLines; i++) {
+    // Draw the minimap content
+    for (int i = 0; i < editingCore.lineCount; i++) {
       final lineContent = editingCore.getLineContent(i);
-      final yPosition = i * lineHeight;
+      final yPosition = i * CodeEditorConstants.lineHeight * scaleFactor;
 
       if (yPosition > size.height) break;
 
-      drawHighlightedLine(canvas, lineContent, yPosition, maxWidth, i);
+      drawHighlightedLine(canvas, lineContent, yPosition, size.width, i);
     }
 
+    // Draw the viewport indicator
     final viewportRatio = viewportHeight / editorHeight;
     final indicatorHeight = size.height * viewportRatio;
 
-    final scrollRatio = scrollOffset / editorHeight;
-    final indicatorTop = scrollRatio * size.height;
+    final scrollRatio = scrollOffset / (editorHeight - viewportHeight);
+    final indicatorTop = scrollRatio * (size.height - indicatorHeight);
 
     final indicatorPaint = Paint()
       ..color = Colors.blue.withOpacity(0.3)
