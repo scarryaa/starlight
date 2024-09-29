@@ -13,52 +13,64 @@ class GestureHandlingService {
   Timer? _tapTimer;
   Offset? _lastTapPosition;
 
-  GestureHandlingService(
-      {required this.textEditingService,
-      required this.selectionService,
-      required this.getPositionFromOffset,
-      required this.recalculateEditor});
+  static const double _tapDistanceThreshold = 10.0;
+  static const Duration _multiTapTimeout = Duration(milliseconds: 300);
+
+  GestureHandlingService({
+    required this.textEditingService,
+    required this.selectionService,
+    required this.getPositionFromOffset,
+    required this.recalculateEditor,
+  });
 
   void handleTap(TapDownDetails details) {
+    final currentTapPosition = details.localPosition;
+
     if (_lastTapPosition != null) {
-      double distance = (details.localPosition - _lastTapPosition!).distance;
-      if (distance > 20.0) {
-        _tapCount = 0;
+      double distance = (currentTapPosition - _lastTapPosition!).distance;
+      if (distance > _tapDistanceThreshold) {
+        _resetTapState();
       }
     }
 
     _tapCount++;
-    _lastTapPosition = details.localPosition;
+    _lastTapPosition = currentTapPosition;
     _tapTimer?.cancel();
-    _tapTimer = Timer(const Duration(milliseconds: 500), () {
-      _tapCount = 0;
-      _lastTapPosition = null;
-    });
+    _tapTimer = Timer(_multiTapTimeout, _resetTapState);
 
-    if (_tapCount == 1) {
-      _handleSingleTap(details);
-    } else if (_tapCount == 2) {
-      _handleDoubleTap(details);
-    } else if (_tapCount == 3) {
-      _handleTripleTap(details);
+    switch (_tapCount) {
+      case 1:
+        _handleSingleTap(currentTapPosition);
+        break;
+      case 2:
+        _handleDoubleTap(currentTapPosition);
+        break;
+      case 3:
+        _handleTripleTap(currentTapPosition);
+        break;
     }
 
     recalculateEditor();
   }
 
-  void _handleSingleTap(TapDownDetails details) {
-    final position = getPositionFromOffset(details.localPosition);
+  void _resetTapState() {
+    _tapCount = 0;
+    _lastTapPosition = null;
+  }
+
+  void _handleSingleTap(Offset tapPosition) {
+    final position = getPositionFromOffset(tapPosition);
     textEditingService.editingCore.cursorPosition = position;
     textEditingService.clearSelection();
   }
 
-  void _handleDoubleTap(TapDownDetails details) {
-    final position = getPositionFromOffset(details.localPosition);
+  void _handleDoubleTap(Offset tapPosition) {
+    final position = getPositionFromOffset(tapPosition);
     selectionService.selectWordAtPosition(position);
   }
 
-  void _handleTripleTap(TapDownDetails details) {
-    final position = getPositionFromOffset(details.localPosition);
+  void _handleTripleTap(Offset tapPosition) {
+    final position = getPositionFromOffset(tapPosition);
     selectionService.selectLineAtPosition(position);
   }
 }

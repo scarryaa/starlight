@@ -583,21 +583,33 @@ class EditorController {
   }
 
   void closeTab(int index) {
+    if (index < 0 || index >= _tabs.length) return;
+
+    // Remove the tab at the specified index
     _tabs.removeAt(index);
-    if (_selectedTabIndex.value >= _tabs.length) {
-      _selectedTabIndex.value = _tabs.isEmpty ? -1 : _tabs.length - 1;
+
+    if (_tabs.isEmpty) {
+      _selectedTabIndex.value = -1;
+      _currentEditorKey = const EditorContentKey('');
+      return;
     }
+
+    // Adjust selected index: select the next tab if possible
+    if (index == _tabs.length) {
+      _selectedTabIndex.value = index - 1; // Last tab closed, select previous
+    } else {
+      _selectedTabIndex.value = index; // Select the next tab
+    }
+
     _updateCurrentEditorKey();
   }
 
   void closeTabsToRight(int index) {
-    FileTab selectedTab = _tabs[index];
-    int selectedTabIndexInTabs = _tabs.indexOf(selectedTab);
-    for (int i = _tabs.length - 1; i > selectedTabIndexInTabs; i--) {
-      if (!_tabs[i].isPinned) {
-        _tabs.removeAt(i);
-      }
-    }
+    final tabsToClose = _tabs.where((tab) => !tab.isPinned).toList();
+
+    // Keep all pinned tabs and tabs to the left of the current tab
+    _tabs.removeWhere((tab) => tabsToClose.indexOf(tab) > index);
+
     if (_selectedTabIndex.value >= _tabs.length) {
       _selectedTabIndex.value = _tabs.length - 1;
     }
@@ -665,8 +677,10 @@ class EditorController {
   }
 
   void selectTab(int index) {
-    _selectedTabIndex.value = index;
-    _currentEditorKey = EditorContentKey(_tabs[index].content);
+    if (index >= 0 && index < _tabs.length) {
+      _selectedTabIndex.value = index;
+      _currentEditorKey = EditorContentKey(_tabs[index].content);
+    }
   }
 
   void toggleSearchVisibility() {

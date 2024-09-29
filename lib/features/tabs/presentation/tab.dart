@@ -427,6 +427,8 @@ class _TabState extends State<Tab> {
     } else {
       widget.onClose();
     }
+
+    setState(() {});
   }
 
   void _showContextMenu(BuildContext context, Offset position) {

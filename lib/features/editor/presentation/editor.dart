@@ -205,6 +205,11 @@ class CodeEditorState extends State<CodeEditor> {
   @override
   void didUpdateWidget(CodeEditor oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (widget.filePath != oldWidget.filePath) {
+      _lspClient.stop();
+      _initializeLspClient();
+    }
+
     if (widget.selectionStart != null &&
         widget.selectionEnd != null &&
         widget.cursorPosition != null) {
@@ -223,13 +228,14 @@ class CodeEditorState extends State<CodeEditor> {
 
   @override
   void dispose() {
+    _suggestionsTimer?.cancel();
     editingCore.removeListener(_onTextChanged);
     editingCore.dispose();
     _textPainter.dispose();
     _settingsService.removeListener(_onSettingsChanged);
+
     _lspClient.stop();
-    _suggestionsTimer?.cancel();
-    editingCore.removeListener(_onTextChangedForSuggestions);
+
     super.dispose();
   }
 
@@ -266,15 +272,17 @@ class CodeEditorState extends State<CodeEditor> {
     );
 
     _initializeLspClient().then((_) {
-      setState(() {
-        _syntaxHighlighter = SyntaxHighlighter(
-          language: 'dart',
-          initialThemeMode: _settingsService.themeMode,
-          lspClient: _lspClient,
-        );
-        _syntaxHighlighter.updateStyles(context);
-      });
-      _updateSemanticTokens();
+      if (mounted) {
+        setState(() {
+          _syntaxHighlighter = SyntaxHighlighter(
+            language: 'dart',
+            initialThemeMode: _settingsService.themeMode,
+            lspClient: _lspClient,
+          );
+          _syntaxHighlighter.updateStyles(context);
+        });
+        _updateSemanticTokens();
+      }
     });
 
     final scrollService = CodeEditorScrollService(
@@ -646,15 +654,23 @@ class CodeEditorState extends State<CodeEditor> {
   }
 
   void _updateScrollPosition() {
+    // Ensure the scroll controller has clients
     if (!editorService.scrollService.codeScrollController.hasClients) return;
+
+    // Ensure foldingRegions is not empty
+    if (foldingRegions.isEmpty) {
+      return; // No need to scroll if there are no folded regions
+    }
 
     int visibleLine = 0;
     int actualLine = 0;
     double scrollOffset = 0.0;
 
+    // Iterate through lines to calculate scroll offset
     while (actualLine < editingCore.lineCount) {
       if (visibleLine >= firstVisibleLine) break;
 
+      // Check for folded regions in the current line
       final foldedRegion = foldingRegions.firstWhere(
         (region) => region.isFolded && region.startLine == actualLine,
         orElse: () => FoldingRegion(
@@ -662,9 +678,11 @@ class CodeEditorState extends State<CodeEditor> {
       );
 
       if (foldedRegion.startLine != -1) {
+        // Skip folded lines
         actualLine = foldedRegion.endLine + 1;
         scrollOffset += CodeEditorConstants.lineHeight * widget.zoomLevel;
       } else {
+        // Move to next line
         actualLine++;
         scrollOffset += CodeEditorConstants.lineHeight * widget.zoomLevel;
       }
@@ -672,7 +690,10 @@ class CodeEditorState extends State<CodeEditor> {
       visibleLine++;
     }
 
-    editorService.scrollService.codeScrollController.jumpTo(scrollOffset);
+    // Ensure the widget is still mounted before updating scroll
+    if (mounted) {
+      editorService.scrollService.codeScrollController.jumpTo(scrollOffset);
+    }
   }
 
   Color _getDefaultTextColor(BuildContext context) {
@@ -788,14 +809,16 @@ class CodeEditorState extends State<CodeEditor> {
         event.logicalKey == LogicalKeyboardKey.backspace;
   }
 
-  void _onTextChangedForSuggestions() {
+  void _onTextChangedForSuggestions() async {
     _suggestionsTimer?.cancel();
     _suggestionsTimer = Timer(const Duration(milliseconds: 50), () {
       final currentChar = _getCurrentChar();
       if (currentChar == ' ' || currentChar == '\n' || _isBackspacing) {
         _hideCompletionsList();
       } else if (_shouldShowSuggestions()) {
-        _showSuggestions();
+        if (mounted) {
+          _showSuggestions();
+        }
       }
     });
   }
