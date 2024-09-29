@@ -1,5 +1,6 @@
 import 'dart:math';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:starlight/features/editor/domain/models/folding_region.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
@@ -11,6 +12,7 @@ class CodeEditorPainter extends CustomPainter {
   static const double fontSize = 14.0;
   static const int lineBuffer = 5;
   final List<FoldingRegion> foldingRegions;
+  final ValueNotifier<bool> repaintNotifier;
 
   final TextEditingCore editingCore;
   final int firstVisibleLine;
@@ -57,6 +59,7 @@ class CodeEditorPainter extends CustomPainter {
     required this.zoomLevel,
     required this.syntaxHighlighter,
     required this.foldingRegions,
+    required this.repaintNotifier,
   }) {
     _calculateCharWidth();
     scaledLineNumberWidth = lineNumberWidth * zoomLevel;
@@ -153,7 +156,9 @@ class CodeEditorPainter extends CustomPainter {
         cursorPosition != oldDelegate.cursorPosition ||
         selectionStart != oldDelegate.selectionStart ||
         selectionEnd != oldDelegate.selectionEnd ||
-        zoomLevel != oldDelegate.zoomLevel;
+        zoomLevel != oldDelegate.zoomLevel ||
+        !listEquals(foldingRegions, oldDelegate.foldingRegions) ||
+        repaintNotifier.value != oldDelegate.repaintNotifier.value;
   }
 
   void _calculateCharWidth() {

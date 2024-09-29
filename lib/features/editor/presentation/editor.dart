@@ -98,6 +98,7 @@ class CodeEditorState extends State<CodeEditor> {
   String _currentWord = '';
   late List<String> _dartKeywords;
   ScrollController lineNumberScrollController = ScrollController();
+  late ValueNotifier<bool> repaintNotifier;
 
   int firstVisibleLine = 0;
   int visibleLineCount = 800;
@@ -111,10 +112,6 @@ class CodeEditorState extends State<CodeEditor> {
 
   @override
   Widget build(BuildContext context) {
-    if (_syntaxHighlighter == null) {
-      return Center(child: CircularProgressIndicator());
-    }
-
     return Stack(
       children: [
         LayoutBuilder(
@@ -194,6 +191,8 @@ class CodeEditorState extends State<CodeEditor> {
   void initState() {
     super.initState();
 
+    repaintNotifier = ValueNotifier<bool>(false);
+
     editingCore = TextEditingCore("\n");
     editingCore.setText(widget.initialCode);
     if (widget.initialCode.isEmpty) {
@@ -220,6 +219,7 @@ class CodeEditorState extends State<CodeEditor> {
       });
       _updateSemanticTokens();
     });
+
     final scrollService = CodeEditorScrollService(
       editingCore: editingCore,
       zoomLevel: widget.zoomLevel,
@@ -228,78 +228,13 @@ class CodeEditorState extends State<CodeEditor> {
 
     clipboardService = ClipboardService(textEditingService);
 
-    _dartKeywords = [
-      'abstract',
-      'as',
-      'assert',
-      'async',
-      'await',
-      'break',
-      'case',
-      'catch',
-      'class',
-      'const',
-      'continue',
-      'covariant',
-      'default',
-      'deferred',
-      'do',
-      'dynamic',
-      'else',
-      'enum',
-      'export',
-      'extends',
-      'extension',
-      'external',
-      'factory',
-      'false',
-      'final',
-      'finally',
-      'for',
-      'Function',
-      'get',
-      'hide',
-      'if',
-      'implements',
-      'import',
-      'in',
-      'interface',
-      'is',
-      'late',
-      'library',
-      'mixin',
-      'new',
-      'null',
-      'on',
-      'operator',
-      'part',
-      'required',
-      'rethrow',
-      'return',
-      'set',
-      'show',
-      'static',
-      'super',
-      'switch',
-      'sync',
-      'this',
-      'throw',
-      'true',
-      'try',
-      'typedef',
-      'var',
-      'void',
-      'while',
-      'with',
-      'yield'
-    ];
-
     _completionsScrollController = ScrollController();
     keyboardHandlingService = KeyboardHandlingService(
-        textEditingService: textEditingService,
-        clipboardService: clipboardService,
-        recalculateEditor: _recalculateEditor,
-        keyboardShortcutService: widget.keyboardShortcutService);
+      textEditingService: textEditingService,
+      clipboardService: clipboardService,
+      recalculateEditor: _recalculateEditor,
+      keyboardShortcutService: widget.keyboardShortcutService,
+    );
 
     editorService = CodeEditorService(
       scrollService: scrollService,
@@ -312,10 +247,11 @@ class CodeEditorState extends State<CodeEditor> {
     layoutService = LayoutService(editingCore);
 
     gestureHandlingService = GestureHandlingService(
-        textEditingService: textEditingService,
-        selectionService: selectionService,
-        getPositionFromOffset: editorService.getPositionFromOffset,
-        recalculateEditor: _recalculateEditor);
+      textEditingService: textEditingService,
+      selectionService: selectionService,
+      getPositionFromOffset: editorService.getPositionFromOffset,
+      recalculateEditor: _recalculateEditor,
+    );
 
     clipboardService = ClipboardService(textEditingService);
     _syntaxHighlighter = SyntaxHighlighter(
@@ -341,6 +277,11 @@ class CodeEditorState extends State<CodeEditor> {
       _updateVisibleLineCount();
       editorService.scrollService.visibleLineCount = visibleLineCount;
     });
+
+    repaintNotifier.addListener(() {
+      setState(() {});
+    });
+
     widget.onZoomChanged?.call(_recalculateEditorAfterZoom);
     editingCore.addListener(_onTextChangedForSuggestions);
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -503,6 +444,7 @@ class CodeEditorState extends State<CodeEditor> {
                                         selectionStart:
                                             editingCore.selectionStart,
                                         selectionEnd: editingCore.selectionEnd,
+                                        repaintNotifier: repaintNotifier,
                                       ),
                                     ),
                                   ),
@@ -636,10 +578,10 @@ class CodeEditorState extends State<CodeEditor> {
   void _toggleFolding(FoldingRegion region) {
     setState(() {
       region.isFolded = !region.isFolded;
-      _recalculateVisibleLines();
-      _updateScrollPosition();
     });
-    _recalculateEditor();
+
+    repaintNotifier.value = !repaintNotifier.value;
+    _updateVisibleLineCount();
   }
 
   void _updateScrollPosition() {
@@ -1105,17 +1047,13 @@ class CodeEditorState extends State<CodeEditor> {
   }
 
   Future<void> _updateSemanticTokens() async {
-    if (_syntaxHighlighter != null && _lspClient != null) {
-      try {
-        await _lspClient.initialized;
-        await _syntaxHighlighter
-            .updateSemanticTokens('file://${widget.filePath}');
-        setState(() {});
-      } catch (e) {
-        print("Error updating semantic tokens: $e");
-      }
-    } else {
-      print("syntaxHighlighter or lspClient is null");
+    try {
+      await _lspClient.initialized;
+      await _syntaxHighlighter
+          .updateSemanticTokens('file://${widget.filePath}');
+      setState(() {});
+    } catch (e) {
+      print("Error updating semantic tokens: $e");
     }
   }
 
@@ -1202,9 +1140,13 @@ class CodeEditorState extends State<CodeEditor> {
     layoutService.calculateLineNumberWidth();
     layoutService.updateMaxLineWidth();
     editorService.scrollService.updateVisibleLines();
+
     editorService.scrollService.ensureCursorVisibility();
+
     _syntaxHighlighter.invalidateCache();
+
     _updateVisibleLineCount();
+
     setState(() {});
   }
 
@@ -1229,15 +1171,33 @@ class CodeEditorState extends State<CodeEditor> {
   }
 
   void _updateVisibleLineCount() {
-    if (editorService.scrollService.codeScrollController.hasClients) {
-      final viewportHeight = editorService
-          .scrollService.codeScrollController.position.viewportDimension;
-      visibleLineCount =
-          (viewportHeight / (CodeEditorConstants.lineHeight * widget.zoomLevel))
-                  .ceil() +
-              1;
-      setState(() {});
+    int visibleLines = 0;
+    for (int i = 0; i < editingCore.lineCount; i++) {
+      // Skip folded regions
+      final foldedRegion = foldingRegions.firstWhere(
+        (region) =>
+            region.isFolded && i >= region.startLine && i <= region.endLine,
+        orElse: () => FoldingRegion(
+            startLine: -1, endLine: -1, startColumn: -1, endColumn: -1),
+      );
+
+      if (foldedRegion.startLine != -1) {
+        // Skip to the end of the folded region
+        i = foldedRegion.endLine;
+        continue;
+      }
+
+      visibleLines++;
     }
+
+    visibleLineCount = visibleLines;
+    setState(() {}); // Repaint editor with new visible line count
+  }
+
+  void forceRedraw() {
+    setState(() {
+      repaintNotifier.value = !repaintNotifier.value;
+    });
   }
 
   void _recalculateEditorAfterZoom(double zoomLevel) {

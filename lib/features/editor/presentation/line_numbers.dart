@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:starlight/features/editor/domain/models/folding_region.dart';
 
@@ -12,6 +13,7 @@ class LineNumberPainter extends CustomPainter {
   final List<FoldingRegion> foldingRegions;
   final Function(FoldingRegion) onFoldingToggle;
   final ScrollController scrollController;
+  final ValueNotifier<bool> repaintNotifier;
 
   LineNumberPainter({
     required this.lineCount,
@@ -24,7 +26,8 @@ class LineNumberPainter extends CustomPainter {
     required this.foldingRegions,
     required this.onFoldingToggle,
     required this.scrollController,
-  });
+    required this.repaintNotifier,
+  }) : super(repaint: repaintNotifier);
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -113,7 +116,7 @@ class LineNumberPainter extends CustomPainter {
         visibleLineCount != oldDelegate.visibleLineCount ||
         textStyle != oldDelegate.textStyle ||
         zoomLevel != oldDelegate.zoomLevel ||
-        foldingRegions != oldDelegate.foldingRegions ||
+        !listEquals(foldingRegions, oldDelegate.foldingRegions) ||
         scrollController != oldDelegate.scrollController;
   }
 }
@@ -150,11 +153,13 @@ class LineNumbers extends StatefulWidget {
 
 class _LineNumbersState extends State<LineNumbers> {
   late List<FoldingRegion> _foldingRegions;
+  late ValueNotifier<bool> _repaintNotifier; // Notifier to trigger repaints
 
   @override
   void initState() {
     super.initState();
     _foldingRegions = widget.foldingRegions;
+    _repaintNotifier = ValueNotifier(false); // Initialize the notifier
   }
 
   @override
@@ -178,7 +183,11 @@ class _LineNumbersState extends State<LineNumbers> {
         );
       }
     });
+
     widget.onFoldingToggle(region);
+
+    // Notify the CustomPainter to repaint
+    _repaintNotifier.value = !_repaintNotifier.value;
   }
 
   @override
@@ -188,21 +197,25 @@ class _LineNumbersState extends State<LineNumbers> {
 
     return GestureDetector(
       onTapDown: (details) => _handleTap(details, context),
-      child: Container(
-        width: scaledLineNumberWidth,
-        color: theme.colorScheme.surface,
-        child: CustomPaint(
-          painter: LineNumberPainter(
-            lineCount: widget.lineCount,
-            lineHeight: widget.lineHeight,
-            lineNumberWidth: scaledLineNumberWidth,
-            firstVisibleLine: widget.firstVisibleLine,
-            visibleLineCount: widget.visibleLineCount,
-            zoomLevel: widget.zoomLevel,
-            textStyle: widget.textStyle ?? theme.textTheme.bodySmall,
-            foldingRegions: _foldingRegions,
-            onFoldingToggle: _handleFoldToggle,
-            scrollController: widget.scrollController ?? ScrollController(),
+      child: RepaintBoundary(
+        // Wrap in RepaintBoundary for explicit repaint management
+        child: Container(
+          width: scaledLineNumberWidth,
+          color: theme.colorScheme.surface,
+          child: CustomPaint(
+            painter: LineNumberPainter(
+              lineCount: widget.lineCount,
+              lineHeight: widget.lineHeight,
+              lineNumberWidth: scaledLineNumberWidth,
+              firstVisibleLine: widget.firstVisibleLine,
+              visibleLineCount: widget.visibleLineCount,
+              zoomLevel: widget.zoomLevel,
+              textStyle: widget.textStyle ?? theme.textTheme.bodySmall,
+              foldingRegions: _foldingRegions,
+              onFoldingToggle: _handleFoldToggle,
+              scrollController: widget.scrollController ?? ScrollController(),
+              repaintNotifier: _repaintNotifier, // Pass the notifier
+            ),
           ),
         ),
       ),
@@ -220,7 +233,7 @@ class _LineNumbersState extends State<LineNumbers> {
 
     final tappedLine = tappedLineLocal +
         (scrollOffset / scaledLineHeight).floor() +
-        1; // Added +1 here
+        1; // Adjusted +1
 
     final tappedRegion = _foldingRegions.firstWhere(
       (region) => region.startLine == tappedLine,
