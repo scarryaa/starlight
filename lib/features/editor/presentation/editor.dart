@@ -108,6 +108,10 @@ class CodeEditorState extends State<CodeEditor> {
 
   @override
   Widget build(BuildContext context) {
+    if (_syntaxHighlighter == null) {
+      return Center(child: CircularProgressIndicator());
+    }
+
     return Stack(
       children: [
         LayoutBuilder(
@@ -202,6 +206,17 @@ class CodeEditorState extends State<CodeEditor> {
       autoScrollOnDrag: (Offset offset, Size size) {},
     );
 
+    _initializeLspClient().then((_) {
+      setState(() {
+        _syntaxHighlighter = SyntaxHighlighter(
+          language: 'dart',
+          initialThemeMode: _settingsService.themeMode,
+          lspClient: _lspClient,
+        );
+        _syntaxHighlighter.updateStyles(context);
+      });
+      _updateSemanticTokens();
+    });
     final scrollService = CodeEditorScrollService(
       editingCore: editingCore,
       zoomLevel: widget.zoomLevel,
@@ -301,23 +316,11 @@ class CodeEditorState extends State<CodeEditor> {
 
     clipboardService = ClipboardService(textEditingService);
     _syntaxHighlighter = SyntaxHighlighter(
-      {
-        'keyword': const TextStyle(
-          color: Colors.blue,
-        ),
-        'type': const TextStyle(color: Colors.green),
-        'comment': const TextStyle(
-          color: Colors.grey,
-        ),
-        'string': const TextStyle(color: Colors.red),
-        'number': const TextStyle(color: Colors.purple),
-        'function': const TextStyle(color: Colors.orange),
-        'default': TextStyle(color: _getDefaultTextColor(context)),
-      },
       language: 'dart',
       initialThemeMode: _settingsService.themeMode,
+      lspClient: _lspClient,
     );
-
+    _syntaxHighlighter.updateStyles(context);
     layoutService = LayoutService(editingCore);
 
     scrollService.lineNumberWidth = layoutService.calculateLineNumberWidth();
@@ -336,8 +339,19 @@ class CodeEditorState extends State<CodeEditor> {
       editorService.scrollService.visibleLineCount = visibleLineCount;
     });
     widget.onZoomChanged?.call(_recalculateEditorAfterZoom);
-    _initializeLspClient();
     editingCore.addListener(_onTextChangedForSuggestions);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateSemanticTokens();
+      _initializeAfterBuild(context);
+    });
+  }
+
+  void _initializeAfterBuild(BuildContext context) {
+    _initializeTextPainter(context);
+    _settingsService = Provider.of<SettingsService>(context, listen: false);
+
+    // Trigger a rebuild
+    setState(() {});
   }
 
   Future<void> _initializeLspClient() async {
@@ -348,6 +362,8 @@ class CodeEditorState extends State<CodeEditor> {
 
     try {
       await _lspClient.start(dartCommand, arguments);
+      await _lspClient
+          .initialized; // Wait for the client to be fully initialized
 
       // Send the initialized notification
       await _lspClient.sendRequest('initialized', {});
@@ -1009,6 +1025,21 @@ class CodeEditorState extends State<CodeEditor> {
     }
   }
 
+  Future<void> _updateSemanticTokens() async {
+    if (_syntaxHighlighter != null && _lspClient != null) {
+      try {
+        await _lspClient.initialized;
+        await _syntaxHighlighter
+            .updateSemanticTokens('file://${widget.filePath}');
+        setState(() {});
+      } catch (e) {
+        print("Error updating semantic tokens: $e");
+      }
+    } else {
+      print("syntaxHighlighter or lspClient is null");
+    }
+  }
+
   void _onTextChanged() {
     print("Text changed. New version: ${editingCore.version}");
     if (_lastKnownVersion != editingCore.version) {
@@ -1022,6 +1053,7 @@ class CodeEditorState extends State<CodeEditor> {
       });
       _lastKnownVersion = editingCore.version;
       _sendDocumentChanges();
+      _updateSemanticTokens();
     }
   }
 

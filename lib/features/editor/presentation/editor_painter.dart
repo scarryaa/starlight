@@ -101,10 +101,10 @@ class CodeEditorPainter extends CustomPainter {
             .map((span) => TextSpan(
                   text: span.text,
                   style: span.style?.copyWith(
-                          fontSize: fontSize * zoomLevel,
+                          fontSize: CodeEditorConstants.fontSize * zoomLevel,
                           fontFamily: "SF Mono") ??
-                      textStyle.copyWith(
-                          fontSize: fontSize * zoomLevel,
+                      TextStyle(
+                          fontSize: CodeEditorConstants.fontSize * zoomLevel,
                           fontFamily: "SF Mono"),
                 ))
             .toList(),
@@ -112,8 +112,8 @@ class CodeEditorPainter extends CustomPainter {
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: double.infinity);
 
-    final yOffset =
-        offset.dy + (lineHeight * zoomLevel - textPainter.height) / 2;
+    final yOffset = offset.dy +
+        (CodeEditorConstants.lineHeight * zoomLevel - textPainter.height) / 2;
     textPainter.paint(canvas, Offset(offset.dx, yOffset));
   }
 

@@ -9,6 +9,7 @@ const Color backgroundColor = Color(0xFFF5F5F7);
 
 class CodeEditorConstants {
   static const double lineHeight = 24.0;
+  static const double fontSize = 14.0;
   static double charWidth = 8.0;
   static const double scrollbarWidth = 10.0;
   static const double clickDistanceThreshold = 10.0; // pixels

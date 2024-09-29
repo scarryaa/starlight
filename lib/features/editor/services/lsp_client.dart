@@ -3,36 +3,44 @@ import 'dart:convert';
 import 'dart:io';
 
 class LspClient {
-  late Process _process;
-  late StreamSubscription<List<int>> _stdoutSubscription;
-  late StreamSubscription<List<int>> _stderrSubscription;
+  Process? _process;
+  StreamSubscription<List<int>>? _stdoutSubscription;
+  StreamSubscription<List<int>>? _stderrSubscription;
   int _messageId = 0;
   final _responseCompleters = <int, Completer<Map<String, dynamic>>>{};
-  Completer<void> _serverReady = Completer<void>();
+  final _initializationCompleter = Completer<void>();
   List<int> _buffer = [];
   bool _verbose = false;
+  final Duration _timeout;
+
+  LspClient({Duration timeout = const Duration(seconds: 15)})
+      : _timeout = timeout;
+
+  Future<void> get initialized => _initializationCompleter.future;
 
   Future<void> start(String command, List<String> arguments) async {
     try {
-      if (_verbose)
+      if (_verbose) {
         print("Starting LSP process: $command ${arguments.join(' ')}");
+      }
       _process = await Process.start(command, arguments);
 
-      _process.exitCode.then((exitCode) {
+      _process!.exitCode.then((exitCode) {
         if (exitCode != 0) {
           print("LSP process exited with code: $exitCode");
         }
-        if (!_serverReady.isCompleted) {
-          _serverReady.completeError("LSP process exited unexpectedly");
+        if (!_initializationCompleter.isCompleted) {
+          _initializationCompleter
+              .completeError("LSP process exited unexpectedly");
         }
       });
 
       _stdoutSubscription =
-          _process.stdout.listen(_handleServerOutput, onError: (error) {
+          _process!.stdout.listen(_handleServerOutput, onError: (error) {
         print("Error in stdout stream: $error");
       });
 
-      _stderrSubscription = _process.stderr.listen((data) {
+      _stderrSubscription = _process!.stderr.listen((data) {
         print("LSP server error: ${utf8.decode(data)}");
       }, onError: (error) {
         print("Error in stderr stream: $error");
@@ -42,8 +50,10 @@ class LspClient {
           {'processId': null, 'rootUri': null, 'capabilities': {}});
 
       if (_verbose) print("LSP process started and initialized");
+      _initializationCompleter.complete();
     } catch (e) {
       print("Error starting LSP process: $e");
+      _initializationCompleter.completeError(e);
       rethrow;
     }
   }
@@ -126,16 +136,15 @@ class LspClient {
       int id = message['id'];
       final completer = _responseCompleters.remove(id);
       completer?.complete(message);
-      if (!_serverReady.isCompleted && message.containsKey('result')) {
-        _serverReady.complete();
-      }
     } else if (message.containsKey('method')) {
       if (_verbose) print('Server notification: ${message['method']}');
+      // Handle server notifications if needed
     }
   }
 
   Future<Map<String, dynamic>> sendRequest(String method,
       [Map<String, dynamic>? params]) async {
+    await initialized; // Ensure the client is initialized before sending requests
     final id = _messageId++;
     final request = {
       'jsonrpc': '2.0',
@@ -153,7 +162,7 @@ class LspClient {
     if (_verbose) print("Sending request to LSP server: $message");
 
     try {
-      _process.stdin.add(utf8.encode(message));
+      _process!.stdin.add(utf8.encode(message));
     } catch (e) {
       print("Error sending request to LSP server: $e");
       _responseCompleters.remove(id);
@@ -161,7 +170,7 @@ class LspClient {
     }
 
     return completer.future.timeout(
-      const Duration(seconds: 15),
+      _timeout,
       onTimeout: () {
         print("Request timed out: $method");
         _responseCompleters.remove(id);
@@ -170,10 +179,22 @@ class LspClient {
     );
   }
 
+  Future<List<int>> getSemanticTokens(String uri) async {
+    try {
+      final response = await sendRequest('textDocument/semanticTokens/full', {
+        'textDocument': {'uri': uri}
+      });
+      return List<int>.from(response['result']['data']);
+    } catch (e) {
+      print("Error getting semantic tokens: $e");
+      return [];
+    }
+  }
+
   Future<void> stop() async {
     print("Stopping LSP client");
-    await _stdoutSubscription.cancel();
-    await _stderrSubscription.cancel();
-    _process.kill();
+    await _stdoutSubscription?.cancel();
+    await _stderrSubscription?.cancel();
+    _process?.kill();
   }
 }
