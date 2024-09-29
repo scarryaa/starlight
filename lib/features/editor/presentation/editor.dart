@@ -341,6 +341,8 @@ class CodeEditorState extends State<CodeEditor> {
 
     widget.onZoomChanged?.call(_recalculateEditorAfterZoom);
     editingCore.addListener(_onTextChangedForSuggestions);
+    _updateFoldingRegions();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _updateSemanticTokens();
       _initializeAfterBuild(context);
@@ -586,7 +588,7 @@ class CodeEditorState extends State<CodeEditor> {
               endLine: i,
               startColumn: startItem.column,
               endColumn: line.indexOf('}', j),
-              isFolded: false, // Reset folding state on update
+              isFolded: false,
             ));
           }
         }
@@ -594,6 +596,8 @@ class CodeEditorState extends State<CodeEditor> {
     }
 
     foldingRegions.sort((a, b) => a.startLine.compareTo(b.startLine));
+
+    _updateVisibleLineCount();
   }
 
   Widget _buildLineNumbers(BoxConstraints constraints) {
@@ -1096,6 +1100,8 @@ class CodeEditorState extends State<CodeEditor> {
           editorService.scrollService.resetAllScrollPositions();
           _recalculateEditor();
         });
+
+        _updateFoldingRegions();
       } catch (e, stackTrace) {
         print('Error loading file: $e');
         print("Stack trace: $stackTrace");
