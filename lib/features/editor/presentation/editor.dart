@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/completions_widget/completions_widget.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
+import 'package:starlight/features/editor/minimap/minimap.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
 import 'package:starlight/features/editor/services/calculation_service.dart';
@@ -380,143 +381,166 @@ class CodeEditorState extends State<CodeEditor> {
         _handleScroll(notification);
         return true;
       },
-      child: GestureDetector(
-          onTapDown: _handleTap,
-          onPanStart: (details) {
-            selectionService.updateSelection(details);
-            _recalculateEditor();
-          },
-          onPanUpdate: (details) {
-            selectionService.updateSelectionOnDrag(
-                details, constraints.biggest);
-            _recalculateEditor();
-          },
-          onPanEnd: (details) {},
-          behavior: HitTestBehavior.deferToChild,
-          child: Focus(
-            focusNode: widget.focusNode,
-            onKeyEvent: _handleKeyPress,
-            child: ScrollbarTheme(
-              data: ScrollbarThemeData(
-                thumbColor: WidgetStateProperty.all(
-                  theme.colorScheme.secondary.withOpacity(0.6),
-                ),
-                radius: Radius.zero,
-              ),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Stack(
-                    children: [
-                      Scrollbar(
-                        interactive: true,
-                        controller:
-                            editorService.scrollService.codeScrollController,
-                        child: SingleChildScrollView(
-                          physics: const ClampingScrollPhysics(),
-                          controller:
-                              editorService.scrollService.codeScrollController,
-                          scrollDirection: Axis.vertical,
-                          child: SizedBox(
-                            width: constraints.maxWidth,
+      child: Row(
+        children: [
+          Expanded(
+            child: GestureDetector(
+              onTapDown: _handleTap,
+              onPanStart: (details) {
+                selectionService.updateSelection(details);
+                _recalculateEditor();
+              },
+              onPanUpdate: (details) {
+                selectionService.updateSelectionOnDrag(
+                    details, constraints.biggest);
+                _recalculateEditor();
+              },
+              onPanEnd: (details) {},
+              behavior: HitTestBehavior.deferToChild,
+              child: Focus(
+                focusNode: widget.focusNode,
+                onKeyEvent: _handleKeyPress,
+                child: ScrollbarTheme(
+                  data: ScrollbarThemeData(
+                    thumbColor: WidgetStateProperty.all(
+                      theme.colorScheme.secondary.withOpacity(0.6),
+                    ),
+                    radius: Radius.zero,
+                  ),
+                  child: LayoutBuilder(
+                    builder: (context, constraints) {
+                      return Stack(
+                        children: [
+                          Scrollbar(
+                            interactive: true,
+                            controller: editorService
+                                .scrollService.codeScrollController,
                             child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
+                              physics: const ClampingScrollPhysics(),
                               controller: editorService
-                                  .scrollService.horizontalController,
+                                  .scrollService.codeScrollController,
+                              scrollDirection: Axis.vertical,
                               child: SizedBox(
-                                width: max(layoutService.getMaxLineWidth(),
-                                    constraints.maxWidth),
-                                height: max(
-                                        editingCore.lineCount *
+                                width: constraints.maxWidth,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  controller: editorService
+                                      .scrollService.horizontalController,
+                                  child: SizedBox(
+                                    width: max(layoutService.getMaxLineWidth(),
+                                        constraints.maxWidth),
+                                    height: max(
+                                            editingCore.lineCount *
+                                                CodeEditorConstants.lineHeight,
+                                            constraints.maxHeight) +
+                                        100,
+                                    child: CustomPaint(
+                                      painter: CodeEditorPainter(
+                                        viewportHeight: editorService
+                                                .scrollService
+                                                .visibleLineCount *
                                             CodeEditorConstants.lineHeight,
-                                        constraints.maxHeight) +
-                                    100,
-                                child: CustomPaint(
-                                  painter: CodeEditorPainter(
-                                    viewportHeight: editorService
-                                            .scrollService.visibleLineCount *
-                                        CodeEditorConstants.lineHeight,
-                                    syntaxHighlighter: _syntaxHighlighter,
-                                    zoomLevel: widget.zoomLevel,
-                                    matchPositions: widget.matchPositions,
-                                    searchTerm: widget.searchTerm,
-                                    highlightColor: theme.colorScheme.secondary
-                                        .withOpacity(0.3),
-                                    lineNumberWidth: editorService
-                                        .scrollService.lineNumberWidth,
-                                    viewportWidth: constraints.maxWidth,
-                                    version: editingCore.version,
-                                    editingCore: editingCore,
-                                    firstVisibleLine: firstVisibleLine,
-                                    visibleLineCount: visibleLineCount,
-                                    horizontalOffset: editorService
-                                            .scrollService
-                                            .horizontalController
-                                            .hasClients
-                                        ? editorService.scrollService
-                                            .horizontalController.offset
-                                            .clamp(
-                                            0.0,
-                                            editorService
+                                        syntaxHighlighter: _syntaxHighlighter,
+                                        zoomLevel: widget.zoomLevel,
+                                        matchPositions: widget.matchPositions,
+                                        searchTerm: widget.searchTerm,
+                                        highlightColor: theme
+                                            .colorScheme.secondary
+                                            .withOpacity(0.3),
+                                        lineNumberWidth: editorService
+                                            .scrollService.lineNumberWidth,
+                                        viewportWidth: constraints.maxWidth,
+                                        version: editingCore.version,
+                                        editingCore: editingCore,
+                                        firstVisibleLine: firstVisibleLine,
+                                        visibleLineCount: visibleLineCount,
+                                        horizontalOffset: editorService
                                                 .scrollService
                                                 .horizontalController
-                                                .position
-                                                .maxScrollExtent,
-                                          )
-                                        : 0,
-                                    textStyle:
-                                        theme.textTheme.bodyMedium!.copyWith(
-                                      fontFamily: 'SF Mono',
-                                      color: defaultTextColor,
+                                                .hasClients
+                                            ? editorService.scrollService
+                                                .horizontalController.offset
+                                                .clamp(
+                                                0.0,
+                                                editorService
+                                                    .scrollService
+                                                    .horizontalController
+                                                    .position
+                                                    .maxScrollExtent,
+                                              )
+                                            : 0,
+                                        textStyle: theme.textTheme.bodyMedium!
+                                            .copyWith(
+                                          fontFamily: 'SF Mono',
+                                          color: defaultTextColor,
+                                        ),
+                                        selectionColor: theme
+                                            .colorScheme.primary
+                                            .withOpacity(0.3),
+                                        cursorColor: theme.colorScheme.primary,
+                                        cursorPosition:
+                                            editingCore.cursorPosition,
+                                        selectionStart:
+                                            editingCore.selectionStart,
+                                        selectionEnd: editingCore.selectionEnd,
+                                      ),
                                     ),
-                                    selectionColor: theme.colorScheme.primary
-                                        .withOpacity(0.3),
-                                    cursorColor: theme.colorScheme.primary,
-                                    cursorPosition: editingCore.cursorPosition,
-                                    selectionStart: editingCore.selectionStart,
-                                    selectionEnd: editingCore.selectionEnd,
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                      Positioned(
-                        right: 0,
-                        bottom: 0,
-                        child: SizedBox(
-                          width: CodeEditorConstants.scrollbarWidth + 2,
-                          height: CodeEditorConstants.scrollbarWidth,
-                          child: ColoredBox(color: theme.colorScheme.surface),
-                        ),
-                      ),
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: SizedBox(
-                          height: CodeEditorConstants.scrollbarWidth,
-                          child: Scrollbar(
-                            controller: editorService
-                                .scrollService.horizontalScrollbarController,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              controller: editorService
-                                  .scrollService.horizontalScrollbarController,
-                              child: SizedBox(
-                                width: max(layoutService.getMaxLineWidth(),
-                                    constraints.maxWidth),
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: SizedBox(
+                              width: CodeEditorConstants.scrollbarWidth + 2,
+                              height: CodeEditorConstants.scrollbarWidth,
+                              child:
+                                  ColoredBox(color: theme.colorScheme.surface),
+                            ),
+                          ),
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: SizedBox(
+                              height: CodeEditorConstants.scrollbarWidth,
+                              child: Scrollbar(
+                                controller: editorService.scrollService
+                                    .horizontalScrollbarController,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  controller: editorService.scrollService
+                                      .horizontalScrollbarController,
+                                  child: SizedBox(
+                                    width: max(layoutService.getMaxLineWidth(),
+                                        constraints.maxWidth),
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
+                        ],
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
-          )),
+          ),
+          Minimap(
+            editingCore: editingCore,
+            syntaxHighlighter: _syntaxHighlighter,
+            scrollController: editorService.scrollService.codeScrollController,
+            viewportHeight: constraints.maxHeight,
+            editorHeight: editingCore.lineCount *
+                CodeEditorConstants.lineHeight *
+                widget.zoomLevel,
+            zoomLevel: widget.zoomLevel,
+          ),
+        ],
+      ),
     );
   }
 
