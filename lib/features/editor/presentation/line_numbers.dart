@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:starlight/features/editor/domain/enums/git_diff_type.dart';
 import 'package:starlight/features/editor/domain/models/folding_region.dart';
 
 class LineNumberPainter extends CustomPainter {
@@ -14,7 +15,8 @@ class LineNumberPainter extends CustomPainter {
   final Function(FoldingRegion) onFoldingToggle;
   final ScrollController scrollController;
   final ValueNotifier<bool> repaintNotifier;
-  final bool Function(int) isLineVisible; // Add this line
+  final bool Function(int) isLineVisible;
+  final Map<int, GitDiffType> gitDiff;
 
   LineNumberPainter({
     required this.lineCount,
@@ -28,7 +30,8 @@ class LineNumberPainter extends CustomPainter {
     required this.onFoldingToggle,
     required this.scrollController,
     required this.repaintNotifier,
-    required this.isLineVisible, // Add this line
+    required this.isLineVisible,
+    required this.gitDiff,
   }) : super(repaint: repaintNotifier);
 
   @override
@@ -44,7 +47,20 @@ class LineNumberPainter extends CustomPainter {
     for (int i = firstVisibleLine;
         i < firstVisibleLine + visibleLineCount + 5 && i < lineCount;
         i++) {
-      if (!isLineVisible(i + 1)) continue; // Now this line will work
+      if (!isLineVisible(i + 1)) continue;
+
+      // Draw git diff indicator
+      if (gitDiff.containsKey(i + 1)) {
+        final diffType = gitDiff[i + 1]!;
+        final diffColor = _getDiffColor(diffType);
+        final diffRect = Rect.fromLTWH(
+          0,
+          i * scaledLineHeight,
+          6 * zoomLevel, // Increased width for visibility
+          scaledLineHeight,
+        );
+        canvas.drawRect(diffRect, Paint()..color = diffColor);
+      }
 
       // Draw folding icon if this line is the start of a folding region
       final foldingRegion = foldingRegions.firstWhere(
@@ -115,6 +131,17 @@ class LineNumberPainter extends CustomPainter {
     }
   }
 
+  Color _getDiffColor(GitDiffType diffType) {
+    switch (diffType) {
+      case GitDiffType.added:
+        return Colors.green;
+      case GitDiffType.modified:
+        return Colors.blue;
+      case GitDiffType.deleted:
+        return Colors.red;
+    }
+  }
+
   @override
   bool shouldRepaint(covariant LineNumberPainter oldDelegate) {
     return lineCount != oldDelegate.lineCount ||
@@ -126,7 +153,8 @@ class LineNumberPainter extends CustomPainter {
         zoomLevel != oldDelegate.zoomLevel ||
         !listEquals(foldingRegions, oldDelegate.foldingRegions) ||
         scrollController != oldDelegate.scrollController ||
-        isLineVisible != oldDelegate.isLineVisible; // Add this line
+        isLineVisible != oldDelegate.isLineVisible ||
+        gitDiff != oldDelegate.gitDiff;
   }
 }
 
@@ -140,8 +168,9 @@ class LineNumbers extends StatefulWidget {
   final double zoomLevel;
   final List<FoldingRegion> foldingRegions;
   final Function(FoldingRegion) onFoldingToggle;
-  final ScrollController? scrollController; // Make scrollController optional
+  final ScrollController? scrollController;
   final bool Function(int) isLineVisible;
+  final Map<int, GitDiffType> gitDiff;
 
   const LineNumbers({
     Key? key,
@@ -154,7 +183,8 @@ class LineNumbers extends StatefulWidget {
     required this.foldingRegions,
     required this.onFoldingToggle,
     required this.isLineVisible,
-    this.scrollController, // Optional scrollController
+    required this.gitDiff,
+    this.scrollController,
     this.textStyle,
   }) : super(key: key);
 
@@ -164,13 +194,13 @@ class LineNumbers extends StatefulWidget {
 
 class _LineNumbersState extends State<LineNumbers> {
   late List<FoldingRegion> _foldingRegions;
-  late ValueNotifier<bool> _repaintNotifier; // Notifier to trigger repaints
+  late ValueNotifier<bool> _repaintNotifier;
 
   @override
   void initState() {
     super.initState();
     _foldingRegions = widget.foldingRegions;
-    _repaintNotifier = ValueNotifier(false); // Initialize the notifier
+    _repaintNotifier = ValueNotifier(false);
   }
 
   @override
@@ -230,7 +260,6 @@ class _LineNumbersState extends State<LineNumbers> {
     return GestureDetector(
       onTapDown: (details) => _handleTap(details, context),
       child: RepaintBoundary(
-        // Wrap in RepaintBoundary for explicit repaint management
         child: Container(
           width: scaledLineNumberWidth,
           color: theme.colorScheme.surface,
@@ -246,8 +275,9 @@ class _LineNumbersState extends State<LineNumbers> {
               foldingRegions: _foldingRegions,
               onFoldingToggle: _handleFoldToggle,
               scrollController: widget.scrollController ?? ScrollController(),
-              repaintNotifier: _repaintNotifier, // Pass the notifier
+              repaintNotifier: _repaintNotifier,
               isLineVisible: widget.isLineVisible,
+              gitDiff: widget.gitDiff,
             ),
           ),
         ),

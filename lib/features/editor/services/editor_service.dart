@@ -11,7 +11,7 @@ import 'package:starlight/utils/constants.dart';
 
 class CodeEditorService {
   final CodeEditorScrollService scrollService;
-  final CodeEditorSelectionService selectionService;
+  CodeEditorSelectionService selectionService;
   final KeyboardHandlingService keyboardHandlerService;
   final ClipboardService clipboardService;
   final CodeEditorCalculationService calculationService;

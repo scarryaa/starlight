@@ -4,6 +4,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/context_menu/context_menu.dart';
+import 'package:starlight/features/editor/domain/enums/git_diff_type.dart';
 import 'package:starlight/features/tabs/presentation/pin_button.dart';
 import 'package:uuid/uuid.dart';
 
@@ -19,6 +20,7 @@ class FileTab {
   int? cursorPosition;
   Widget? customWidget;
   Function(double)? triggerRecalculation;
+  Map<int, GitDiffType> gitDiff = {};
 
   FileTab({
     required this.filePath,
@@ -38,6 +40,10 @@ class FileTab {
   String get fileName => filePath.split(Platform.pathSeparator).last;
 
   bool get isModified => _content != _originalContent;
+
+  void updateGitDiff(Map<int, GitDiffType> newGitDiff) {
+    gitDiff = newGitDiff;
+  }
 
   void markAsSaved() {
     _originalContent = _content;

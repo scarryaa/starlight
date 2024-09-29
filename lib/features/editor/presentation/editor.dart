@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/completions_widget/completions_widget.dart';
+import 'package:starlight/features/editor/domain/enums/git_diff_type.dart';
 import 'package:starlight/features/editor/domain/models/folding_region.dart';
 import 'package:starlight/features/editor/domain/models/lsp_config.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
@@ -20,7 +21,6 @@ import 'package:starlight/features/editor/services/gesture_handling_service.dart
 import 'package:starlight/features/editor/services/keyboard_handler_service.dart';
 import 'package:starlight/features/editor/services/layout_service.dart';
 import 'package:starlight/features/editor/services/lsp_client.dart';
-import 'package:starlight/features/editor/services/lsp_path_resolver.dart';
 import 'package:starlight/features/editor/services/scroll_service.dart';
 import 'package:starlight/features/editor/services/selection_service.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
@@ -51,6 +51,7 @@ class CodeEditor extends StatefulWidget {
   double zoomLevel;
   final String languageId;
   final Map<String, LspConfig> lspConfigs;
+  Map<int, GitDiffType> gitDiff;
 
   CodeEditor({
     super.key,
@@ -71,6 +72,7 @@ class CodeEditor extends StatefulWidget {
     required this.focusNode,
     required this.languageId,
     required this.lspConfigs,
+    required this.gitDiff,
     this.onZoomChanged,
     this.selectionStart,
     this.selectionEnd,
@@ -346,6 +348,12 @@ class CodeEditorState extends State<CodeEditor> {
     _settingsService.addListener(_onSettingsChanged);
     editorService.scrollService.visibleLineCount = 800;
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadFile();
+      _updateSemanticTokens();
+      _initializeAfterBuild(context);
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _recalculateEditor();
       _updateVisibleLineCount();
       editorService.scrollService.visibleLineCount = visibleLineCount;
@@ -358,11 +366,7 @@ class CodeEditorState extends State<CodeEditor> {
     widget.onZoomChanged?.call(_recalculateEditorAfterZoom);
     editingCore.addListener(_onTextChangedForSuggestions);
     _updateFoldingRegions();
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _updateSemanticTokens();
-      _initializeAfterBuild(context);
-    });
+    repaintNotifier.value = !repaintNotifier.value;
   }
 
   void _initializeAfterBuild(BuildContext context) {
@@ -373,11 +377,51 @@ class CodeEditorState extends State<CodeEditor> {
     setState(() {});
   }
 
+  Future<void> _updateGitDiff() async {
+    if (widget.filePath != 'Untitled' && widget.filePath != 'Project Search') {
+      final gitDiff = await _getGitDiff(widget.filePath);
+      setState(() {
+        widget.gitDiff = gitDiff;
+      });
+    }
+  }
+
+  Future<Map<int, GitDiffType>> _getGitDiff(String filePath) async {
+    final result = await Process.run('git', ['diff', '--unified=0', filePath]);
+    if (result.exitCode == 0) {
+      final diffOutput = result.stdout as String;
+      return _parseGitDiff(diffOutput);
+    }
+    return {};
+  }
+
+  Map<int, GitDiffType> _parseGitDiff(String diffOutput) {
+    final Map<int, GitDiffType> gitDiff = {};
+    final lines = diffOutput.split('\n');
+    int currentLine = 0;
+    for (final line in lines) {
+      if (line.startsWith('+')) {
+        gitDiff[currentLine] = GitDiffType.added;
+        currentLine++;
+      } else if (line.startsWith('-')) {
+        gitDiff[currentLine] = GitDiffType.deleted;
+      } else if (line.startsWith('@@ ')) {
+        final match = RegExp(r'@@ -\d+(?:,\d+)? \+(\d+)').firstMatch(line);
+        if (match != null) {
+          currentLine = int.parse(match.group(1)!) - 1;
+        }
+      } else {
+        currentLine++;
+      }
+    }
+    return gitDiff;
+  }
+
   Future<void> _initializeLspClient() async {
-    _lspClient = LspClient(timeout: Duration(seconds: 30));
+    _lspClient = LspClient(timeout: const Duration(seconds: 30));
     _lspClient.setVerboseLogging(true); // Enable verbose logging
 
-    final dartCommand = 'dart';
+    const dartCommand = 'dart';
     final arguments = ['language-server', '--protocol=lsp'];
 
     print(
@@ -665,6 +709,7 @@ class CodeEditorState extends State<CodeEditor> {
               foldingRegions: foldingRegions,
               onFoldingToggle: _toggleFolding,
               isLineVisible: _isLineVisible,
+              gitDiff: widget.gitDiff,
             ),
           ),
         ),
@@ -1173,15 +1218,17 @@ class CodeEditorState extends State<CodeEditor> {
       try {
         final file = File(widget.filePath);
         final content = file.readAsStringSync();
-        setState(() {
-          editingCore.setText(content);
-          editingCore.cursorPosition = 1;
-          editingCore.clearSelection();
-        });
+        editingCore.setText(content);
+        editingCore.cursorPosition = 1;
+        editingCore.clearSelection();
 
-        SchedulerBinding.instance.addPostFrameCallback((_) {
-          editorService.scrollService.resetAllScrollPositions();
-          _recalculateEditor();
+        _updateGitDiff().then((_) {
+          setState(() {});
+
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            editorService.scrollService.resetAllScrollPositions();
+            _recalculateEditor();
+          });
         });
 
         _updateFoldingRegions();
@@ -1209,13 +1256,12 @@ class CodeEditorState extends State<CodeEditor> {
       _syntaxHighlighter.updateLine(
           editingCore.lastModifiedLine, editingCore.version);
 
-      // Update folding regions immediately
       _updateFoldingRegions();
+      _updateGitDiff();
 
       setState(() {});
       widget.onContentChanged(editingCore.getText());
 
-      // Use a microtask to ensure the UI is updated before recalculating
       Future.microtask(() {
         _recalculateEditor();
         _updateScrollPosition();

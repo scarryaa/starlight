@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide TabBar;
 import 'package:provider/provider.dart';
+import 'package:starlight/features/editor/domain/enums/git_diff_type.dart';
 import 'package:starlight/features/editor/domain/models/lsp_config.dart';
 import 'package:starlight/features/editor/presentation/editor.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
@@ -54,6 +55,14 @@ class EditorWidgetState extends State<EditorWidget> {
     _toastManager = ErrorToastManager(context);
     _fileExplorerService = context.read<FileExplorerService>();
     _initializeFileMenuActions();
+    Timer.periodic(
+        const Duration(seconds: 30), (_) => refreshCurrentFileDiff());
+  }
+
+  void refreshCurrentFileDiff() {
+    if (_editorController.hasOpenTabs) {
+      _editorController.updateGitDiff(_editorController.selectedTabIndex.value);
+    }
   }
 
   void _initializeFileMenuActions() {
@@ -428,11 +437,11 @@ class EditorWidgetState extends State<EditorWidget> {
 
   Widget _buildCodeEditor(int selectedIndex) {
     final currentTab = _editorController.tabs[selectedIndex];
+    print('Git diff for current tab: ${currentTab.gitDiff}');
     if (currentTab.customWidget != null) {
       return currentTab.customWidget!;
     }
 
-    // Determine the language ID based on the file extension
     final String languageId = _getLanguageIdFromFilePath(currentTab.filePath);
 
     return CodeEditor(
@@ -460,6 +469,7 @@ class EditorWidgetState extends State<EditorWidget> {
       focusNode: _editorFocusNode,
       languageId: languageId,
       lspConfigs: widget.lspConfigs,
+      gitDiff: currentTab.gitDiff,
     );
   }
 
@@ -565,6 +575,51 @@ class EditorController {
     _selectedTabIndex.value = _tabs.length - 1;
   }
 
+  Future<void> updateGitDiff(int tabIndex) async {
+    if (tabIndex >= 0 && tabIndex < _tabs.length) {
+      final tab = _tabs[tabIndex];
+      if (tab.filePath != 'Untitled' && tab.filePath != 'Project Search') {
+        final gitDiff = await _getGitDiff(tab.filePath);
+        tab.gitDiff = gitDiff;
+        print(
+            'Updated git diff for tab $tabIndex: ${tab.gitDiff}'); // Debug print
+      }
+    }
+  }
+
+  Future<Map<int, GitDiffType>> _getGitDiff(String filePath) async {
+    final result = await Process.run('git', ['diff', '--unified=0', filePath]);
+    if (result.exitCode == 0) {
+      final diffOutput = result.stdout as String;
+      final gitDiff = _parseGitDiff(diffOutput);
+      print('Generated git diff: $gitDiff'); // Debug print
+      return gitDiff;
+    }
+    return {};
+  }
+
+  Map<int, GitDiffType> _parseGitDiff(String diffOutput) {
+    final Map<int, GitDiffType> gitDiff = {};
+    final lines = diffOutput.split('\n');
+    int currentLine = 0;
+    for (final line in lines) {
+      if (line.startsWith('+')) {
+        gitDiff[currentLine] = GitDiffType.added;
+        currentLine++;
+      } else if (line.startsWith('-')) {
+        gitDiff[currentLine] = GitDiffType.deleted;
+      } else if (line.startsWith('@@ ')) {
+        final match = RegExp(r'@@ -\d+(?:,\d+)? \+(\d+)').firstMatch(line);
+        if (match != null) {
+          currentLine = int.parse(match.group(1)!) - 1;
+        }
+      } else {
+        currentLine++;
+      }
+    }
+    return gitDiff;
+  }
+
   void updateCursorPosition(int position) {
     if (_selectedTabIndex.value != -1) {
       _tabs[_selectedTabIndex.value].cursorPosition = position;
@@ -639,17 +694,18 @@ class EditorController {
     _updateCurrentEditorKey();
   }
 
-  void openFile(File file) {
+  Future<void> openFile(File file) async {
     int existingTabIndex = _tabs.indexWhere((tab) => tab.filePath == file.path);
     if (existingTabIndex != -1) {
       _selectedTabIndex.value = existingTabIndex;
       _currentEditorKey = EditorContentKey(_tabs[existingTabIndex].content);
     } else {
-      String content = file.readAsStringSync();
+      String content = await file.readAsString();
       _tabs.add(FileTab(filePath: file.path, content: content));
       _selectedTabIndex.value = _tabs.length - 1;
       _currentEditorKey = EditorContentKey(content);
     }
+    await updateGitDiff(_selectedTabIndex.value);
   }
 
   void reorderTabs(int oldIndex, int newIndex) {
@@ -693,6 +749,7 @@ class EditorController {
         await File(currentTab.filePath)
             .writeAsString(currentTab.content.replaceFirst('\n', ''));
         currentTab.markAsSaved();
+        await updateGitDiff(index);
       } else {
         await saveFileAs();
       }
