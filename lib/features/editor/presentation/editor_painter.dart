@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:starlight/features/editor/domain/models/folding_region.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
 import 'package:starlight/utils/constants.dart';
@@ -9,6 +10,7 @@ class CodeEditorPainter extends CustomPainter {
   static const double lineHeight = 24.0;
   static const double fontSize = 14.0;
   static const int lineBuffer = 5;
+  final List<FoldingRegion> foldingRegions;
 
   final TextEditingCore editingCore;
   final int firstVisibleLine;
@@ -54,6 +56,7 @@ class CodeEditorPainter extends CustomPainter {
     required this.selectionEnd,
     required this.zoomLevel,
     required this.syntaxHighlighter,
+    required this.foldingRegions,
   }) {
     _calculateCharWidth();
     scaledLineNumberWidth = lineNumberWidth * zoomLevel;
@@ -68,8 +71,26 @@ class CodeEditorPainter extends CustomPainter {
     final lastVisibleLine =
         min(firstVisibleLine + totalVisibleLines, editingCore.lineCount);
 
-    for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
+    int visibleLineIndex = 0;
+    for (int i = firstVisibleLine;
+        i < lastVisibleLine && visibleLineIndex < visibleLineCount;
+        i++) {
+      // Check if this line is part of a folded region
+      final foldedRegion = foldingRegions.firstWhere(
+        (region) =>
+            region.isFolded && i > region.startLine && i <= region.endLine,
+        orElse: () => FoldingRegion(
+            startLine: -1, endLine: -1, startColumn: -1, endColumn: -1),
+      );
+
+      if (foldedRegion.startLine != -1) {
+        // This line is part of a folded region, skip to the end of the region
+        i = foldedRegion.endLine;
+        continue;
+      }
+
       final lineContent = _getLineContent(i);
+
       // Paint search highlights
       _paintSearchHighlights(canvas, i, lineContent);
       // Paint selection if needed
@@ -83,6 +104,8 @@ class CodeEditorPainter extends CustomPainter {
       if (_isCursorOnLine(i)) {
         _paintCursor(canvas, i, lineContent);
       }
+
+      visibleLineIndex++;
     }
 
     // Paint cursor at the end of the document if necessary

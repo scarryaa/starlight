@@ -7,6 +7,7 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/completions_widget/completions_widget.dart';
+import 'package:starlight/features/editor/domain/models/folding_region.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/minimap/minimap.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
@@ -87,6 +88,7 @@ class CodeEditorState extends State<CodeEditor> {
   late SettingsService _settingsService;
   late LspClient _lspClient;
   List<CompletionItem> _completions = [];
+  List<FoldingRegion> foldingRegions = [];
   int _lastCompletionPosition = -1;
   bool _isBackspacing = false;
   final bool _shortcutHandled = false;
@@ -95,6 +97,7 @@ class CodeEditorState extends State<CodeEditor> {
   int _selectedSuggestionIndex = 0;
   String _currentWord = '';
   late List<String> _dartKeywords;
+  ScrollController lineNumberScrollController = ScrollController();
 
   int firstVisibleLine = 0;
   int visibleLineCount = 800;
@@ -452,6 +455,7 @@ class CodeEditorState extends State<CodeEditor> {
                                         100,
                                     child: CustomPaint(
                                       painter: CodeEditorPainter(
+                                        foldingRegions: foldingRegions,
                                         viewportHeight: editorService
                                                 .scrollService
                                                 .visibleLineCount *
@@ -560,6 +564,39 @@ class CodeEditorState extends State<CodeEditor> {
     );
   }
 
+  void _updateFoldingRegions() {
+    foldingRegions.clear();
+    final lines = editingCore.getText().split('\n');
+    final stack = <FoldingStackItem>[];
+
+    for (int i = 0; i < lines.length; i++) {
+      final line = lines[i].trim();
+      int openBraces = '{'.allMatches(line).length;
+      int closeBraces = '}'.allMatches(line).length;
+
+      for (int j = 0; j < openBraces; j++) {
+        stack.add(FoldingStackItem(i, line.indexOf('{', j)));
+      }
+
+      for (int j = 0; j < closeBraces; j++) {
+        if (stack.isNotEmpty) {
+          final startItem = stack.removeLast();
+          if (i > startItem.line) {
+            foldingRegions.add(FoldingRegion(
+              startLine: startItem.line,
+              endLine: i,
+              startColumn: startItem.column,
+              endColumn: line.indexOf('}', j),
+              isFolded: false, // Reset folding state on update
+            ));
+          }
+        }
+      }
+    }
+
+    foldingRegions.sort((a, b) => a.startLine.compareTo(b.startLine));
+  }
+
   Widget _buildLineNumbers(BoxConstraints constraints) {
     final theme = Theme.of(context);
     final scaledLineNumberWidth =
@@ -577,6 +614,7 @@ class CodeEditorState extends State<CodeEditor> {
                     constraints.maxHeight) +
                 100,
             child: LineNumbers(
+              scrollController: lineNumberScrollController,
               lineCount: editingCore.lineCount,
               lineHeight: CodeEditorConstants.lineHeight,
               lineNumberWidth: editorService.scrollService.lineNumberWidth,
@@ -586,11 +624,52 @@ class CodeEditorState extends State<CodeEditor> {
               textStyle: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurface.withOpacity(0.6),
               ),
+              foldingRegions: foldingRegions,
+              onFoldingToggle: _toggleFolding,
             ),
           ),
         ),
       ),
     );
+  }
+
+  void _toggleFolding(FoldingRegion region) {
+    setState(() {
+      region.isFolded = !region.isFolded;
+      _recalculateVisibleLines();
+      _updateScrollPosition();
+    });
+    _recalculateEditor();
+  }
+
+  void _updateScrollPosition() {
+    if (!editorService.scrollService.codeScrollController.hasClients) return;
+
+    int visibleLine = 0;
+    int actualLine = 0;
+    double scrollOffset = 0.0;
+
+    while (actualLine < editingCore.lineCount) {
+      if (visibleLine >= firstVisibleLine) break;
+
+      final foldedRegion = foldingRegions.firstWhere(
+        (region) => region.isFolded && region.startLine == actualLine,
+        orElse: () => FoldingRegion(
+            startLine: -1, endLine: -1, startColumn: -1, endColumn: -1),
+      );
+
+      if (foldedRegion.startLine != -1) {
+        actualLine = foldedRegion.endLine + 1;
+        scrollOffset += CodeEditorConstants.lineHeight * widget.zoomLevel;
+      } else {
+        actualLine++;
+        scrollOffset += CodeEditorConstants.lineHeight * widget.zoomLevel;
+      }
+
+      visibleLine++;
+    }
+
+    editorService.scrollService.codeScrollController.jumpTo(scrollOffset);
   }
 
   Color _getDefaultTextColor(BuildContext context) {
@@ -1045,12 +1124,20 @@ class CodeEditorState extends State<CodeEditor> {
     if (_lastKnownVersion != editingCore.version) {
       _syntaxHighlighter.updateLine(
           editingCore.lastModifiedLine, editingCore.version);
+
+      // Update folding regions immediately
+      _updateFoldingRegions();
+
       setState(() {});
       widget.onContentChanged(editingCore.getText());
-      WidgetsBinding.instance.addPostFrameCallback((_) {
+
+      // Use a microtask to ensure the UI is updated before recalculating
+      Future.microtask(() {
         _recalculateEditor();
+        _updateScrollPosition();
         widget.focusNode.requestFocus();
       });
+
       _lastKnownVersion = editingCore.version;
       _sendDocumentChanges();
       _updateSemanticTokens();
