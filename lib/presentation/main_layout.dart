@@ -81,6 +81,40 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
             'typescript-language-server',
         arguments: ['--stdio'],
       ),
+      'typescript': LspConfig(
+        command: LspPathResolver.resolveLspPath('typescript') ??
+            'typescript-language-server',
+        arguments: ['--stdio'],
+      ),
+      'html': LspConfig(
+        command: LspPathResolver.resolveLspPath('html') ??
+            'vscode-html-language-server',
+        arguments: ['--stdio'],
+      ),
+      'css': LspConfig(
+        command: LspPathResolver.resolveLspPath('css') ??
+            'vscode-css-language-server',
+        arguments: ['--stdio'],
+      ),
+      'json': LspConfig(
+        command: LspPathResolver.resolveLspPath('json') ??
+            'vscode-json-language-server',
+        arguments: ['--stdio'],
+      ),
+      'yaml': LspConfig(
+        command:
+            LspPathResolver.resolveLspPath('yaml') ?? 'yaml-language-server',
+        arguments: ['--stdio'],
+      ),
+      'markdown': LspConfig(
+        command: LspPathResolver.resolveLspPath('markdown') ??
+            'remark-language-server',
+        arguments: ['--stdio'],
+      ),
+      'plaintext': LspConfig(
+        command: 'simple-language-server',
+        arguments: ['--stdio'],
+      ),
     };
   }
 
