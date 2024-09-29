@@ -517,7 +517,9 @@ class _FileExplorerContentState extends State<FileExplorerContent>
       controller.clearSelectedItems();
       controller.setSelectedItem(item);
       if (item.isDirectory) {
-        controller.toggleDirectoryExpansion(item);
+        controller.toggleDirectoryExpansion(item).then((_) {
+          controller.updateGitStatus();
+        });
       } else {
         widget.onFileSelected(item.entity as File);
       }
@@ -1164,8 +1166,9 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     try {
       String? selectedDirectory = await FileService.pickDirectory();
       if (selectedDirectory != null) {
-        controller.setDirectory(Directory(selectedDirectory));
+        await controller.setDirectory(Directory(selectedDirectory));
         widget.onDirectorySelected(selectedDirectory);
+        await controller.updateGitStatus();
       }
     } catch (e) {
       print('Error picking directory: $e');

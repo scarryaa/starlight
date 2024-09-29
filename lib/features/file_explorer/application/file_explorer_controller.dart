@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as _path;
 import 'package:path_provider/path_provider.dart';
 import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
+import 'package:starlight/features/file_explorer/domain/models/git_status.dart';
 import 'package:starlight/features/file_explorer/infrastructure/file_operation.dart';
 import 'package:crypto/crypto.dart';
+import 'package:starlight/features/file_explorer/infrastructure/services/git_service.dart';
 import 'dart:convert';
 
 import 'package:starlight/services/settings_service.dart';
@@ -25,6 +27,7 @@ class FileExplorerController extends ChangeNotifier {
   Timer? _pollingTimer;
   bool _isRefreshCoolingDown = false;
   String? _lastDirectoryHash;
+  final GitService _gitService = GitService();
   final SettingsService _settingsService = SettingsService();
 
   // Getters
@@ -65,6 +68,8 @@ class FileExplorerController extends ChangeNotifier {
 
       // Update the hash after refresh
       _lastDirectoryHash = _computeDirectoryHash(_currentDirectory!.path);
+      await updateGitStatus();
+      notifyListeners();
     }
   }
 
@@ -119,6 +124,7 @@ class FileExplorerController extends ChangeNotifier {
 
   Future<void> expandAll() async {
     await _expandRecursively(rootItems);
+    await updateGitStatus();
     notifyListeners();
   }
 
@@ -166,7 +172,29 @@ class FileExplorerController extends ChangeNotifier {
         .toList();
 
     _sortFileTree(directory.children);
+    await updateGitStatus();
     notifyListeners();
+  }
+
+  Future<void> updateGitStatus() async {
+    if (currentDirectory != null) {
+      final gitStatus =
+          await _gitService.getDirectoryGitStatus(currentDirectory!.path);
+      _updateGitStatusRecursive(rootItems, gitStatus);
+      notifyListeners();
+    }
+  }
+
+  void _updateGitStatusRecursive(
+      List<FileTreeItem> items, Map<String, GitStatus> gitStatus) {
+    for (var item in items) {
+      final relativePath =
+          _path.relative(item.path, from: currentDirectory!.path);
+      item.updateGitStatus(gitStatus[relativePath] ?? GitStatus.none);
+      if (item.isDirectory && item.isExpanded) {
+        _updateGitStatusRecursive(item.children, gitStatus);
+      }
+    }
   }
 
   Future<String> moveToTemp(String sourcePath) async {
@@ -471,6 +499,7 @@ class FileExplorerController extends ChangeNotifier {
     _selectedItems.clear();
     _selectedItem = null;
     await refreshDirectory();
+    await updateGitStatus();
     _startPolling();
   }
 
