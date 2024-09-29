@@ -100,8 +100,8 @@ class CodeEditorPainter extends CustomPainter {
       if (_isLineSelected(i)) {
         _paintSelection(canvas, i, lineContent);
       }
-      // Paint syntax highlighted text
-      _paintSyntaxHighlightedText(
+      // Paint syntax highlighted text with semantic tokens
+      _paintSyntaxHighlightedTextWithSemanticTokens(
           canvas, i, lineContent, Offset(textStartX, i * scaledLineHeight));
       // Paint cursor
       if (_isCursorOnLine(i)) {
@@ -115,6 +115,32 @@ class CodeEditorPainter extends CustomPainter {
     if (editingCore.cursorPosition == editingCore.length) {
       _paintCursorAtEnd(canvas, lineCount - 1);
     }
+  }
+
+  void _paintSyntaxHighlightedTextWithSemanticTokens(
+      Canvas canvas, int line, String text, Offset offset) {
+    final highlightedSpans =
+        syntaxHighlighter.highlightLine(text, line, version);
+    final textPainter = TextPainter(
+      text: TextSpan(
+        children: highlightedSpans
+            .map((span) => TextSpan(
+                  text: span.text,
+                  style: span.style?.copyWith(
+                          fontSize: CodeEditorConstants.fontSize * zoomLevel,
+                          fontFamily: "SF Mono") ??
+                      TextStyle(
+                          fontSize: CodeEditorConstants.fontSize * zoomLevel,
+                          fontFamily: "SF Mono"),
+                ))
+            .toList(),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout(maxWidth: double.infinity);
+
+    final yOffset = offset.dy +
+        (CodeEditorConstants.lineHeight * zoomLevel - textPainter.height) / 2;
+    textPainter.paint(canvas, Offset(offset.dx, yOffset));
   }
 
   void _paintSyntaxHighlightedText(

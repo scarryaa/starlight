@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/completions_widget/completions_widget.dart';
 import 'package:starlight/features/editor/domain/models/folding_region.dart';
+import 'package:starlight/features/editor/domain/models/lsp_config.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/minimap/minimap.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
@@ -19,6 +20,7 @@ import 'package:starlight/features/editor/services/gesture_handling_service.dart
 import 'package:starlight/features/editor/services/keyboard_handler_service.dart';
 import 'package:starlight/features/editor/services/layout_service.dart';
 import 'package:starlight/features/editor/services/lsp_client.dart';
+import 'package:starlight/features/editor/services/lsp_path_resolver.dart';
 import 'package:starlight/features/editor/services/scroll_service.dart';
 import 'package:starlight/features/editor/services/selection_service.dart';
 import 'package:starlight/features/editor/services/syntax_highlighter.dart';
@@ -47,6 +49,8 @@ class CodeEditor extends StatefulWidget {
   final Function(String) onContentChanged;
   final Function(Function(double))? onZoomChanged;
   double zoomLevel;
+  final String languageId;
+  final Map<String, LspConfig> lspConfigs;
 
   CodeEditor({
     super.key,
@@ -65,6 +69,8 @@ class CodeEditor extends StatefulWidget {
     required this.onContentChanged,
     required this.zoomLevel,
     required this.focusNode,
+    required this.languageId,
+    required this.lspConfigs,
     this.onZoomChanged,
     this.selectionStart,
     this.selectionEnd,
@@ -156,6 +162,7 @@ class CodeEditorState extends State<CodeEditor> {
   ];
   ScrollController lineNumberScrollController = ScrollController();
   late ValueNotifier<bool> repaintNotifier;
+  late LspConfig _currentLspConfig;
 
   int firstVisibleLine = 0;
   int visibleLineCount = 800;
@@ -271,6 +278,7 @@ class CodeEditorState extends State<CodeEditor> {
       autoScrollOnDrag: (Offset offset, Size size) {},
     );
 
+    _currentLspConfig = widget.lspConfigs[widget.languageId]!;
     _initializeLspClient().then((_) {
       if (mounted) {
         setState(() {
@@ -366,21 +374,39 @@ class CodeEditorState extends State<CodeEditor> {
   }
 
   Future<void> _initializeLspClient() async {
-    _lspClient = LspClient();
+    _lspClient = LspClient(timeout: Duration(seconds: 30));
+    _lspClient.setVerboseLogging(true); // Enable verbose logging
 
-    const dartCommand = '/Users/scarlet/flutter/bin/dart';
+    final dartCommand = 'dart';
     final arguments = ['language-server', '--protocol=lsp'];
+
+    print(
+        "Initializing Dart LSP with command: $dartCommand ${arguments.join(' ')}");
 
     try {
       await _lspClient.start(dartCommand, arguments);
-      await _lspClient
-          .initialized; // Wait for the client to be fully initialized
+      print("LSP process started successfully");
+
+      // Send the initialize request
+      final initializeResult = await _lspClient.sendRequest('initialize', {
+        'processId': null,
+        'rootUri': null,
+        'capabilities': {
+          'textDocument': {
+            'completion': {
+              'completionItem': {'snippetSupport': true}
+            }
+          }
+        }
+      });
+      print("LSP server initialized with result: $initializeResult");
 
       // Send the initialized notification
-      await _lspClient.sendRequest('initialized', {});
+      await _lspClient.sendNotification('initialized', {});
+      print("Sent initialized notification to LSP server");
 
       // Open the document
-      await _lspClient.sendRequest('textDocument/didOpen', {
+      await _lspClient.sendNotification('textDocument/didOpen', {
         'textDocument': {
           'uri': 'file://${widget.filePath}',
           'languageId': 'dart',
@@ -388,10 +414,10 @@ class CodeEditorState extends State<CodeEditor> {
           'text': editingCore.getText()
         }
       });
-
-      print("LSP server initialized successfully");
+      print("Document opened in LSP server");
     } catch (e) {
       print("Error initializing LSP client: $e");
+      // Consider showing an error message to the user here
     }
   }
 
@@ -1219,11 +1245,14 @@ class CodeEditorState extends State<CodeEditor> {
       final response = await _lspClient.sendRequest('textDocument/completion', {
         'textDocument': {'uri': 'file://${widget.filePath}'},
         'position': {'line': line, 'character': character},
-        'context': {'triggerKind': 1} // Invoked
-      }).timeout(const Duration(seconds: 2));
+        'context': {'triggerKind': 1}
+      }).timeout(const Duration(seconds: 5));
 
       final items = response['result']['items'] as List<dynamic>;
       return items.map((item) => CompletionItem.fromJson(item)).toList();
+    } on TimeoutException {
+      print("Timeout while getting completions from Dart Language Server");
+      return _getFallbackCompletions();
     } catch (e) {
       print("Error getting completions: $e");
       return _getFallbackCompletions();

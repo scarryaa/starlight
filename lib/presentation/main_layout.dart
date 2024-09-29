@@ -7,7 +7,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/command_palette/command_palette.dart';
+import 'package:starlight/features/editor/domain/models/lsp_config.dart';
 import 'package:starlight/features/editor/presentation/editor_widget.dart';
+import 'package:starlight/features/editor/services/lsp_path_resolver.dart';
 import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/features/file_explorer/presentation/file_explorer.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
@@ -38,6 +40,7 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
   bool _showCommandPalette = false;
   late final List<Command> _commands;
   bool _dragging = false;
+  late Future<Map<String, LspConfig>> _lspConfigsFuture;
 
   @override
   void initState() {
@@ -45,6 +48,7 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initializeServices();
     _initializeCommands();
+    _lspConfigsFuture = _initializeLspConfigs();
     WidgetsBinding.instance
         .addPostFrameCallback((_) => _mainFocusNode.requestFocus());
   }
@@ -60,8 +64,44 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
       ..setToggleTerminal(_toggleTerminal);
   }
 
+  Future<Map<String, LspConfig>> _initializeLspConfigs() async {
+    await LspPathResolver.initialize();
+
+    return {
+      'dart': LspConfig(
+        command: LspPathResolver.resolveLspPath('dart') ?? 'dart',
+        arguments: ['language-server', '--protocol=lsp'],
+      ),
+      'python': LspConfig(
+        command: LspPathResolver.resolveLspPath('python') ?? 'pyls',
+        arguments: [],
+      ),
+      'javascript': LspConfig(
+        command: LspPathResolver.resolveLspPath('javascript') ??
+            'typescript-language-server',
+        arguments: ['--stdio'],
+      ),
+    };
+  }
+
   @override
   Widget build(BuildContext context) {
+    return FutureBuilder<Map<String, LspConfig>>(
+      future: _lspConfigsFuture,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.done) {
+          if (snapshot.hasError) {
+            return Center(child: Text('Error: ${snapshot.error}'));
+          }
+          return _buildMainLayout(snapshot.data!);
+        } else {
+          return const Center(child: CircularProgressIndicator());
+        }
+      },
+    );
+  }
+
+  Widget _buildMainLayout(Map<String, LspConfig> lspConfigs) {
     return Consumer<SettingsService>(
       builder: (context, settingsService, child) {
         return Focus(
@@ -69,23 +109,22 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           autofocus: true,
           onKeyEvent: (FocusNode node, KeyEvent event) {
             final result = _keyboardShortcutService.handleKeyEvent(event);
-            // Assuming handleKeyEvent returns KeyEventResult
             return result;
           },
           child: GestureDetector(
             onTap: () => _mainFocusNode.requestFocus(),
             behavior: HitTestBehavior.translucent,
-            child: _buildScaffold(context, settingsService),
+            child: _buildScaffold(context, settingsService, lspConfigs),
           ),
         );
       },
     );
   }
 
-  Widget _buildScaffold(BuildContext context, SettingsService settingsService) {
+  Widget _buildScaffold(BuildContext context, SettingsService settingsService,
+      Map<String, LspConfig> lspConfigs) {
     return Consumer<UIService>(
       builder: (context, uiService, child) {
-        var showCommandPalette = _showCommandPalette;
         return Stack(children: [
           DropTarget(
             onDragDone: (detail) => _handleFileDrop(detail.files),
@@ -95,7 +134,8 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
               body: Column(
                 children: [
                   _buildAppBar(context, uiService, settingsService),
-                  Expanded(child: _buildMainContent(settingsService)),
+                  Expanded(
+                      child: _buildMainContent(settingsService, lspConfigs)),
                   uiService.buildStatusBar(context),
                 ],
               ),
@@ -125,14 +165,15 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildMainContent(SettingsService settingsService) {
+  Widget _buildMainContent(
+      SettingsService settingsService, Map<String, LspConfig> lspConfigs) {
     return Row(
       children: [
         if (settingsService.showFileExplorer) _buildFileExplorer(),
         Expanded(
           child: Column(
             children: [
-              Expanded(child: _buildEditor()),
+              Expanded(child: _buildEditor(lspConfigs)),
               if (settingsService.showTerminal) _buildTerminal(),
             ],
           ),
@@ -155,7 +196,7 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     );
   }
 
-  Widget _buildEditor() {
+  Widget _buildEditor(Map<String, LspConfig> lspConfigs) {
     return DragTarget<List<FileTreeItem>>(
       onAcceptWithDetails: (DragTargetDetails<List<FileTreeItem>> details) {
         _handleDraggedFiles(details.data);
@@ -167,6 +208,7 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
           fileMenuActions: _buildFileMenuActions(),
           rootDirectory: _fileExplorerService.selectedDirectory,
           keyboardShortcutService: _keyboardShortcutService,
+          lspConfigs: lspConfigs,
         );
       },
     );

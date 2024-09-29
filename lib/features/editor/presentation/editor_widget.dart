@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide TabBar;
 import 'package:provider/provider.dart';
+import 'package:starlight/features/editor/domain/models/lsp_config.dart';
 import 'package:starlight/features/editor/presentation/editor.dart';
 import 'package:starlight/features/file_menu/presentation/file_menu_actions.dart';
 import 'package:starlight/features/tabs/presentation/tab.dart';
@@ -21,12 +22,14 @@ class EditorWidget extends StatefulWidget {
   final FileMenuActions fileMenuActions;
   final ValueNotifier<String?> rootDirectory;
   final Function(String)? onContentChanged;
+  final Map<String, LspConfig> lspConfigs;
 
   const EditorWidget({
     super.key,
     required this.fileMenuActions,
     required this.rootDirectory,
     required this.keyboardShortcutService,
+    required this.lspConfigs,
     this.onContentChanged,
   });
 
@@ -428,6 +431,10 @@ class EditorWidgetState extends State<EditorWidget> {
     if (currentTab.customWidget != null) {
       return currentTab.customWidget!;
     }
+
+    // Determine the language ID based on the file extension
+    final String languageId = _getLanguageIdFromFilePath(currentTab.filePath);
+
     return CodeEditor(
       key: _editorController.currentEditorKey,
       initialCode: currentTab.content,
@@ -451,7 +458,23 @@ class EditorWidgetState extends State<EditorWidget> {
       keyboardShortcutService: widget.keyboardShortcutService,
       zoomLevel: _editorController.zoomLevel,
       focusNode: _editorFocusNode,
+      languageId: languageId,
+      lspConfigs: widget.lspConfigs,
     );
+  }
+
+  String _getLanguageIdFromFilePath(String filePath) {
+    final extension = filePath.split('.').last.toLowerCase();
+    switch (extension) {
+      case 'dart':
+        return 'dart';
+      case 'py':
+        return 'python';
+      case 'js':
+        return 'javascript';
+      default:
+        return 'plaintext';
+    }
   }
 
   void _openFile(File file) {

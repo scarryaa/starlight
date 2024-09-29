@@ -18,6 +18,68 @@ class LspClient {
 
   Future<void> get initialized => _initializationCompleter.future;
 
+  Future<void> sendNotification(String method,
+      [Map<String, dynamic>? params]) async {
+    final notification = {
+      'jsonrpc': '2.0',
+      'method': method,
+      if (params != null) 'params': params,
+    };
+
+    final jsonNotification = json.encode(notification);
+    final message =
+        'Content-Length: ${jsonNotification.length}\r\n\r\n$jsonNotification';
+
+    if (_verbose) print("Sending notification to LSP server: $message");
+
+    try {
+      _process!.stdin.add(utf8.encode(message));
+    } catch (e) {
+      print("Error sending notification to LSP server: $e");
+      throw Exception("Failed to send notification to LSP server: $e");
+    }
+  }
+
+  Future<Map<String, dynamic>> sendRequest(String method,
+      [Map<String, dynamic>? params]) async {
+    if (_process == null) {
+      throw Exception("LSP process is not started");
+    }
+
+    final id = _messageId++;
+    final request = {
+      'jsonrpc': '2.0',
+      'id': id,
+      'method': method,
+      if (params != null) 'params': params,
+    };
+
+    final completer = Completer<Map<String, dynamic>>();
+    _responseCompleters[id] = completer;
+
+    final jsonRequest = json.encode(request);
+    final message = 'Content-Length: ${jsonRequest.length}\r\n\r\n$jsonRequest';
+
+    if (_verbose) print("Sending request to LSP server: $message");
+
+    try {
+      _process!.stdin.add(utf8.encode(message));
+    } catch (e) {
+      print("Error sending request to LSP server: $e");
+      _responseCompleters.remove(id);
+      throw Exception("Failed to send request to LSP server: $e");
+    }
+
+    return completer.future.timeout(
+      _timeout,
+      onTimeout: () {
+        print("Request timed out: $method");
+        _responseCompleters.remove(id);
+        throw TimeoutException("LSP server did not respond in time");
+      },
+    );
+  }
+
   Future<void> start(String command, List<String> arguments) async {
     try {
       if (_verbose) {
@@ -140,43 +202,6 @@ class LspClient {
       if (_verbose) print('Server notification: ${message['method']}');
       // Handle server notifications if needed
     }
-  }
-
-  Future<Map<String, dynamic>> sendRequest(String method,
-      [Map<String, dynamic>? params]) async {
-    await initialized; // Ensure the client is initialized before sending requests
-    final id = _messageId++;
-    final request = {
-      'jsonrpc': '2.0',
-      'id': id,
-      'method': method,
-      if (params != null) 'params': params,
-    };
-
-    final completer = Completer<Map<String, dynamic>>();
-    _responseCompleters[id] = completer;
-
-    final jsonRequest = json.encode(request);
-    final message = 'Content-Length: ${jsonRequest.length}\r\n\r\n$jsonRequest';
-
-    if (_verbose) print("Sending request to LSP server: $message");
-
-    try {
-      _process!.stdin.add(utf8.encode(message));
-    } catch (e) {
-      print("Error sending request to LSP server: $e");
-      _responseCompleters.remove(id);
-      throw Exception("Failed to send request to LSP server: $e");
-    }
-
-    return completer.future.timeout(
-      _timeout,
-      onTimeout: () {
-        print("Request timed out: $method");
-        _responseCompleters.remove(id);
-        throw TimeoutException("LSP server did not respond in time");
-      },
-    );
   }
 
   Future<List<int>> getSemanticTokens(String uri) async {

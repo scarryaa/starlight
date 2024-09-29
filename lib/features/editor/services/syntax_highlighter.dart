@@ -189,11 +189,6 @@ class SyntaxHighlighter extends ChangeNotifier {
     _cachedHighlights[lineNumber] = spans;
     _lastProcessedVersion = version;
 
-    if (_semanticTokensReady) {
-      final semanticSpans = _getSemanticSpans(line, lineNumber, 0);
-      spans.addAll(semanticSpans);
-    }
-
     return spans;
   }
 
