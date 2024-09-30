@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide TabBar, Tab;
-import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/completions_widget/completions_widget.dart';
@@ -224,11 +223,6 @@ class CodeEditorState extends State<CodeEditor> {
         widget.cursorPosition != null) {
       editingCore.setSelection(widget.selectionStart!, widget.selectionEnd!);
       editingCore.cursorPosition = widget.cursorPosition!;
-      if (widget.filePath != oldWidget.filePath) {
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _loadFile();
-        });
-      }
     }
     if (widget.zoomLevel != oldWidget.zoomLevel) {
       _updateVisibleLineCount();
@@ -265,11 +259,8 @@ class CodeEditorState extends State<CodeEditor> {
 
     repaintNotifier = ValueNotifier<bool>(false);
 
-    editingCore = TextEditingCore("\n");
+    editingCore = TextEditingCore("");
     editingCore.setText(widget.initialCode);
-    if (widget.initialCode.isEmpty) {
-      editingCore.handleBackspace();
-    }
     editingCore.addListener(_onTextChanged);
     textEditingService = TextEditingService(editingCore);
 
@@ -348,7 +339,6 @@ class CodeEditorState extends State<CodeEditor> {
     _settingsService.addListener(_onSettingsChanged);
     editorService.scrollService.visibleLineCount = 800;
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadFile();
       _updateSemanticTokens();
       _initializeAfterBuild(context);
     });
@@ -1073,12 +1063,6 @@ class CodeEditorState extends State<CodeEditor> {
     return RegExp(r'[a-zA-Z0-9_]').hasMatch(char);
   }
 
-  bool _hasNonSpaceBeforeCaret(int line, int character) {
-    if (character == 0) return false;
-    final lineText = editingCore.getLineContent(line);
-    return character > 0 && lineText[character - 1].trim().isNotEmpty;
-  }
-
   void _selectNextSuggestion() {
     setState(() {
       _selectedSuggestionIndex =
@@ -1181,15 +1165,6 @@ class CodeEditorState extends State<CodeEditor> {
     return position - lineStartIndex;
   }
 
-  void _replaceText(int start, int end, String replacement) {
-    editingCore.replaceRange(start, end, replacement);
-    editingCore.cursorPosition = start + replacement.length;
-    editingCore.clearSelection();
-    editingCore.incrementVersion();
-    editingCore.checkModificationStatus();
-    setState(() {});
-  }
-
   void _handleTap(TapDownDetails details) {
     gestureHandlingService.handleTap(details);
     widget.focusNode.requestFocus();
@@ -1213,32 +1188,6 @@ class CodeEditorState extends State<CodeEditor> {
     CodeEditorConstants.charWidth = _textPainter.width;
   }
 
-  void _loadFile() {
-    if (widget.filePath.isNotEmpty) {
-      try {
-        final file = File(widget.filePath);
-        final content = file.readAsStringSync();
-        editingCore.setText(content);
-        editingCore.cursorPosition = 1;
-        editingCore.clearSelection();
-
-        _updateGitDiff().then((_) {
-          setState(() {});
-
-          SchedulerBinding.instance.addPostFrameCallback((_) {
-            editorService.scrollService.resetAllScrollPositions();
-            _recalculateEditor();
-          });
-        });
-
-        _updateFoldingRegions();
-      } catch (e, stackTrace) {
-        print('Error loading file: $e');
-        print("Stack trace: $stackTrace");
-      }
-    }
-  }
-
   Future<void> _updateSemanticTokens() async {
     try {
       await _lspClient.initialized;
@@ -1260,7 +1209,7 @@ class CodeEditorState extends State<CodeEditor> {
       _updateGitDiff();
 
       setState(() {});
-      widget.onContentChanged(editingCore.getText());
+      widget.onContentChanged(editingCore.getText().replaceFirst('\n', ''));
 
       Future.microtask(() {
         _recalculateEditor();

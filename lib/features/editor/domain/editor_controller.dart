@@ -245,8 +245,7 @@ class EditorController {
     if (index >= 0 && index < _tabs.length) {
       final currentTab = _tabs[index];
       if (currentTab.filePath != 'Untitled') {
-        await File(currentTab.filePath)
-            .writeAsString(currentTab.content.replaceFirst('\n', ''));
+        await File(currentTab.filePath).writeAsString(currentTab.content);
         currentTab.markAsSaved();
         await updateGitDiff(index);
       } else {
