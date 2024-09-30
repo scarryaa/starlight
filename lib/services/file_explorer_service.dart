@@ -6,10 +6,11 @@ import 'package:starlight/features/file_explorer/application/file_explorer_contr
 import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/services/settings_service.dart';
 
-class FileExplorerService {
+class FileExplorerService extends ChangeNotifier {
   final ValueNotifier<String?> selectedDirectory = ValueNotifier<String?>(null);
+  final ValueNotifier<FileTreeItem?> currentFileNotifier = ValueNotifier(null);
   late final FileExplorerController _fileExplorerController;
-  final SettingsService _settingsService;
+  SettingsService _settingsService;
 
   FileExplorerService(this._settingsService) {
     _fileExplorerController = FileExplorerController();
@@ -24,6 +25,11 @@ class FileExplorerService {
       _fileExplorerController.setDirectory(Directory(directory));
       _settingsService.setLastDirectory(directory);
     }
+  }
+
+  void updateSettings(SettingsService newSettings) {
+    _settingsService = newSettings;
+    notifyListeners();
   }
 
   Future<void> pickDirectory() async {
@@ -74,6 +80,7 @@ class FileExplorerService {
     if (fileItem != null) {
       _fileExplorerController.clearSelectedItems();
       _fileExplorerController.setSelectedItem(fileItem);
+      setCurrentFile(fileItem);
     } else {
       print('File not found in the current directory structure: $filePath');
     }
@@ -96,5 +103,10 @@ class FileExplorerService {
       }
     }
     return null;
+  }
+
+  void setCurrentFile(FileTreeItem? file) {
+    currentFileNotifier.value = file;
+    notifyListeners();
   }
 }

@@ -4,6 +4,7 @@ import 'package:starlight/app.dart';
 import 'package:starlight/services/editor_service.dart';
 import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
+import 'package:starlight/services/lsp_service.dart';
 import 'package:starlight/services/settings_service.dart';
 import 'package:starlight/services/ui_service.dart';
 import 'package:starlight/themes/theme_provider.dart';
@@ -41,10 +42,15 @@ Future<void> main() async {
         update: (context, settingsService, previous) =>
             previous ?? ThemeProvider(settingsService),
       ),
-      ProxyProvider<SettingsService, FileExplorerService>(
+      ChangeNotifierProxyProvider<SettingsService, FileExplorerService>(
         create: (context) => FileExplorerService(settingsService),
-        update: (context, settingsService, previous) =>
-            previous ?? FileExplorerService(settingsService),
+        update: (context, settingsService, previous) {
+          if (previous == null) {
+            return FileExplorerService(settingsService);
+          }
+          previous.updateSettings(settingsService);
+          return previous;
+        },
       ),
       Provider<EditorService>(
         create: (_) => EditorService(),
@@ -56,6 +62,7 @@ Future<void> main() async {
         ),
         lazy: true,
       ),
+      ChangeNotifierProvider(create: (_) => LspService()),
     ],
     child: const App(),
   ));

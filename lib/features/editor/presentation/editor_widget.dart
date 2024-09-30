@@ -41,17 +41,25 @@ class EditorWidgetState extends State<EditorWidget> {
   late final ErrorToastManager _toastManager;
   late final FocusNode _editorFocusNode;
   late final FileExplorerService _fileExplorerService;
+  final _cursorPositionController = StreamController<String>.broadcast();
+
+  Stream<String> get cursorPositionStream => _cursorPositionController.stream;
+
+  void updateCursorPosition(int line, int column) {
+    _cursorPositionController.add('Ln $line, Col $column');
+  }
 
   @override
   void initState() {
     super.initState();
+    _fileExplorerService = context.read<FileExplorerService>();
     _editorController = EditorController(
+      fileExplorerService: _fileExplorerService,
       keyboardShortcutService: widget.keyboardShortcutService,
       onContentChanged: widget.onContentChanged,
     );
     _editorFocusNode = FocusNode();
     _toastManager = ErrorToastManager(context);
-    _fileExplorerService = context.read<FileExplorerService>();
     _initializeFileMenuActions();
     Timer.periodic(
         const Duration(seconds: 30), (_) => refreshCurrentFileDiff());

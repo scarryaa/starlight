@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'dart:io' show Platform;
 import 'package:provider/provider.dart';
+import 'package:starlight/features/status_bar/status_bar.dart';
 import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/themes/theme_provider.dart';
 import 'package:window_manager/window_manager.dart';
@@ -80,18 +81,7 @@ class UIService extends ChangeNotifier {
   }
 
   Widget buildStatusBar(BuildContext context) {
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: Theme.of(context).dividerColor,
-          ),
-        ),
-      ),
-    );
+    return StatusBar();
   }
 
   void toggleFileExplorer() {

@@ -3,15 +3,21 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide TabBar;
+import 'package:path/path.dart';
+import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/domain/enums/git_diff_type.dart';
 import 'package:starlight/features/editor/presentation/editor_widget.dart';
+import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/features/tabs/presentation/tab.dart';
 import 'package:starlight/presentation/screens/search_all_files.dart';
+import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
+import 'package:starlight/services/lsp_service.dart';
 
 class EditorController {
   final KeyboardShortcutService keyboardShortcutService;
   final Function(String)? onContentChanged;
+  final FileExplorerService fileExplorerService;
 
   final List<FileTab> _tabs = [];
   final ValueNotifier<int> _selectedTabIndex = ValueNotifier<int>(-1);
@@ -37,6 +43,7 @@ class EditorController {
 
   EditorController({
     required this.keyboardShortcutService,
+    required this.fileExplorerService,
     this.onContentChanged,
   });
 
@@ -204,6 +211,8 @@ class EditorController {
       _selectedTabIndex.value = _tabs.length - 1;
       _currentEditorKey = EditorContentKey(content);
     }
+    fileExplorerService
+        .setCurrentFile(FileTreeItem(File(file.path), 0, false, null));
     await updateGitDiff(_selectedTabIndex.value);
   }
 
