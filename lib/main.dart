@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/app.dart';
+import 'package:starlight/features/file_explorer/infrastructure/services/git_service.dart';
 import 'package:starlight/services/editor_service.dart';
 import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/services/keyboard_shortcut_service.dart';
@@ -31,12 +32,13 @@ Future<void> initializeWindow() async {
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final settingsService = await SettingsService().init();
+  final gitService = GitService();
   await initializeWindow();
-
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider.value(value: settingsService),
-      ChangeNotifierProvider(create: (_) => UIService()),
+      ChangeNotifierProvider(create: (_) => gitService),
+      ChangeNotifierProvider(create: (_) => UIService(gitService)),
       ChangeNotifierProxyProvider<SettingsService, ThemeProvider>(
         create: (context) => ThemeProvider(settingsService),
         update: (context, settingsService, previous) =>

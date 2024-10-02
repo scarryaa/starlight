@@ -16,6 +16,7 @@ import 'package:starlight/features/file_explorer/services/keyboard_navigation_ha
 import 'package:starlight/features/file_explorer/services/search_handler.dart';
 import 'package:starlight/features/toasts/message_toast.dart';
 import 'package:starlight/features/file_explorer/infrastructure/services/file_service.dart';
+import 'package:starlight/services/ui_service.dart';
 
 class FileExplorerContent extends StatefulWidget {
   final Function(File) onFileSelected;
@@ -60,6 +61,17 @@ class _FileExplorerContentState extends State<FileExplorerContent>
     _initializeControllers();
     _initializeHandlers();
     _addListeners();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _updateUIServiceDirectory();
+    });
+  }
+
+  void _updateUIServiceDirectory() {
+    final controller = context.read<FileExplorerController>();
+    final uiService = context.read<UIService>();
+    if (controller.currentDirectory != null) {
+      uiService.currentDirectoryPath = controller.currentDirectory!.path;
+    }
   }
 
   void _initializeControllers() {
@@ -580,12 +592,16 @@ class _FileExplorerContentState extends State<FileExplorerContent>
 
   Future<void> _pickDirectory() async {
     final controller = context.read<FileExplorerController>();
+    final uiService = context.read<UIService>();
     try {
       String? selectedDirectory = await FileService.pickDirectory();
       if (selectedDirectory != null) {
         await controller.setDirectory(Directory(selectedDirectory));
         widget.onDirectorySelected(selectedDirectory);
         await controller.updateGitStatus();
+
+        // Update the UIService with the new main directory path
+        uiService.currentDirectoryPath = selectedDirectory;
       }
     } catch (e) {
       print('Error picking directory: $e');
