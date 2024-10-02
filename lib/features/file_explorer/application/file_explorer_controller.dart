@@ -191,10 +191,38 @@ class FileExplorerController extends ChangeNotifier {
       final relativePath =
           _path.relative(item.path, from: currentDirectory!.path);
       item.updateGitStatus(gitStatus[relativePath] ?? GitStatus.none);
+
+      // If this is a directory, update its status based on its contents
+      if (item.isDirectory) {
+        final dirStatus = _getDirectoryStatus(item, gitStatus);
+        item.updateGitStatus(dirStatus);
+      }
+
       if (item.isDirectory && item.isExpanded) {
         _updateGitStatusRecursive(item.children, gitStatus);
       }
     }
+  }
+
+  GitStatus _getDirectoryStatus(
+      FileTreeItem directory, Map<String, GitStatus> gitStatus) {
+    final relativePath =
+        _path.relative(directory.path, from: currentDirectory!.path);
+    if (gitStatus.containsKey(relativePath)) {
+      return gitStatus[relativePath]!;
+    }
+
+    // Check if any child item has a non-none status
+    for (var child in directory.children) {
+      final childRelativePath =
+          _path.relative(child.path, from: currentDirectory!.path);
+      if (gitStatus[childRelativePath] != null &&
+          gitStatus[childRelativePath] != GitStatus.none) {
+        return GitStatus.modified;
+      }
+    }
+
+    return GitStatus.none;
   }
 
   Future<String> moveToTemp(String sourcePath) async {

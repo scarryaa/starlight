@@ -850,7 +850,6 @@ class CodeEditorState extends State<CodeEditor> {
       }
     }
 
-    // Allow default behavior for unhandled keys
     return KeyEventResult.ignored;
   }
 
@@ -908,11 +907,16 @@ class CodeEditorState extends State<CodeEditor> {
   bool _shouldPreventCompletions(KeyEvent event) {
     return event.logicalKey == LogicalKeyboardKey.arrowLeft ||
         event.logicalKey == LogicalKeyboardKey.arrowRight ||
+        event.logicalKey == LogicalKeyboardKey.arrowUp ||
+        event.logicalKey == LogicalKeyboardKey.arrowDown ||
         event.logicalKey == LogicalKeyboardKey.escape ||
         event.logicalKey == LogicalKeyboardKey.tab ||
         event.logicalKey == LogicalKeyboardKey.enter ||
         event.logicalKey == LogicalKeyboardKey.space ||
-        event.logicalKey == LogicalKeyboardKey.backspace;
+        event.logicalKey == LogicalKeyboardKey.backspace ||
+        HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed;
   }
 
   void _onTextChangedForSuggestions() async {
