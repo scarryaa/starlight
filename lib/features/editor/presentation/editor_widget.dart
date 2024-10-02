@@ -22,6 +22,7 @@ class EditorWidget extends StatefulWidget {
   final ValueNotifier<String?> rootDirectory;
   final Function(String)? onContentChanged;
   final Map<String, LspConfig> lspConfigs;
+  static final cursorPositionNotifier = ValueNotifier<String>('1:1');
 
   const EditorWidget({
     super.key,
@@ -31,6 +32,11 @@ class EditorWidget extends StatefulWidget {
     required this.lspConfigs,
     this.onContentChanged,
   });
+
+  static Stream<String>? getCursorPositionStream(BuildContext context) {
+    final state = context.findAncestorStateOfType<EditorWidgetState>();
+    return state?._cursorPositionController.stream;
+  }
 
   @override
   EditorWidgetState createState() => EditorWidgetState();
@@ -477,6 +483,7 @@ class EditorWidgetState extends State<EditorWidget> {
       languageId: languageId,
       lspConfigs: widget.lspConfigs,
       gitDiff: currentTab.gitDiff,
+      onCursorPositionChanged: updateCursorPosition,
     );
   }
 

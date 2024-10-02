@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/command_palette/command_palette.dart';
+import 'package:starlight/features/editor/presentation/editor_widget.dart';
 import 'package:starlight/features/file_explorer/domain/models/file_tree_item.dart';
 import 'package:starlight/features/file_explorer/domain/models/git_status.dart';
 import 'package:starlight/services/editor_service.dart';
 import 'package:starlight/services/file_explorer_service.dart';
 import 'package:starlight/services/lsp_service.dart';
 import 'package:starlight/features/file_explorer/infrastructure/services/git_service.dart';
+import 'package:starlight/services/settings_service.dart';
 
 class StatusBar extends StatelessWidget {
   const StatusBar({super.key});
@@ -15,8 +17,8 @@ class StatusBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final fileExplorerService = Provider.of<FileExplorerService>(context);
     final lspService = Provider.of<LspService>(context);
-    final editorService = Provider.of<EditorService>(context);
     final gitService = Provider.of<GitService?>(context, listen: false);
+    final settingsService = Provider.of<SettingsService>(context);
 
     return ValueListenableBuilder<FileTreeItem?>(
       valueListenable: fileExplorerService.currentFileNotifier,
@@ -25,28 +27,30 @@ class StatusBar extends StatelessWidget {
           lspService.updateForFile(currentFile.path);
         }
         return Container(
-          height: 24,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
+          height: 28,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
           decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.surface,
+            color: Theme.of(context).colorScheme.surfaceVariant,
             border: Border(
               top: BorderSide(
                 color: Theme.of(context).dividerColor,
+                width: 1,
               ),
             ),
           ),
           child: Row(
             children: [
+              _buildFileExplorerToggle(context, settingsService),
+              const Spacer(),
               _buildLanguageSelector(context, lspService),
-              const SizedBox(width: 16),
-              _buildCursorPosition(editorService),
               const SizedBox(width: 16),
               _buildFileInfo(context, currentFile),
               if (gitService != null) ...[
                 const SizedBox(width: 16),
                 _buildGitInfo(gitService, currentFile),
               ],
-              const Spacer(),
+              const SizedBox(width: 16),
+              _buildCursorPosition(context),
             ],
           ),
         );
@@ -54,36 +58,58 @@ class StatusBar extends StatelessWidget {
     );
   }
 
-  Widget _buildCursorPosition(EditorService editorService) {
-    return StreamBuilder<String>(
-      stream: editorService.editorKey.currentState?.cursorPositionStream,
-      builder: (context, snapshot) {
-        if (snapshot.hasData) {
-          return Text(
-            snapshot.data!,
-            style: Theme.of(context).textTheme.bodySmall,
-          );
-        }
+  Widget _buildFileExplorerToggle(
+      BuildContext context, SettingsService settingsService) {
+    return IconButton(
+      icon: Icon(
+        settingsService.showFileExplorer ? Icons.folder : Icons.folder_outlined,
+      ),
+      iconSize: 16,
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints(),
+      onPressed: () {
+        settingsService.setShowFileExplorer(!settingsService.showFileExplorer);
+      },
+      color: Theme.of(context).colorScheme.onSurfaceVariant,
+      tooltip: settingsService.showFileExplorer
+          ? 'Hide File Explorer'
+          : 'Show File Explorer',
+    );
+  }
+
+  Widget _buildCursorPosition(BuildContext context) {
+    return ValueListenableBuilder<String>(
+      valueListenable: EditorWidget.cursorPositionNotifier,
+      builder: (context, position, _) {
         return Text(
-          'Ln 1, Col 1',
-          style: Theme.of(context).textTheme.bodySmall,
+          position,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
         );
       },
     );
   }
 
   Widget _buildFileInfo(BuildContext context, FileTreeItem? currentFile) {
-    if (currentFile == null) {
-      return Text(
-        'No file selected',
-        style: Theme.of(context).textTheme.bodySmall,
-      );
-    } else {
-      return Text(
-        currentFile.name,
-        style: Theme.of(context).textTheme.bodySmall,
-      );
-    }
+    final text = currentFile?.name ?? 'No file selected';
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(
+          currentFile != null ? Icons.insert_drive_file : Icons.folder_open,
+          size: 14,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 4),
+        Text(
+          text,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+        ),
+      ],
+    );
   }
 
   Widget _buildGitInfo(GitService gitService, FileTreeItem? currentFile) {
@@ -95,12 +121,17 @@ class StatusBar extends StatelessWidget {
         if (snapshot.hasData && snapshot.data!.containsKey(currentFile.path)) {
           final status = snapshot.data![currentFile.path];
           return Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.source_rounded, size: 16),
+              Icon(Icons.source_rounded,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant),
               const SizedBox(width: 4),
               Text(
                 status.toString().split('.').last,
-                style: Theme.of(context).textTheme.bodySmall,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
             ],
           );
@@ -111,12 +142,33 @@ class StatusBar extends StatelessWidget {
   }
 
   Widget _buildLanguageSelector(BuildContext context, LspService lspService) {
-    return TextButton(
-      onPressed: () => _showLanguageCommandPalette(context, lspService),
-      child: Text(
-        lspService.currentLanguage,
-        style: TextStyle(fontSize: 12),
-      ),
+    return ValueListenableBuilder<bool>(
+      valueListenable: lspService.isLspRunningNotifier,
+      builder: (context, isLspRunning, _) {
+        return InkWell(
+          onTap: () => _showLanguageCommandPalette(context, lspService),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  isLspRunning ? Icons.code : Icons.code_off,
+                  size: 14,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  lspService.currentLanguage,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 

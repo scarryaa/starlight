@@ -12,6 +12,7 @@ import 'package:starlight/features/editor/domain/models/lsp_config.dart';
 import 'package:starlight/features/editor/domain/models/text_editing_core.dart';
 import 'package:starlight/features/editor/minimap/minimap.dart';
 import 'package:starlight/features/editor/presentation/editor_painter.dart';
+import 'package:starlight/features/editor/presentation/editor_widget.dart';
 import 'package:starlight/features/editor/presentation/line_numbers.dart';
 import 'package:starlight/features/editor/services/calculation_service.dart';
 import 'package:starlight/features/editor/services/clipboard_service.dart';
@@ -51,6 +52,7 @@ class CodeEditor extends StatefulWidget {
   final String languageId;
   final Map<String, LspConfig> lspConfigs;
   Map<int, GitDiffType> gitDiff;
+  final Function(int, int) onCursorPositionChanged;
 
   CodeEditor({
     super.key,
@@ -76,6 +78,7 @@ class CodeEditor extends StatefulWidget {
     this.selectionStart,
     this.selectionEnd,
     this.cursorPosition,
+    required this.onCursorPositionChanged,
   });
 
   @override
@@ -830,6 +833,14 @@ class CodeEditorState extends State<CodeEditor> {
         } else {
           _hideCompletionsList();
         }
+
+        final cursorPosition = editingCore.cursorPosition;
+        final line = _getLineForPosition(cursorPosition);
+        final character = _getCharacterForPosition(cursorPosition);
+        widget.onCursorPositionChanged(line, character);
+        EditorWidget.cursorPositionNotifier.value =
+            '${line + 1}: ${character + 1}';
+
         return KeyEventResult.handled;
       }
     } else if (event is KeyUpEvent) {
@@ -1168,6 +1179,15 @@ class CodeEditorState extends State<CodeEditor> {
   void _handleTap(TapDownDetails details) {
     gestureHandlingService.handleTap(details);
     widget.focusNode.requestFocus();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final cursorPosition = editingCore.cursorPosition;
+      final line = _getLineForPosition(cursorPosition);
+      final character = _getCharacterForPosition(cursorPosition);
+      widget.onCursorPositionChanged(line, character);
+      EditorWidget.cursorPositionNotifier.value =
+          '${line + 1}: ${character + 1}';
+    });
   }
 
   void _initializeTextPainter(BuildContext context) {
@@ -1216,6 +1236,17 @@ class CodeEditorState extends State<CodeEditor> {
         _updateScrollPosition();
         widget.focusNode.requestFocus();
       });
+
+      _lastKnownVersion = editingCore.version;
+      _sendDocumentChanges();
+      _updateSemanticTokens();
+
+      final cursorPosition = editingCore.cursorPosition;
+      final line = _getLineForPosition(cursorPosition);
+      final character = _getCharacterForPosition(cursorPosition);
+      widget.onCursorPositionChanged(line, character);
+      EditorWidget.cursorPositionNotifier.value =
+          '${line + 1}: ${character + 1}';
 
       _lastKnownVersion = editingCore.version;
       _sendDocumentChanges();
