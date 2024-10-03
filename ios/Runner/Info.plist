@@ -45,7 +45,5 @@
 	<true/>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
-	<key>NSDocumentsFolderUsageDescription</key>
-	<string>This app needs access to the documents folder to read and write files.</string>
 </dict>
 </plist>

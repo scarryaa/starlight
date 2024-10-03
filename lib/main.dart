@@ -1,71 +1,46 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import 'package:starlight/app.dart';
-import 'package:starlight/features/file_explorer/infrastructure/services/git_service.dart';
-import 'package:starlight/services/editor_service.dart';
-import 'package:starlight/services/file_explorer_service.dart';
-import 'package:starlight/services/keyboard_shortcut_service.dart';
-import 'package:starlight/services/lsp_service.dart';
-import 'package:starlight/services/settings_service.dart';
-import 'package:starlight/services/ui_service.dart';
-import 'package:starlight/themes/theme_provider.dart';
-import 'package:window_manager/window_manager.dart';
+import 'package:starlight/features/editor/editor.dart';
 
-Future<void> initializeWindow() async {
-  SettingsService settingsService = await SettingsService().init();
-  WindowOptions windowOptions = WindowOptions(
-    size: Size(settingsService.windowWidth, settingsService.windowHeight),
-    minimumSize: const Size(700, 600),
-    center: true,
-    backgroundColor: Colors.transparent,
-    skipTaskbar: false,
-    titleBarStyle: TitleBarStyle.hidden,
-    fullScreen: settingsService.isFullscreen,
-  );
-  await windowManager.ensureInitialized();
-  windowManager.waitUntilReadyToShow(windowOptions, () async {
-    await windowManager.show();
-    await windowManager.focus();
-  });
+void main() {
+  runApp(const MyApp());
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  final settingsService = await SettingsService().init();
-  final gitService = GitService();
-  await initializeWindow();
-  runApp(MultiProvider(
-    providers: [
-      ChangeNotifierProvider.value(value: settingsService),
-      ChangeNotifierProvider(create: (_) => gitService),
-      ChangeNotifierProvider(create: (_) => UIService(gitService)),
-      ChangeNotifierProxyProvider<SettingsService, ThemeProvider>(
-        create: (context) => ThemeProvider(settingsService),
-        update: (context, settingsService, previous) =>
-            previous ?? ThemeProvider(settingsService),
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Flutter Demo',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+        useMaterial3: true,
       ),
-      ChangeNotifierProxyProvider<SettingsService, FileExplorerService>(
-        create: (context) => FileExplorerService(settingsService),
-        update: (context, settingsService, previous) {
-          if (previous == null) {
-            return FileExplorerService(settingsService);
-          }
-          previous.updateSettings(settingsService);
-          return previous;
-        },
-      ),
-      Provider<EditorService>(
-        create: (_) => EditorService(),
-        lazy: true,
-      ),
-      Provider<KeyboardShortcutService>(
-        create: (context) => KeyboardShortcutService(
-          context.read<EditorService>(),
+      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+    );
+  }
+}
+
+class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key, required this.title});
+
+  final String title;
+
+  @override
+  State<MyHomePage> createState() => _MyHomePageState();
+}
+
+class _MyHomePageState extends State<MyHomePage> {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: <Widget>[Editor()],
         ),
-        lazy: true,
       ),
-      ChangeNotifierProvider(create: (_) => LspService()),
-    ],
-    child: const App(),
-  ));
+    );
+  }
 }

@@ -1,55 +1,16 @@
+# starlight
 
-# Starlight
-
-Starlight aims to be a fast, modern, and cross-platform Flutter code editor. The project is designed to run on multiple platforms, including Android, iOS, Linux, macOS, Windows, and the Web.
+A new Flutter project.
 
 ## Getting Started
 
-Follow the steps below to set up the project and run it on your desired platform.
+This project is a starting point for a Flutter application.
 
-### Prerequisites
+A few resources to get you started if this is your first Flutter project:
 
-- [Flutter SDK](https://flutter.dev/docs/get-started/install)
-- Platform-specific prerequisites (e.g., Android SDK, iOS simulator, etc.).
+- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
+- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
 
-### Installation
-
-1. Clone the repository:
-
-    ```bash
-    git clone https://github.com/scarryaa/starlight.git
-    cd starlight
-    ```
-
-2. Install dependencies:
-
-    ```bash
-    flutter pub get
-    ```
-
-3. Run the project on your desired platform:
-
-    - For Android:
-        ```bash
-        flutter run -d android
-        ```
-    - For iOS:
-        ```bash
-        flutter run -d ios
-        ```
-    - For Linux:
-        ```bash
-        flutter run -d linux
-        ```
-    - For macOS:
-        ```bash
-        flutter run -d macos
-        ```
-    - For Windows:
-        ```bash
-        flutter run -d windows
-        ```
-    - For Web:
-        ```bash
-        flutter run -d chrome
-        ```
+For help getting started with Flutter development, view the
+[online documentation](https://docs.flutter.dev/), which offers tutorials,
+samples, guidance on mobile development, and a full API reference.
