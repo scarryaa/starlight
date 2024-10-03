@@ -151,7 +151,6 @@ class UIService extends ChangeNotifier {
     return _gitService.branches.map((branch) {
       return Command(
         name: branch,
-        description: 'Switch to branch $branch',
         icon: Icons.call_split,
         action: () {
           if (_currentDirectoryPath != null) {

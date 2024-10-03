@@ -5,13 +5,11 @@ import 'package:flutter/services.dart';
 
 class Command {
   final String name;
-  final String description;
   final IconData icon;
   final VoidCallback action;
 
   Command({
     required this.name,
-    required this.description,
     required this.icon,
     required this.action,
   });
@@ -47,8 +45,8 @@ class _CommandPaletteState extends State<CommandPalette> {
       builder: (context, constraints) {
         final screenHeight = constraints.maxHeight;
         final screenWidth = constraints.maxWidth;
-        final maxHeight = screenHeight * 0.6;
-        final width = min(400.0, screenWidth * 0.9);
+        final maxHeight = screenHeight * 0.7;
+        final width = min(500.0, screenWidth * 0.95);
 
         return Stack(
           children: [
@@ -59,7 +57,7 @@ class _CommandPaletteState extends State<CommandPalette> {
               ),
             ),
             Positioned(
-              top: MediaQuery.of(context).size.height * 0.2,
+              top: MediaQuery.of(context).size.height * 0.15,
               left: 0,
               right: 0,
               child: Center(
@@ -73,7 +71,7 @@ class _CommandPaletteState extends State<CommandPalette> {
                     child: Container(
                       decoration: BoxDecoration(
                         color: Theme.of(context).colorScheme.surface,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(16),
                         border: Border.all(
                           color: Colors.grey.withOpacity(0.3),
                           width: 1,
@@ -81,8 +79,8 @@ class _CommandPaletteState extends State<CommandPalette> {
                         boxShadow: [
                           BoxShadow(
                             color: Colors.black.withOpacity(0.1),
-                            blurRadius: 6,
-                            spreadRadius: 3,
+                            blurRadius: 8,
+                            spreadRadius: 4,
                           ),
                         ],
                       ),
@@ -128,71 +126,85 @@ class _CommandPaletteState extends State<CommandPalette> {
 
   Widget _buildCommandList() {
     return ScrollConfiguration(
-        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-        child: ListView.builder(
-          controller: _scrollController,
-          physics: const ClampingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-          shrinkWrap: true,
-          itemCount: _filteredCommands.length,
-          itemBuilder: (context, index) {
-            final command = _filteredCommands[index];
-            final isSelected = _selectedIndex == index;
-            return ListTile(
+      behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+      child: ListView.builder(
+        controller: _scrollController,
+        physics: const ClampingScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+        shrinkWrap: true,
+        itemCount: _filteredCommands.length,
+        itemBuilder: (context, index) {
+          final command = _filteredCommands[index];
+          final isSelected = _selectedIndex == index;
+          return Container(
+            margin: const EdgeInsets.symmetric(vertical: 6),
+            decoration: BoxDecoration(
+              color: isSelected
+                  ? Theme.of(context)
+                      .colorScheme
+                      .primaryContainer
+                      .withOpacity(0.2)
+                  : Theme.of(context).colorScheme.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: isSelected
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey.withOpacity(0.3),
+                width: 1,
+              ),
+            ),
+            child: ListTile(
               contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
-              leading: Icon(command.icon,
-                  size: 20,
-                  color: isSelected
-                      ? Theme.of(context).colorScheme.primary
-                      : null),
+                  const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              leading: Icon(
+                command.icon,
+                size: 28,
+                color:
+                    isSelected ? Theme.of(context).colorScheme.primary : null,
+              ),
               title: Text(
                 command.name,
                 style: TextStyle(
-                  fontSize: 12,
+                  fontSize: 16,
                   fontWeight: FontWeight.w600,
                   color:
                       isSelected ? Theme.of(context).colorScheme.primary : null,
                 ),
               ),
-              subtitle: Text(
-                command.description,
-                style: const TextStyle(fontSize: 10),
-              ),
-              tileColor: isSelected
-                  ? Theme.of(context)
-                      .colorScheme
-                      .primaryContainer
-                      .withOpacity(0.2)
-                  : null,
-              shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(6)),
               onTap: () => widget.onCommandSelected(command),
-              visualDensity: VisualDensity.compact,
-            );
-          },
-        ));
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   Widget _buildSearchBar() {
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
       child: RawKeyboardListener(
         focusNode: FocusNode(),
         onKey: _handleKeyEvent,
         child: TextField(
           controller: _searchController,
           focusNode: _searchFocusNode,
-          style: const TextStyle(fontSize: 13),
+          style: const TextStyle(fontSize: 16),
           decoration: InputDecoration(
-            isDense: true,
             hintText: 'Search commands...',
             border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: BorderSide.none,
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: Colors.grey.withOpacity(0.3)),
             ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide:
+                  BorderSide(color: Theme.of(context).colorScheme.primary),
+            ),
+            prefixIcon: const Icon(Icons.search),
             contentPadding:
-                const EdgeInsets.symmetric(vertical: 6, horizontal: 10),
+                const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
           ),
           onChanged: _filterCommands,
         ),
@@ -204,8 +216,7 @@ class _CommandPaletteState extends State<CommandPalette> {
     setState(() {
       _filteredCommands = widget.commands
           .where((command) =>
-              command.name.toLowerCase().contains(query.toLowerCase()) ||
-              command.description.toLowerCase().contains(query.toLowerCase()))
+              command.name.toLowerCase().contains(query.toLowerCase()))
           .toList();
       _selectedIndex = 0;
       _scrollToSelected();
@@ -258,11 +269,11 @@ class _CommandPaletteState extends State<CommandPalette> {
   void _scrollToSelected() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
-        const itemHeight = 52.0;
+        const itemHeight = 76.0;
         final offset = _selectedIndex * itemHeight;
         _scrollController.animateTo(
           offset,
-          duration: const Duration(milliseconds: 100),
+          duration: const Duration(milliseconds: 20),
           curve: Curves.easeInOut,
         );
       }

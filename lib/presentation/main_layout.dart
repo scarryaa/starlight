@@ -316,138 +316,116 @@ class MainLayoutState extends State<MainLayout> with WidgetsBindingObserver {
     _commands = [
       Command(
         name: 'New File',
-        description: 'Create a new file',
         icon: Icons.note_add,
         action: _editorService.handleNewFile,
       ),
       Command(
         name: 'Open File',
-        description: 'Open an existing file',
         icon: Icons.folder_open,
         action: _openFile,
       ),
       Command(
         name: 'Save',
-        description: 'Save the current file',
         icon: Icons.save,
         action: _editorService.handleSaveCurrentFile,
       ),
       Command(
         name: 'Save As',
-        description: 'Save the current file with a new name',
         icon: Icons.save_as,
         action: _editorService.handleSaveFileAs,
       ),
       Command(
         name: 'Close File',
-        description: 'Close the current file',
         icon: Icons.close,
         action: _editorService.closeCurrentFile,
       ),
       Command(
         name: 'Pick Directory',
-        description: 'Choose a new root directory for the file explorer',
         icon: Icons.folder,
         action: _fileExplorerService.pickDirectory,
       ),
       Command(
         name: 'Toggle File Explorer',
-        description: 'Show or hide the file explorer',
         icon: Icons.folder_open,
         action: _toggleFileExplorer,
       ),
       Command(
         name: 'Toggle Terminal',
-        description: 'Show or hide the integrated terminal',
         icon: Icons.terminal,
         action: _toggleTerminal,
       ),
       Command(
         name: 'Open in Integrated Terminal',
-        description: 'Open the current directory in the integrated terminal',
         icon: Icons.terminal,
         action: () => _openInIntegratedTerminal(
             _fileExplorerService.selectedDirectory.value ?? ''),
       ),
       Command(
         name: 'Search All Files',
-        description: 'Search for a string in all files',
         icon: Icons.search,
         action: _editorService.addSearchAllFilesTab,
       ),
       Command(
         name: 'Find in File',
-        description: 'Find text in the current file',
         icon: Icons.find_in_page,
         action: _editorService.showFindDialog,
       ),
       Command(
         name: 'Replace in File',
-        description: 'Find and replace text in the current file',
         icon: Icons.find_replace,
         action: _editorService.showReplaceDialog,
       ),
       Command(
         name: 'Undo',
-        description: 'Undo the last action',
         icon: Icons.undo,
         action: _editorService.undo,
       ),
       Command(
         name: 'Redo',
-        description: 'Redo the last undone action',
         icon: Icons.redo,
         action: _editorService.redo,
       ),
       Command(
         name: 'Zoom In',
-        description: 'Increase the font size',
         icon: Icons.zoom_in,
         action: _editorService.zoomIn,
       ),
       Command(
         name: 'Zoom Out',
-        description: 'Decrease the font size',
         icon: Icons.zoom_out,
         action: _editorService.zoomOut,
       ),
       Command(
         name: 'Reset Zoom',
-        description: 'Reset the font size to default',
         icon: Icons.zoom_out_map,
         action: _editorService.resetZoom,
       ),
       Command(
         name: 'Light Theme',
-        description: 'Switch to light theme',
         icon: Icons.light_mode,
         action: () => Provider.of<ThemeProvider>(context, listen: false)
             .setTheme('light'),
       ),
       Command(
         name: 'Dark Theme',
-        description: 'Switch to dark theme',
         icon: Icons.dark_mode,
         action: () =>
             Provider.of<ThemeProvider>(context, listen: false).setTheme('dark'),
       ),
       Command(
         name: 'Retro Terminal Theme',
-        description: 'Switch to retro terminal theme',
         icon: Icons.terminal,
         action: () => Provider.of<ThemeProvider>(context, listen: false)
             .setTheme('retro'),
       ),
       Command(
         name: 'Solarized Light Theme',
-        description: 'Switch to solarized light theme',
         icon: Icons.wb_sunny,
         action: () => Provider.of<ThemeProvider>(context, listen: false)
             .setTheme('solarized_light'),
       ),
       Command(
         name: 'Solarized Dark Theme',
-        description: 'Switch to solarized dark theme',
         icon: Icons.wb_sunny,
         action: () => Provider.of<ThemeProvider>(context, listen: false)
             .setTheme('solarized_dark'),

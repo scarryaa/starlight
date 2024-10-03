@@ -177,7 +177,6 @@ class StatusBar extends StatelessWidget {
     final commands = lspService.supportedLanguages
         .map((lang) => Command(
               name: lang,
-              description: 'Set language to $lang',
               icon: Icons.language,
               action: () => lspService.setLanguage(lang),
             ))
