@@ -13,6 +13,7 @@ class CodeEditorPainter extends CustomPainter {
   static const int lineBuffer = 5;
   final List<FoldingRegion> foldingRegions;
   final ValueNotifier<bool> repaintNotifier;
+  late int _detectedIndentSize;
 
   final TextEditingCore editingCore;
   final int firstVisibleLine;
@@ -64,6 +65,36 @@ class CodeEditorPainter extends CustomPainter {
     _calculateCharWidth();
     scaledLineNumberWidth = lineNumberWidth * zoomLevel;
     textStartX = scaledLineNumberWidth / 8;
+    _detectedIndentSize = _detectIndentationSize();
+  }
+
+  int _detectIndentationSize() {
+    Map<int, int> indentCounts = {2: 0, 4: 0, 8: 0};
+    int lineCount = min(1000, editingCore.lineCount);
+
+    for (int i = 0; i < lineCount; i++) {
+      String line = _getLineContent(i);
+      int leadingSpaces = line.indexOf(RegExp(r'\S'));
+      if (leadingSpaces > 0 && leadingSpaces % 2 == 0) {
+        for (int size in indentCounts.keys) {
+          if (leadingSpaces % size == 0) {
+            indentCounts[size] = indentCounts[size]! + 1;
+          }
+        }
+      }
+    }
+
+    // Find the most common indent size
+    int maxCount = 0;
+    int mostCommonSize = 4; // Default to 4 if no clear winner
+    indentCounts.forEach((size, count) {
+      if (count > maxCount) {
+        maxCount = count;
+        mostCommonSize = size;
+      }
+    });
+
+    return mostCommonSize;
   }
 
   @override
@@ -72,48 +103,59 @@ class CodeEditorPainter extends CustomPainter {
     final scaledLineHeight = CodeEditorConstants.lineHeight * zoomLevel;
     final totalVisibleLines = (viewportHeight / scaledLineHeight).ceil() + 1;
     final lastVisibleLine =
-        min(firstVisibleLine + totalVisibleLines, editingCore.lineCount);
+        min(firstVisibleLine + totalVisibleLines, lineCount);
 
-    int visibleLineIndex = 0;
-    for (int i = firstVisibleLine;
-        i < lastVisibleLine && visibleLineIndex < visibleLineCount;
-        i++) {
-      // Check if this line is part of a folded region
-      final foldedRegion = foldingRegions.firstWhere(
-        (region) =>
-            region.isFolded && i > region.startLine && i <= region.endLine,
-        orElse: () => FoldingRegion(
-            startLine: -1, endLine: -1, startColumn: -1, endColumn: -1),
-      );
-
-      if (foldedRegion.startLine != -1) {
-        // This line is part of a folded region, skip to the end of the region
-        i = foldedRegion.endLine;
-        continue;
-      }
-
+    // Paint visible lines
+    for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
       final lineContent = _getLineContent(i);
+
+      // Paint indentation lines
+      _paintIndentationLines(canvas, i, lineContent);
 
       // Paint search highlights
       _paintSearchHighlights(canvas, i, lineContent);
+
       // Paint selection if needed
       if (_isLineSelected(i)) {
         _paintSelection(canvas, i, lineContent);
       }
+
       // Paint syntax highlighted text with semantic tokens
       _paintSyntaxHighlightedTextWithSemanticTokens(
           canvas, i, lineContent, Offset(textStartX, i * scaledLineHeight));
+
       // Paint cursor
       if (_isCursorOnLine(i)) {
         _paintCursor(canvas, i, lineContent);
       }
-
-      visibleLineIndex++;
     }
 
     // Paint cursor at the end of the document if necessary
     if (editingCore.cursorPosition == editingCore.length) {
       _paintCursorAtEnd(canvas, lineCount - 1);
+    }
+  }
+
+  void _paintIndentationLines(Canvas canvas, int line, String lineContent) {
+    final indentWidth = charWidth * _detectedIndentSize;
+    final indentPaint = Paint()
+      ..color = Colors.grey.withOpacity(0.5)
+      ..strokeWidth = 1 * zoomLevel;
+
+    final leadingSpaces = lineContent.indexOf(RegExp(r'\S'));
+    final spaceCount = leadingSpaces == -1 ? lineContent.length : leadingSpaces;
+    final indentCount = (spaceCount / _detectedIndentSize).ceil(); // Round up
+
+    for (int i = 0; i < indentCount; i++) {
+      final x = textStartX + i * indentWidth;
+      final topY = line * CodeEditorConstants.lineHeight * zoomLevel;
+      final bottomY = topY + CodeEditorConstants.lineHeight * zoomLevel;
+
+      canvas.drawLine(
+        Offset(x, topY),
+        Offset(x, bottomY),
+        indentPaint,
+      );
     }
   }
 
