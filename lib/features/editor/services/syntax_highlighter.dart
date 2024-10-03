@@ -117,23 +117,21 @@ class SyntaxHighlighter extends ChangeNotifier {
         (_currentThemeMode == ThemeMode.system &&
             MediaQuery.of(context).platformBrightness == Brightness.dark);
 
-    // Base colors
     final Color primary =
-        isDark ? const Color(0xFF61AFEF) : const Color(0xFF0A84FF);
+        isDark ? const Color(0xFF61AFEF) : const Color(0xFF005A9E);
     final Color secondary =
-        isDark ? const Color(0xFFE5C07B) : const Color(0xFFFF9500);
+        isDark ? const Color(0xFFE5C07B) : const Color(0xFFB7950B);
     final Color tertiary =
-        isDark ? const Color(0xFFC678DD) : const Color(0xFFAF52DE);
+        isDark ? const Color(0xFFC678DD) : const Color(0xFF8E44AD);
     final Color quaternary =
-        isDark ? const Color(0xFF98C379) : const Color(0xFF30D158);
+        isDark ? const Color(0xFF98C379) : const Color(0xFF16A085);
     final Color quinary =
-        isDark ? const Color(0xFFE06C75) : const Color(0xFFFF453A);
+        isDark ? const Color(0xFFE06C75) : const Color(0xFFC0392B);
 
-    // Text colors
     final Color defaultText =
         isDark ? const Color(0xFFABB2BF) : const Color(0xFF2C3E50);
     final Color dimmedText =
-        isDark ? const Color(0xFF6B727D) : const Color(0xFF8E8E93);
+        isDark ? const Color(0xFF6B727D) : const Color(0xFF7F8C8D);
     _styles = {
       // Keywords and control flow
       'keyword': TextStyle(color: primary, fontWeight: FontWeight.bold),

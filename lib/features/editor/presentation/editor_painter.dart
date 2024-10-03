@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -15,6 +16,8 @@ class CodeEditorPainter extends CustomPainter {
   final ValueNotifier<bool> repaintNotifier;
   late int _detectedIndentSize;
 
+  final Map<int, List<TextSpan>> _cachedHighlightedSpans = {};
+  final Map<int, TextPainter> _cachedTextPainters = {};
   final TextEditingCore editingCore;
   final int firstVisibleLine;
   final int visibleLineCount;
@@ -86,7 +89,7 @@ class CodeEditorPainter extends CustomPainter {
 
     // Find the most common indent size
     int maxCount = 0;
-    int mostCommonSize = 4; // Default to 4 if no clear winner
+    int mostCommonSize = 4;
     indentCounts.forEach((size, count) {
       if (count > maxCount) {
         maxCount = count;
@@ -105,34 +108,39 @@ class CodeEditorPainter extends CustomPainter {
     final lastVisibleLine =
         min(firstVisibleLine + totalVisibleLines, lineCount);
 
-    // Paint visible lines
+    final recorder = ui.PictureRecorder();
+    final recordingCanvas = Canvas(recorder);
+
     for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
       final lineContent = _getLineContent(i);
 
-      // Paint indentation lines
-      _paintIndentationLines(canvas, i, lineContent);
+      _paintIndentationLines(recordingCanvas, i, lineContent);
+      _paintSearchHighlights(recordingCanvas, i, lineContent);
 
-      // Paint search highlights
-      _paintSearchHighlights(canvas, i, lineContent);
-
-      // Paint selection if needed
       if (_isLineSelected(i)) {
-        _paintSelection(canvas, i, lineContent);
+        _paintSelection(recordingCanvas, i, lineContent);
       }
 
-      // Paint syntax highlighted text with semantic tokens
-      _paintSyntaxHighlightedTextWithSemanticTokens(
-          canvas, i, lineContent, Offset(textStartX, i * scaledLineHeight));
+      _paintSyntaxHighlightedTextWithSemanticTokens(recordingCanvas, i,
+          lineContent, Offset(textStartX, i * scaledLineHeight));
 
-      // Paint cursor
       if (_isCursorOnLine(i)) {
-        _paintCursor(canvas, i, lineContent);
+        _paintCursor(recordingCanvas, i, lineContent);
       }
     }
 
-    // Paint cursor at the end of the document if necessary
     if (editingCore.cursorPosition == editingCore.length) {
-      _paintCursorAtEnd(canvas, lineCount - 1);
+      _paintCursorAtEnd(recordingCanvas, lineCount - 1);
+    }
+
+    final picture = recorder.endRecording();
+    canvas.drawPicture(picture);
+
+    if (_cachedHighlightedSpans.length > 1000) {
+      _cachedHighlightedSpans.clear();
+    }
+    if (_cachedTextPainters.length > 1000) {
+      _cachedTextPainters.clear();
     }
   }
 
@@ -161,28 +169,40 @@ class CodeEditorPainter extends CustomPainter {
 
   void _paintSyntaxHighlightedTextWithSemanticTokens(
       Canvas canvas, int line, String text, Offset offset) {
-    final highlightedSpans =
-        syntaxHighlighter.highlightLine(text, line, version);
-    final textPainter = TextPainter(
-      text: TextSpan(
-        children: highlightedSpans
-            .map((span) => TextSpan(
-                  text: span.text,
-                  style: span.style?.copyWith(
-                          fontSize: CodeEditorConstants.fontSize * zoomLevel,
-                          fontFamily: "SF Mono") ??
-                      TextStyle(
-                          fontSize: CodeEditorConstants.fontSize * zoomLevel,
-                          fontFamily: "SF Mono"),
-                ))
-            .toList(),
-      ),
-      textDirection: TextDirection.ltr,
-    )..layout(maxWidth: double.infinity);
+    final cacheKey = _calculateCacheKey(line, text);
+    if (!_cachedHighlightedSpans.containsKey(cacheKey)) {
+      _cachedHighlightedSpans[cacheKey] =
+          syntaxHighlighter.highlightLine(text, line, version);
+    }
+    final highlightedSpans = _cachedHighlightedSpans[cacheKey]!;
+
+    if (!_cachedTextPainters.containsKey(cacheKey)) {
+      _cachedTextPainters[cacheKey] = TextPainter(
+        text: TextSpan(
+          children: highlightedSpans
+              .map((span) => TextSpan(
+                    text: span.text,
+                    style: span.style?.copyWith(
+                            fontSize: CodeEditorConstants.fontSize * zoomLevel,
+                            fontFamily: "SF Mono") ??
+                        TextStyle(
+                            fontSize: CodeEditorConstants.fontSize * zoomLevel,
+                            fontFamily: "SF Mono"),
+                  ))
+              .toList(),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout(maxWidth: double.infinity);
+    }
+    final textPainter = _cachedTextPainters[cacheKey]!;
 
     final yOffset = offset.dy +
         (CodeEditorConstants.lineHeight * zoomLevel - textPainter.height) / 2;
     textPainter.paint(canvas, Offset(offset.dx, yOffset));
+  }
+
+  int _calculateCacheKey(int line, String text) {
+    return Object.hash(line, text, version);
   }
 
   void _paintSyntaxHighlightedText(
@@ -213,13 +233,13 @@ class CodeEditorPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(CodeEditorPainter oldDelegate) {
-    return editingCore != oldDelegate.editingCore ||
+    final shouldRepaint = editingCore != oldDelegate.editingCore ||
         firstVisibleLine != oldDelegate.firstVisibleLine ||
         visibleLineCount != oldDelegate.visibleLineCount ||
         horizontalOffset != oldDelegate.horizontalOffset ||
         version != oldDelegate.version ||
         viewportWidth != oldDelegate.viewportWidth ||
-        matchPositions != oldDelegate.matchPositions ||
+        !listEquals(matchPositions, oldDelegate.matchPositions) ||
         searchTerm != oldDelegate.searchTerm ||
         cursorPosition != oldDelegate.cursorPosition ||
         selectionStart != oldDelegate.selectionStart ||
@@ -227,6 +247,14 @@ class CodeEditorPainter extends CustomPainter {
         zoomLevel != oldDelegate.zoomLevel ||
         !listEquals(foldingRegions, oldDelegate.foldingRegions) ||
         repaintNotifier.value != oldDelegate.repaintNotifier.value;
+
+    if (shouldRepaint) {
+      // Clear caches when repainting is needed
+      _cachedHighlightedSpans.clear();
+      _cachedTextPainters.clear();
+    }
+
+    return shouldRepaint;
   }
 
   void _calculateCharWidth() {
