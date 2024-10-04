@@ -21,31 +21,40 @@ class _EditorState extends State<Editor> {
   static double charWidth = 0;
   List<int> lineCounts = [0];
 
+  final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _verticalScrollController = ScrollController();
+
   @override
   Widget build(BuildContext context) {
     return Expanded(
-        child: SingleChildScrollView(
-      child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: GestureDetector(
-            behavior: HitTestBehavior.translucent,
-            onTapDown: (TapDownDetails details) => f.requestFocus(),
-            child: Focus(
-                focusNode: f,
-                onKeyEvent: (node, event) => handleInput(event),
-                child: SizedBox(
-                  height: max((lineHeight * rope.lineCount), 400).toDouble(),
-                  width: max(getMaxLineCount() * charWidth, 400) + charWidth,
-                  child: CustomPaint(
-                    painter: EditorPainter(
-                        // TODO find a better method than splitting the lines
-                        lines: rope.text.split('\n'),
-                        caretPosition: caretPosition,
-                        caretLine: caretLine),
-                  ),
-                )),
-          )),
-    ));
+        child: Scrollbar(
+            controller: _horizontalScrollController,
+            child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                controller: _horizontalScrollController,
+                child: SingleChildScrollView(
+                    scrollDirection: Axis.vertical,
+                    controller: _verticalScrollController,
+                    child: GestureDetector(
+                      behavior: HitTestBehavior.translucent,
+                      onTapDown: (TapDownDetails details) => f.requestFocus(),
+                      child: Focus(
+                          focusNode: f,
+                          onKeyEvent: (node, event) => handleInput(event),
+                          child: SizedBox(
+                            height: max((lineHeight * rope.lineCount), 400)
+                                .toDouble(),
+                            width: max(getMaxLineCount() * charWidth, 400) +
+                                charWidth,
+                            child: CustomPaint(
+                              painter: EditorPainter(
+                                  // TODO find a better method than splitting the lines
+                                  lines: rope.text.split('\n'),
+                                  caretPosition: caretPosition,
+                                  caretLine: caretLine),
+                            ),
+                          )),
+                    )))));
   }
 
   int getMaxLineCount() {
