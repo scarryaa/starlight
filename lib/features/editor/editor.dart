@@ -20,6 +20,8 @@ class _EditorState extends State<Editor> {
   static double lineHeight = 0;
   static double charWidth = 0;
   List<int> lineCounts = [0];
+  double viewPadding = 100;
+  double editorPadding = 5;
 
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
@@ -27,34 +29,44 @@ class _EditorState extends State<Editor> {
   @override
   Widget build(BuildContext context) {
     return Expanded(
-        child: Scrollbar(
-            controller: _horizontalScrollController,
-            child: SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
+        child: Padding(
+            padding: EdgeInsets.fromLTRB(editorPadding, editorPadding, 0, 0),
+            child: Scrollbar(
                 controller: _horizontalScrollController,
                 child: SingleChildScrollView(
-                    scrollDirection: Axis.vertical,
-                    controller: _verticalScrollController,
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.translucent,
-                      onTapDown: (TapDownDetails details) => f.requestFocus(),
-                      child: Focus(
-                          focusNode: f,
-                          onKeyEvent: (node, event) => handleInput(event),
-                          child: SizedBox(
-                            height: max((lineHeight * rope.lineCount), 400)
-                                .toDouble(),
-                            width: max(getMaxLineCount() * charWidth, 400) +
-                                charWidth,
-                            child: CustomPaint(
-                              painter: EditorPainter(
-                                  // TODO find a better method than splitting the lines
-                                  lines: rope.text.split('\n'),
-                                  caretPosition: caretPosition,
-                                  caretLine: caretLine),
-                            ),
-                          )),
-                    )))));
+                    scrollDirection: Axis.horizontal,
+                    controller: _horizontalScrollController,
+                    child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        controller: _verticalScrollController,
+                        child: GestureDetector(
+                          behavior: HitTestBehavior.translucent,
+                          onTapDown: (TapDownDetails details) =>
+                              f.requestFocus(),
+                          child: Focus(
+                              focusNode: f,
+                              onKeyEvent: (node, event) => handleInput(event),
+                              child: SizedBox(
+                                height: max(
+                                        (lineHeight * rope.lineCount) +
+                                            viewPadding -
+                                            editorPadding,
+                                        MediaQuery.of(context).size.height)
+                                    .toDouble(),
+                                width: max(
+                                    getMaxLineCount() * charWidth +
+                                        charWidth +
+                                        viewPadding,
+                                    MediaQuery.of(context).size.width),
+                                child: CustomPaint(
+                                  painter: EditorPainter(
+                                      // TODO find a better method than splitting the lines
+                                      lines: rope.text.split('\n'),
+                                      caretPosition: caretPosition,
+                                      caretLine: caretLine),
+                                ),
+                              )),
+                        ))))));
   }
 
   int getMaxLineCount() {
@@ -134,7 +146,6 @@ class _EditorState extends State<Editor> {
           moveCaretHorizontally(1);
           break;
       }
-      print(rope.text);
     });
   }
 
@@ -225,12 +236,12 @@ class EditorPainter extends CustomPainter {
       tp.paint(canvas, Offset(0, lineHeight * i));
     }
 
-    canvas.drawLine(
-        Offset(caretPosition.toDouble() * charWidth,
-            lineHeight * (caretLine + 1) - lineHeight),
-        Offset(
-            caretPosition.toDouble() * charWidth, lineHeight * (caretLine + 1)),
-        Paint()..color = Colors.blue);
+    canvas.drawRect(
+        Rect.fromLTWH(caretPosition.toDouble() * charWidth,
+            lineHeight * (caretLine + 1) - lineHeight, 2, lineHeight),
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.fill);
   }
 
   @override
