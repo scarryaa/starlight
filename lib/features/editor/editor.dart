@@ -17,30 +17,46 @@ class _EditorState extends State<Editor> {
   int absoluteCaretPosition = 0;
   var caretPosition = 0;
   var caretLine = 0;
+  static double lineHeight = 0;
+  static double charWidth = 0;
+  List<int> lineCounts = [0];
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-        child: GestureDetector(
-      behavior: HitTestBehavior.translucent,
-      onTapDown: (TapDownDetails details) => f.requestFocus(),
-      child: Focus(
-        focusNode: f,
-        onKeyEvent: (node, event) => handleInput(event),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            CustomPaint(
-              painter: EditorPainter(
-                  // TODO find a better method than splitting the lines
-                  lines: rope.text.split('\n'),
-                  caretPosition: caretPosition,
-                  caretLine: caretLine),
-            ),
-          ],
-        ),
-      ),
+        child: SingleChildScrollView(
+      child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTapDown: (TapDownDetails details) => f.requestFocus(),
+            child: Focus(
+                focusNode: f,
+                onKeyEvent: (node, event) => handleInput(event),
+                child: SizedBox(
+                  height: max((lineHeight * rope.lineCount), 400).toDouble(),
+                  width: max(getMaxLineCount() * charWidth, 400) + charWidth,
+                  child: CustomPaint(
+                    painter: EditorPainter(
+                        // TODO find a better method than splitting the lines
+                        lines: rope.text.split('\n'),
+                        caretPosition: caretPosition,
+                        caretLine: caretLine),
+                  ),
+                )),
+          )),
     ));
+  }
+
+  int getMaxLineCount() {
+    return lineCounts.reduce(max);
+  }
+
+  void updateLineCounts() {
+    lineCounts.clear();
+    for (int i = 0; i < rope.lineCount; i++) {
+      lineCounts.add(rope.getLineLength(i));
+    }
   }
 
   KeyEventResult handleInput(KeyEvent keyEvent) {
@@ -55,6 +71,8 @@ class _EditorState extends State<Editor> {
         rope.insert(keyEvent.character!, absoluteCaretPosition);
         caretPosition++;
         absoluteCaretPosition++;
+
+        updateLineCounts();
       });
 
       return KeyEventResult.handled;
@@ -81,6 +99,8 @@ class _EditorState extends State<Editor> {
               handleArrowKeys(LogicalKeyboardKey.arrowDown);
               break;
           }
+
+          updateLineCounts();
         });
         return KeyEventResult.handled;
       }
@@ -105,6 +125,7 @@ class _EditorState extends State<Editor> {
           moveCaretHorizontally(1);
           break;
       }
+      print(rope.text);
     });
   }
 
@@ -160,15 +181,18 @@ class EditorPainter extends CustomPainter {
   var lines = [];
   var caretPosition = 0;
   var caretLine = 0;
-  var widthOfChar = 0.0;
-  var lineHeight = 0.0;
+  var charWidth = 0.0;
+  double lineHeight = 0.0;
 
   EditorPainter(
       {required this.lines,
       required this.caretPosition,
       required this.caretLine}) {
-    widthOfChar = _measureCharWidth("w");
+    charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
+
+    _EditorState.lineHeight = lineHeight;
+    _EditorState.charWidth = charWidth;
   }
 
   @override
@@ -193,10 +217,10 @@ class EditorPainter extends CustomPainter {
     }
 
     canvas.drawLine(
-        Offset(caretPosition.toDouble() * widthOfChar,
+        Offset(caretPosition.toDouble() * charWidth,
             lineHeight * (caretLine + 1) - lineHeight),
-        Offset(caretPosition.toDouble() * widthOfChar,
-            lineHeight * (caretLine + 1)),
+        Offset(
+            caretPosition.toDouble() * charWidth, lineHeight * (caretLine + 1)),
         Paint()..color = Colors.blue);
   }
 
