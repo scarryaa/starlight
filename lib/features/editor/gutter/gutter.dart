@@ -14,7 +14,16 @@ class EditorGutter extends StatefulWidget {
       required this.editorPadding,
       required this.editorVerticalScrollController,
       required this.lineCount,
-      this.lineNumberColor = Colors.grey});
+      this.lineNumberColor = Colors.grey}) {
+    gutterScrollController.addListener(
+      () {
+        if (editorVerticalScrollController.offset !=
+            gutterScrollController.offset) {
+          editorVerticalScrollController.jumpTo(gutterScrollController.offset);
+        }
+      },
+    );
+  }
 
   @override
   State<StatefulWidget> createState() => _EditorGutterState();
@@ -32,16 +41,6 @@ class _EditorGutterState extends State<EditorGutter> {
             .jumpTo(widget.editorVerticalScrollController.offset);
       }
     });
-
-    widget.gutterScrollController.addListener(
-      () {
-        if (widget.editorVerticalScrollController.offset !=
-            widget.gutterScrollController.offset) {
-          widget.editorVerticalScrollController
-              .jumpTo(widget.gutterScrollController.offset);
-        }
-      },
-    );
   }
 
   @override
