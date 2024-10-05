@@ -1,8 +1,10 @@
 import 'dart:math';
 
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide VerticalDirection;
 import 'package:flutter/services.dart';
+import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
+import 'package:starlight/features/editor/services/scroll_manager.dart';
 
 class Editor extends StatefulWidget {
   const Editor({super.key});
@@ -22,9 +24,9 @@ class _EditorState extends State<Editor> {
   List<int> lineCounts = [0];
   double viewPadding = 100;
   double editorPadding = 5;
-
-  final ScrollController _horizontalScrollController = ScrollController();
-  final ScrollController _verticalScrollController = ScrollController();
+  HorizontalDirection horizontalDirection = HorizontalDirection.right;
+  VerticalDirection verticalDirection = VerticalDirection.down;
+  final ScrollManager _scrollManager = ScrollManager();
 
   @override
   Widget build(BuildContext context) {
@@ -32,13 +34,15 @@ class _EditorState extends State<Editor> {
         child: Padding(
             padding: EdgeInsets.fromLTRB(editorPadding, editorPadding, 0, 0),
             child: Scrollbar(
-                controller: _horizontalScrollController,
+                controller: _scrollManager.horizontalScrollController,
                 child: SingleChildScrollView(
+                    physics: const ClampingScrollPhysics(),
                     scrollDirection: Axis.horizontal,
-                    controller: _horizontalScrollController,
+                    controller: _scrollManager.horizontalScrollController,
                     child: SingleChildScrollView(
+                        physics: const ClampingScrollPhysics(),
                         scrollDirection: Axis.vertical,
-                        controller: _verticalScrollController,
+                        controller: _scrollManager.verticalScrollController,
                         child: GestureDetector(
                           behavior: HitTestBehavior.translucent,
                           onTapDown: (TapDownDetails details) =>
@@ -94,6 +98,17 @@ class _EditorState extends State<Editor> {
         absoluteCaretPosition++;
 
         updateLineCounts();
+        _scrollManager.scrollToCursor(
+            charWidth,
+            caretPosition,
+            lineHeight,
+            caretLine,
+            MediaQuery.of(context).size.width,
+            MediaQuery.of(context).size.height,
+            editorPadding,
+            viewPadding,
+            horizontalDirection,
+            verticalDirection);
       });
 
       return KeyEventResult.handled;
@@ -103,25 +118,44 @@ class _EditorState extends State<Editor> {
           switch (keyEvent.logicalKey) {
             case LogicalKeyboardKey.backspace:
               handleBackspaceKey();
+              horizontalDirection = HorizontalDirection.left;
+              verticalDirection = VerticalDirection.up;
               break;
             case LogicalKeyboardKey.enter:
               handleEnterKey();
+              verticalDirection = VerticalDirection.down;
               break;
             case LogicalKeyboardKey.arrowLeft:
               handleArrowKeys(LogicalKeyboardKey.arrowLeft);
+              horizontalDirection = HorizontalDirection.left;
               break;
             case LogicalKeyboardKey.arrowRight:
               handleArrowKeys(LogicalKeyboardKey.arrowRight);
+              horizontalDirection = HorizontalDirection.right;
+
               break;
             case LogicalKeyboardKey.arrowUp:
               handleArrowKeys(LogicalKeyboardKey.arrowUp);
+              verticalDirection = VerticalDirection.up;
               break;
             case LogicalKeyboardKey.arrowDown:
               handleArrowKeys(LogicalKeyboardKey.arrowDown);
+              verticalDirection = VerticalDirection.down;
               break;
           }
 
           updateLineCounts();
+          _scrollManager.scrollToCursor(
+              charWidth,
+              caretPosition,
+              lineHeight,
+              caretLine,
+              MediaQuery.of(context).size.width,
+              MediaQuery.of(context).size.height,
+              editorPadding,
+              viewPadding,
+              horizontalDirection,
+              verticalDirection);
         });
         return KeyEventResult.handled;
       }
