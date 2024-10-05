@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart' hide VerticalDirection;
 import 'package:starlight/features/editor/models/direction.dart';
 
-class ScrollManager {
+class EditorScrollManager {
   ScrollController horizontalScrollController = ScrollController();
   ScrollController verticalScrollController = ScrollController();
 
@@ -22,7 +22,7 @@ class ScrollManager {
       HorizontalDirection horizontalDirection,
       VerticalDirection verticalDirection) {
     var horizOffset = (charWidth * caretPosition) + editorPadding * 2.625;
-    var vertOffset = (lineHeight * caretLine) + editorPadding * 4;
+    var vertOffset = (lineHeight * caretLine) + editorPadding * 3;
     var offset = Offset(horizOffset, vertOffset);
 
     // Horizontal scroll (right)

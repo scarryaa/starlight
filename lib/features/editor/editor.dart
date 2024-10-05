@@ -2,9 +2,10 @@ import 'dart:math';
 
 import 'package:flutter/material.dart' hide VerticalDirection;
 import 'package:flutter/services.dart';
+import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
-import 'package:starlight/features/editor/services/scroll_manager.dart';
+import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 
 class Editor extends StatefulWidget {
   const Editor({super.key});
@@ -26,55 +27,68 @@ class _EditorState extends State<Editor> {
   double editorPadding = 5;
   HorizontalDirection horizontalDirection = HorizontalDirection.right;
   VerticalDirection verticalDirection = VerticalDirection.down;
-  final ScrollManager _scrollManager = ScrollManager();
+  final EditorScrollManager _scrollManager = EditorScrollManager();
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-        child: Padding(
-            padding: EdgeInsets.fromLTRB(editorPadding, editorPadding, 0, 0),
-            child: Scrollbar(
-                controller: _scrollManager.horizontalScrollController,
-                child: SingleChildScrollView(
-                    physics: const ClampingScrollPhysics(),
-                    scrollDirection: Axis.horizontal,
-                    controller: _scrollManager.horizontalScrollController,
-                    child: SingleChildScrollView(
-                        physics: const ClampingScrollPhysics(),
-                        scrollDirection: Axis.vertical,
-                        controller: _scrollManager.verticalScrollController,
-                        child: GestureDetector(
-                          behavior: HitTestBehavior.translucent,
-                          onTapDown: (TapDownDetails details) =>
-                              f.requestFocus(),
-                          child: Focus(
-                              focusNode: f,
-                              onKeyEvent: (node, event) => handleInput(event),
-                              child: SizedBox(
-                                height: max(
-                                        (lineHeight * rope.lineCount) +
-                                            viewPadding -
-                                            editorPadding,
-                                        MediaQuery.of(context).size.height)
-                                    .toDouble(),
-                                width: max(
-                                    getMaxLineCount() * charWidth +
-                                        charWidth +
-                                        viewPadding,
-                                    MediaQuery.of(context).size.width),
-                                child: CustomPaint(
-                                  painter: EditorPainter(
-                                      // TODO find a better method than splitting the lines
-                                      lines: rope.text.split('\n'),
-                                      caretPosition: caretPosition,
-                                      caretLine: caretLine),
-                                ),
-                              )),
-                        ))))));
+        child: Row(children: [
+      EditorGutter(
+        height: max((lineHeight * rope.lineCount) - editorPadding + viewPadding,
+            MediaQuery.of(context).size.height),
+        editorVerticalScrollController: _scrollManager.verticalScrollController,
+        lineCount: rope.lineCount,
+        editorPadding: editorPadding,
+      ),
+      Expanded(
+          child: Scrollbar(
+              controller: _scrollManager.horizontalScrollController,
+              child: SingleChildScrollView(
+                  physics: const ClampingScrollPhysics(),
+                  scrollDirection: Axis.horizontal,
+                  controller: _scrollManager.horizontalScrollController,
+                  child: SingleChildScrollView(
+                      physics: const ClampingScrollPhysics(),
+                      scrollDirection: Axis.vertical,
+                      controller: _scrollManager.verticalScrollController,
+                      child: SizedBox(
+                          height: max(
+                                  (lineHeight * rope.lineCount) +
+                                      viewPadding -
+                                      editorPadding,
+                                  MediaQuery.of(context).size.height)
+                              .toDouble(),
+                          width: max(
+                              getMaxLineCount() * charWidth +
+                                  charWidth +
+                                  viewPadding,
+                              MediaQuery.of(context).size.width),
+                          child: Padding(
+                            padding: EdgeInsets.fromLTRB(
+                                editorPadding, editorPadding, 0, 0),
+                            child: GestureDetector(
+                                behavior: HitTestBehavior.translucent,
+                                onTapDown: (TapDownDetails details) =>
+                                    f.requestFocus(),
+                                child: Focus(
+                                  focusNode: f,
+                                  onKeyEvent: (node, event) =>
+                                      handleInput(event),
+                                  child: CustomPaint(
+                                    painter: EditorPainter(
+                                        // TODO find a better method than splitting the lines
+                                        lines: rope.text.split('\n'),
+                                        caretPosition: caretPosition,
+                                        caretLine: caretLine),
+                                  ),
+                                )),
+                          ))))))
+    ]));
   }
 
   int getMaxLineCount() {
-    return lineCounts.reduce(max);
+    if (lineCounts.isNotEmpty) return lineCounts.reduce(max);
+    return 0;
   }
 
   void updateLineCounts() {
@@ -184,18 +198,23 @@ class _EditorState extends State<Editor> {
   }
 
   void handleBackspaceKey() {
-    if (rope.text.isNotEmpty) {
-      if (rope.text[absoluteCaretPosition - 1] == '\n') {
-        caretPosition =
-            rope.getLineLength(caretLine == 0 ? caretLine : caretLine - 1);
-        rope.delete(absoluteCaretPosition - 1);
-        caretLine--;
-        absoluteCaretPosition =
-            caretPosition + rope.findClosestLineStart(caretLine);
-      } else {
-        rope.delete(absoluteCaretPosition - 1);
-        caretPosition--;
-        absoluteCaretPosition--;
+    if (caretPosition > 0 || caretLine != 0) {
+      if (rope.text.isNotEmpty) {
+        if (rope.text[absoluteCaretPosition - 1] == '\n' &&
+            absoluteCaretPosition != 0) {
+          caretPosition =
+              rope.getLineLength(caretLine == 0 ? caretLine : caretLine - 1);
+          rope.delete(absoluteCaretPosition - 1);
+          caretLine--;
+          absoluteCaretPosition = caretPosition +
+              rope.findClosestLineStart(caretLine) +
+              1 -
+              (caretLine == 0 ? 1 : 0);
+        } else {
+          rope.delete(absoluteCaretPosition - 1);
+          caretPosition--;
+          absoluteCaretPosition--;
+        }
       }
     }
   }

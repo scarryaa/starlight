@@ -50,13 +50,13 @@ class Rope {
     Node? foundNode = findNodeFromCharIndex(position,
         updateWeights: true, weightToAdd: 1, subtract: true);
     if (foundNode == null) throw Exception("Node to delete at not found.");
+    int closestLineStart = _findClosestLineStartFromCharIndex(position);
+    int closestLineStartIndex = lineStarts.indexOf(closestLineStart);
 
     // Remove corresponding line start if needed
     if (foundNode.text.substring(position, position + 1) == '\n') {
       lineStarts.remove(position);
     } else {
-      int closestLineStart = _findClosestLineStartFromCharIndex(position);
-      int closestLineStartIndex = lineStarts.indexOf(closestLineStart);
       for (int i = closestLineStartIndex + 1; i < lineStarts.length; i++) {
         lineStarts[i]--;
       }
