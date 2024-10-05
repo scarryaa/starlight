@@ -44,15 +44,20 @@ class ScrollManager {
     }
 
     // Vertical scroll (down)
-    if (vertOffset > screenHeight &&
+    if (vertOffset - screenHeight + viewPadding >
+            verticalScrollController.offset &&
         verticalDirection == VerticalDirection.down) {
-      verticalScrollController.jumpTo(offset.dy - screenHeight + viewPadding);
+      verticalScrollController
+          .jumpTo(verticalScrollController.offset + lineHeight);
     }
 
     // (up)
-    if (vertOffset > screenHeight - verticalScrollController.offset &&
+    if (vertOffset <
+            verticalScrollController.offset + lineHeight + viewPadding &&
+        verticalScrollController.offset > 0 &&
         verticalDirection == VerticalDirection.up) {
-      verticalScrollController.jumpTo(offset.dy - screenHeight + viewPadding);
+      verticalScrollController
+          .jumpTo(verticalScrollController.offset - lineHeight);
     }
   }
 }
