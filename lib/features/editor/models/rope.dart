@@ -23,14 +23,14 @@ class Rope {
         foundNode.text.substring(position, foundNode.text.length);
 
     // Update line starts if needed
+    int closestLineStart = _findClosestLineStartFromCharIndex(position);
+    int closestLineStartIndex = lineStarts.indexOf(closestLineStart);
+    for (int i = closestLineStartIndex + 1; i < lineStarts.length; i++) {
+      lineStarts[i]++;
+    }
+
     if (s == '\n') {
-      lineStarts.add(position);
-    } else {
-      int closestLineStart = _findClosestLineStartFromCharIndex(position);
-      int closestLineStartIndex = lineStarts.indexOf(closestLineStart);
-      for (int i = closestLineStartIndex + 1; i < lineStarts.length; i++) {
-        lineStarts[i]++;
-      }
+      lineStarts.insert(closestLineStartIndex + 1, position);
     }
 
     if (foundNode.weight > splitThreshold) {

@@ -224,7 +224,7 @@ class _EditorState extends State<Editor> {
 
       int targetPosition = min(
           targetLineStart + caretPosition, targetLineStart + targetLineLength);
-      absoluteCaretPosition = targetPosition;
+      absoluteCaretPosition = targetPosition + 1;
       caretLine = targetLine;
       caretPosition = targetPosition - targetLineStart;
     }
