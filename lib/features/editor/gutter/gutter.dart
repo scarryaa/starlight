@@ -65,6 +65,8 @@ class _EditorGutterState extends State<EditorGutter> {
                                 return Center(
                                     child: Text(
                                         style: TextStyle(
+                                            fontFamily: "Spot Mono",
+                                            fontSize: 14,
                                             height: 1.4,
                                             color: widget.lineNumberColor),
                                         (index + 1).toString()));

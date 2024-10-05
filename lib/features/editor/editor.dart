@@ -200,8 +200,7 @@ class _EditorState extends State<Editor> {
   void handleBackspaceKey() {
     if (caretPosition > 0 || caretLine != 0) {
       if (rope.text.isNotEmpty) {
-        if (rope.text[absoluteCaretPosition - 1] == '\n' &&
-            absoluteCaretPosition != 0) {
+        if (rope.text[absoluteCaretPosition - 1] == '\n') {
           caretPosition =
               rope.getLineLength(caretLine == 0 ? caretLine : caretLine - 1);
           rope.delete(absoluteCaretPosition - 1);
