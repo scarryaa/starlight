@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:starlight/features/editor/editor.dart';
+import 'package:starlight/features/file_explorer/file_explorer.dart';
 
 void main() {
   runApp(const MyApp());
@@ -35,9 +36,9 @@ class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Column(
+      body: Row(
         mainAxisAlignment: MainAxisAlignment.start,
-        children: <Widget>[Editor()],
+        children: <Widget>[FileExplorer(initialDirectory: ''), Editor()],
       ),
     );
   }

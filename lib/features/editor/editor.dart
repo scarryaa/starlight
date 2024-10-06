@@ -185,8 +185,8 @@ class _EditorState extends State<Editor> {
         absoluteCaretPosition++;
 
         updateLineCounts();
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          _ensureCursorVisible();
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await _ensureCursorVisible();
         });
       });
       return KeyEventResult.handled;
@@ -223,8 +223,8 @@ class _EditorState extends State<Editor> {
           }
 
           updateLineCounts();
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            _ensureCursorVisible();
+          WidgetsBinding.instance.addPostFrameCallback((_) async {
+            await _ensureCursorVisible();
           });
         });
         return KeyEventResult.handled;
@@ -290,8 +290,8 @@ class _EditorState extends State<Editor> {
       updateLineCounts();
     });
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureCursorVisible();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await _ensureCursorVisible();
     });
   }
 

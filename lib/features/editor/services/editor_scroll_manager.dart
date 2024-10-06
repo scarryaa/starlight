@@ -21,7 +21,7 @@ class EditorScrollManager {
       double viewPadding,
       HorizontalDirection horizontalDirection,
       VerticalDirection verticalDirection) {
-    var horizOffset = (charWidth * caretPosition) + editorPadding * 2.625;
+    var horizOffset = (charWidth * caretPosition);
 
     if (horizOffset > horizontalScrollController.offset &&
         horizontalDirection == HorizontalDirection.right &&
