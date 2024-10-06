@@ -34,70 +34,116 @@ class _EditorState extends State<Editor> {
   int selectionAnchor = -1;
   int selectionFocus = -1;
 
+  late ScrollController _verticalController;
+  late ScrollController _horizontalController;
+
   @override
   void initState() {
     super.initState();
+    _verticalController = _scrollManager.verticalScrollController;
+    _horizontalController = _scrollManager.horizontalScrollController;
     _scrollManager.preventOverscroll(editorPadding, viewPadding);
+  }
+
+  @override
+  void dispose() {
+    _verticalController.dispose();
+    _horizontalController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Expanded(
-        child: Row(children: [
-      EditorGutter(
-        height: max((lineHeight * rope.lineCount) - editorPadding + viewPadding,
-            MediaQuery.of(context).size.height),
-        editorVerticalScrollController: _scrollManager.verticalScrollController,
-        lineCount: rope.lineCount,
-        editorPadding: editorPadding,
-      ),
-      Expanded(
-          child: Scrollbar(
-              controller: _scrollManager.horizontalScrollController,
-              child: SingleChildScrollView(
-                  physics: _scrollManager.clampingScrollPhysics,
-                  scrollDirection: Axis.horizontal,
-                  controller: _scrollManager.horizontalScrollController,
-                  child: SingleChildScrollView(
-                      physics: _scrollManager.clampingScrollPhysics,
-                      scrollDirection: Axis.vertical,
-                      controller: _scrollManager.verticalScrollController,
-                      child: SizedBox(
-                          height: max(
-                                  (lineHeight * rope.lineCount) +
-                                      viewPadding -
-                                      editorPadding,
-                                  MediaQuery.of(context).size.height)
-                              .toDouble(),
-                          width: max(
-                              getMaxLineCount() * charWidth +
-                                  charWidth +
-                                  viewPadding,
-                              MediaQuery.of(context).size.width),
-                          child: Padding(
-                            padding: EdgeInsets.fromLTRB(
-                                editorPadding, editorPadding, 0, 0),
-                            child: GestureDetector(
-                                behavior: HitTestBehavior.translucent,
-                                onTapDown: (TapDownDetails details) =>
-                                    f.requestFocus(),
-                                child: Focus(
-                                    focusNode: f,
-                                    onKeyEvent: (node, event) =>
-                                        handleInput(event),
-                                    child: CustomPaint(
-                                      painter: EditorPainter(
-                                          // TODO find a better method than splitting the lines
+      child: Row(
+        children: [
+          EditorGutter(
+            height: max(
+                (lineHeight * rope.lineCount) - editorPadding + viewPadding,
+                MediaQuery.of(context).size.height),
+            editorVerticalScrollController: _verticalController,
+            lineCount: rope.lineCount,
+            editorPadding: editorPadding,
+          ),
+          Expanded(
+            child: GestureDetector(
+              onTapDown: (TapDownDetails details) => f.requestFocus(),
+              behavior: HitTestBehavior.translucent,
+              child: Focus(
+                focusNode: f,
+                onKeyEvent: (node, event) => handleInput(event),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Stack(
+                      children: [
+                        Positioned.fill(
+                          child: RawScrollbar(
+                            controller: _verticalController,
+                            thumbVisibility: true,
+                            thickness: 8,
+                            radius: const Radius.circular(4),
+                            thumbColor: Colors.grey.withOpacity(0.5),
+                            minThumbLength: 30,
+                            child: RawScrollbar(
+                              controller: _horizontalController,
+                              thumbVisibility: true,
+                              thickness: 8,
+                              radius: const Radius.circular(4),
+                              thumbColor: Colors.grey.withOpacity(0.5),
+                              minThumbLength: 30,
+                              notificationPredicate: (notification) =>
+                                  notification.depth == 1,
+                              child: SingleChildScrollView(
+                                physics: _scrollManager.clampingScrollPhysics,
+                                controller: _verticalController,
+                                scrollDirection: Axis.vertical,
+                                child: SingleChildScrollView(
+                                  physics: _scrollManager.clampingScrollPhysics,
+                                  controller: _horizontalController,
+                                  scrollDirection: Axis.horizontal,
+                                  child: SizedBox(
+                                    width: max(
+                                        getMaxLineCount() * charWidth +
+                                            charWidth +
+                                            viewPadding,
+                                        constraints.maxWidth),
+                                    height: max(
+                                        (lineHeight * rope.lineCount) +
+                                            viewPadding -
+                                            editorPadding,
+                                        constraints.maxHeight),
+                                    child: Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                          editorPadding, editorPadding, 0, 0),
+                                      child: CustomPaint(
+                                        painter: EditorPainter(
                                           lines: rope.text.split('\n'),
                                           caretPosition: caretPosition,
                                           caretLine: caretLine,
                                           selectionStart: selectionStart,
                                           selectionEnd: selectionEnd,
                                           lineStarts: rope.lineStarts,
-                                          text: rope.text),
-                                    ))),
-                          ))))))
-    ]));
+                                          text: rope.text,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+          // TODO: Implement Minimap widget
+        ],
+      ),
+    );
   }
 
   int getMaxLineCount() {

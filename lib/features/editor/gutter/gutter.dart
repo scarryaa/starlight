@@ -8,6 +8,8 @@ class EditorGutter extends StatefulWidget {
   double editorPadding = 0;
   Color? lineNumberColor;
 
+  static double get width => 40;
+
   EditorGutter(
       {super.key,
       required this.height,
@@ -53,7 +55,7 @@ class _EditorGutterState extends State<EditorGutter> {
             child: SingleChildScrollView(
                 controller: widget.gutterScrollController,
                 child: SizedBox(
-                    width: 40,
+                    width: EditorGutter.width,
                     height: widget.height,
                     child: Padding(
                         padding: EdgeInsets.fromLTRB(
