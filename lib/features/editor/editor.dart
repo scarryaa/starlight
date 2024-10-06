@@ -202,7 +202,7 @@ class _EditorState extends State<Editor> {
     }
   }
 
-  void _handleCtrlKeys(String key) {
+  Future<void> _handleCtrlKeys(String key) async {
     switch (key) {
       case 'a':
         // Select all
@@ -211,12 +211,71 @@ class _EditorState extends State<Editor> {
         updateSelection();
         break;
       case 'v':
+        await pasteText();
         break;
       case 'c':
+        copyText();
         break;
       case 'x':
+        cutText();
         break;
     }
+  }
+
+  Future<void> pasteText() async {
+    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+    final textToBePasted = clipboardData?.text;
+
+    if (textToBePasted == null || textToBePasted.isEmpty) {
+      return; // Nothing to paste
+    }
+
+    if (hasSelection()) {
+      deleteSelection();
+    }
+
+    rope.insert(textToBePasted, absoluteCaretPosition);
+    absoluteCaretPosition += textToBePasted.length;
+    int line = rope.findLineForPosition(absoluteCaretPosition);
+    int caretAdjustment =
+        absoluteCaretPosition - rope.findClosestLineStart(line);
+
+    caretLine = line;
+    caretPosition = caretAdjustment;
+
+    // Clear selection after paste
+    selectionStart = selectionEnd = absoluteCaretPosition;
+
+    updateLineCounts();
+    _scrollManager.scrollToCursor(
+        charWidth,
+        caretPosition,
+        lineHeight,
+        caretLine,
+        MediaQuery.of(context).size.width,
+        MediaQuery.of(context).size.height,
+        editorPadding,
+        viewPadding,
+        horizontalDirection,
+        verticalDirection);
+  }
+
+  void copyText() {
+    if (hasSelection()) {
+      Clipboard.setData(ClipboardData(
+          text: (rope.text.substring(selectionStart, selectionEnd))));
+    } else {
+      // Copy line
+      int closestLineStart = rope.findClosestLineStart(caretLine);
+      int lineEnd = rope.getLineLength(caretLine) + closestLineStart;
+      Clipboard.setData(ClipboardData(
+          text: (rope.text.substring(closestLineStart, lineEnd))));
+    }
+  }
+
+  void cutText() {
+    copyText();
+    deleteSelection();
   }
 
   void handleArrowKeys(LogicalKeyboardKey key, bool isShiftPressed) {
@@ -460,7 +519,8 @@ class EditorPainter extends CustomPainter {
     return oldDelegate.lines != lines ||
         oldDelegate.caretPosition != caretPosition ||
         oldDelegate.selectionStart != selectionStart ||
-        oldDelegate.selectionEnd != selectionEnd;
+        oldDelegate.selectionEnd != selectionEnd ||
+        oldDelegate.caretLine != caretLine;
   }
 
   double _measureCharWidth(String s) {
