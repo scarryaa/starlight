@@ -24,6 +24,12 @@ class Rope {
     }
   }
 
+  int findLineForPosition(int position) {
+    if (length == 0) return 0;
+    int line = lineStarts.indexWhere((start) => start > position) - 1;
+    return line >= 0 ? line : lineStarts.length - 1;
+  }
+
   // Getters
   get text => _root.text;
   get lineCount => lineStarts.length;

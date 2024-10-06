@@ -31,6 +31,8 @@ class _EditorState extends State<Editor> {
   final EditorScrollManager _scrollManager = EditorScrollManager();
   int selectionStart = -1;
   int selectionEnd = -1;
+  int selectionAnchor = -1;
+  int selectionFocus = -1;
 
   @override
   Widget build(BuildContext context) {
@@ -109,6 +111,7 @@ class _EditorState extends State<Editor> {
     bool isKeyRepeatEvent = keyEvent is KeyRepeatEvent;
     bool isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
     bool isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
+    bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
 
     if ((isCtrlPressed && !Platform.isMacOS) ||
         (Platform.isMacOS && isMetaPressed) && keyEvent.character != null) {
@@ -125,7 +128,7 @@ class _EditorState extends State<Editor> {
       setState(() {
         // Delete selection if present
         if (selectionStart != selectionEnd) {
-          _deleteSelection();
+          deleteSelection();
         }
 
         rope.insert(keyEvent.character!, absoluteCaretPosition);
@@ -161,20 +164,20 @@ class _EditorState extends State<Editor> {
               verticalDirection = VerticalDirection.down;
               break;
             case LogicalKeyboardKey.arrowLeft:
-              handleArrowKeys(LogicalKeyboardKey.arrowLeft);
+              handleArrowKeys(LogicalKeyboardKey.arrowLeft, isShiftPressed);
               horizontalDirection = HorizontalDirection.left;
               break;
             case LogicalKeyboardKey.arrowRight:
-              handleArrowKeys(LogicalKeyboardKey.arrowRight);
+              handleArrowKeys(LogicalKeyboardKey.arrowRight, isShiftPressed);
               horizontalDirection = HorizontalDirection.right;
 
               break;
             case LogicalKeyboardKey.arrowUp:
-              handleArrowKeys(LogicalKeyboardKey.arrowUp);
+              handleArrowKeys(LogicalKeyboardKey.arrowUp, isShiftPressed);
               verticalDirection = VerticalDirection.up;
               break;
             case LogicalKeyboardKey.arrowDown:
-              handleArrowKeys(LogicalKeyboardKey.arrowDown);
+              handleArrowKeys(LogicalKeyboardKey.arrowDown, isShiftPressed);
               verticalDirection = VerticalDirection.down;
               break;
           }
@@ -199,49 +202,13 @@ class _EditorState extends State<Editor> {
     }
   }
 
-  void _deleteSelection() {
-    if (selectionStart == -1 ||
-        selectionEnd == -1 ||
-        selectionStart == selectionEnd) {
-      return;
-    }
-
-    int start = min(selectionStart, selectionEnd);
-    int end = max(selectionStart, selectionEnd);
-
-    rope.delete(start, end - start);
-
-    caretPosition = start;
-    absoluteCaretPosition = start;
-
-    caretLine = rope.findClosestLineStart(caretPosition);
-
-    selectionStart = selectionEnd = -1;
-
-    updateLineCounts();
-
-    _scrollManager.scrollToCursor(
-        charWidth,
-        caretPosition,
-        lineHeight,
-        caretLine,
-        MediaQuery.of(context).size.width,
-        MediaQuery.of(context).size.height,
-        editorPadding,
-        viewPadding,
-        horizontalDirection,
-        verticalDirection);
-
-    // Force a repaint
-    setState(() {});
-  }
-
   void _handleCtrlKeys(String key) {
     switch (key) {
       case 'a':
         // Select all
-        selectionStart = 0;
-        selectionEnd = rope.length - 1;
+        selectionAnchor = 0;
+        selectionFocus = rope.length - 1;
+        updateSelection();
         break;
       case 'v':
         break;
@@ -252,53 +219,78 @@ class _EditorState extends State<Editor> {
     }
   }
 
-  void handleArrowKeys(LogicalKeyboardKey key) {
+  void handleArrowKeys(LogicalKeyboardKey key, bool isShiftPressed) {
     setState(() {
+      int oldCaretPosition = absoluteCaretPosition;
+
       switch (key) {
         case LogicalKeyboardKey.arrowDown:
           moveCaretVertically(1);
-          selectionStart = selectionEnd = -1;
           break;
         case LogicalKeyboardKey.arrowUp:
-          selectionStart = selectionEnd = -1;
           moveCaretVertically(-1);
           break;
         case LogicalKeyboardKey.arrowLeft:
-          selectionStart = selectionEnd = -1;
           moveCaretHorizontally(-1);
           break;
         case LogicalKeyboardKey.arrowRight:
-          selectionStart = selectionEnd = -1;
           moveCaretHorizontally(1);
           break;
       }
+
+      if (isShiftPressed) {
+        if (selectionAnchor == -1) {
+          selectionAnchor = oldCaretPosition;
+        }
+        selectionFocus = absoluteCaretPosition;
+      } else {
+        clearSelection();
+      }
+
+      updateSelection();
     });
   }
 
-  void handleBackspaceKey() {
-    if (absoluteCaretPosition > 0) {
-      // Delete selection if present
-      if (selectionStart != selectionEnd) {
-        _deleteSelection();
-        return;
-      }
-    }
-    {
-      if (caretPosition == 0 && caretLine > 0) {
-        caretLine--;
-        caretPosition = rope.getLineLength(caretLine);
-        rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
-        absoluteCaretPosition--;
-      } else if (caretPosition > 0) {
-        rope.delete(absoluteCaretPosition - 1, 1);
-        caretPosition--;
-        absoluteCaretPosition--;
-      }
+  void clearSelection() {
+    selectionAnchor = -1;
+    selectionFocus = -1;
+    selectionStart = -1;
+    selectionEnd = -1;
+  }
 
-      caretLine = max(0, caretLine);
-      caretPosition = max(0, min(caretPosition, rope.getLineLength(caretLine)));
-      absoluteCaretPosition =
-          max(0, min(absoluteCaretPosition, rope.length - 1));
+  void updateSelection() {
+    if (selectionAnchor != -1 && selectionFocus != -1) {
+      selectionStart = min(selectionAnchor, selectionFocus);
+      selectionEnd = max(selectionAnchor, selectionFocus);
+    } else {
+      selectionStart = selectionEnd = -1;
+    }
+  }
+
+  void handleBackspaceKey() {
+    if (hasSelection()) {
+      deleteSelection();
+    }
+
+    if (absoluteCaretPosition > 0) {
+      {
+        if (caretPosition == 0 && caretLine > 0) {
+          caretLine--;
+          caretPosition = rope.getLineLength(caretLine);
+          rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
+          absoluteCaretPosition--;
+        } else if (caretPosition > 0) {
+          rope.delete(absoluteCaretPosition - 1, 1);
+          caretPosition--;
+          absoluteCaretPosition--;
+        }
+
+        caretLine = max(0, caretLine);
+        caretPosition =
+            max(0, min(caretPosition, rope.getLineLength(caretLine)));
+        absoluteCaretPosition =
+            max(0, min(absoluteCaretPosition, rope.length - 1));
+      }
     }
   }
 
@@ -329,6 +321,7 @@ class _EditorState extends State<Editor> {
     }
 
     absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length - 1));
+    moveSelectionHorizontally(absoluteCaretPosition);
   }
 
   void moveCaretVertically(int amount) {
@@ -345,6 +338,61 @@ class _EditorState extends State<Editor> {
 
       caretLine = targetLine;
       absoluteCaretPosition = targetLineStart + caretPosition;
+      moveSelectionVertically(absoluteCaretPosition);
+    }
+  }
+
+  bool hasSelection() {
+    return selectionStart != -1 &&
+        selectionEnd != -1 &&
+        selectionStart != selectionEnd;
+  }
+
+  void deleteSelection() {
+    if (hasSelection()) {
+      int start = min(selectionStart, selectionEnd);
+      int end = max(selectionStart, selectionEnd);
+      int length = end - start;
+
+      rope.delete(start, length);
+      absoluteCaretPosition = start;
+      updateCaretPosition();
+      clearSelection();
+    }
+  }
+
+  void updateCaretPosition() {
+    caretLine = rope.findLineForPosition(absoluteCaretPosition);
+    int lineStart = rope.findClosestLineStart(caretLine);
+    caretPosition = absoluteCaretPosition - lineStart;
+  }
+
+  void moveSelectionHorizontally(int target) {
+    if (target > 0) {
+      selectionEnd = target;
+      if (selectionStart == -1) {
+        selectionStart = target;
+      }
+    } else {
+      selectionStart = target;
+    }
+    normalizeSelection();
+  }
+
+  void moveSelectionVertically(int target) {
+    if (target > 0) {
+      selectionEnd = target;
+    } else {
+      selectionStart = target;
+    }
+    normalizeSelection();
+  }
+
+  void normalizeSelection() {
+    if (selectionStart > selectionEnd) {
+      int temp = selectionStart;
+      selectionStart = selectionEnd;
+      selectionEnd = temp;
     }
   }
 }
