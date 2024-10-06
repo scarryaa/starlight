@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide VerticalDirection;
@@ -28,6 +29,8 @@ class _EditorState extends State<Editor> {
   HorizontalDirection horizontalDirection = HorizontalDirection.right;
   VerticalDirection verticalDirection = VerticalDirection.down;
   final EditorScrollManager _scrollManager = EditorScrollManager();
+  int selectionStart = -1;
+  int selectionEnd = -1;
 
   @override
   Widget build(BuildContext context) {
@@ -71,17 +74,20 @@ class _EditorState extends State<Editor> {
                                 onTapDown: (TapDownDetails details) =>
                                     f.requestFocus(),
                                 child: Focus(
-                                  focusNode: f,
-                                  onKeyEvent: (node, event) =>
-                                      handleInput(event),
-                                  child: CustomPaint(
-                                    painter: EditorPainter(
-                                        // TODO find a better method than splitting the lines
-                                        lines: rope.text.split('\n'),
-                                        caretPosition: caretPosition,
-                                        caretLine: caretLine),
-                                  ),
-                                )),
+                                    focusNode: f,
+                                    onKeyEvent: (node, event) =>
+                                        handleInput(event),
+                                    child: CustomPaint(
+                                      painter: EditorPainter(
+                                          // TODO find a better method than splitting the lines
+                                          lines: rope.text.split('\n'),
+                                          caretPosition: caretPosition,
+                                          caretLine: caretLine,
+                                          selectionStart: selectionStart,
+                                          selectionEnd: selectionEnd,
+                                          lineStarts: rope.lineStarts,
+                                          text: rope.text),
+                                    ))),
                           ))))))
     ]));
   }
@@ -99,14 +105,29 @@ class _EditorState extends State<Editor> {
   }
 
   KeyEventResult handleInput(KeyEvent keyEvent) {
-    var isKeyDownEvent = keyEvent is KeyDownEvent;
-    var isKeyRepeatEvent = keyEvent is KeyRepeatEvent;
+    bool isKeyDownEvent = keyEvent is KeyDownEvent;
+    bool isKeyRepeatEvent = keyEvent is KeyRepeatEvent;
+    bool isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
+    bool isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
+
+    if ((isCtrlPressed && !Platform.isMacOS) ||
+        (Platform.isMacOS && isMetaPressed) && keyEvent.character != null) {
+      setState(() {
+        _handleCtrlKeys(keyEvent.character!);
+      });
+      return KeyEventResult.handled;
+    }
 
     if ((isKeyDownEvent || isKeyRepeatEvent) &&
         keyEvent.character != null &&
         keyEvent.logicalKey != LogicalKeyboardKey.backspace &&
         keyEvent.logicalKey != LogicalKeyboardKey.enter) {
       setState(() {
+        // Delete selection if present
+        if (selectionStart != selectionEnd) {
+          _deleteSelection();
+        }
+
         rope.insert(keyEvent.character!, absoluteCaretPosition);
         caretPosition++;
         absoluteCaretPosition++;
@@ -178,19 +199,76 @@ class _EditorState extends State<Editor> {
     }
   }
 
+  void _deleteSelection() {
+    if (selectionStart == -1 ||
+        selectionEnd == -1 ||
+        selectionStart == selectionEnd) {
+      return;
+    }
+
+    int start = min(selectionStart, selectionEnd);
+    int end = max(selectionStart, selectionEnd);
+
+    rope.delete(start, end - start);
+
+    caretPosition = start;
+    absoluteCaretPosition = start;
+
+    caretLine = rope.findClosestLineStart(caretPosition);
+
+    selectionStart = selectionEnd = -1;
+
+    updateLineCounts();
+
+    _scrollManager.scrollToCursor(
+        charWidth,
+        caretPosition,
+        lineHeight,
+        caretLine,
+        MediaQuery.of(context).size.width,
+        MediaQuery.of(context).size.height,
+        editorPadding,
+        viewPadding,
+        horizontalDirection,
+        verticalDirection);
+
+    // Force a repaint
+    setState(() {});
+  }
+
+  void _handleCtrlKeys(String key) {
+    switch (key) {
+      case 'a':
+        // Select all
+        selectionStart = 0;
+        selectionEnd = rope.length - 1;
+        break;
+      case 'v':
+        break;
+      case 'c':
+        break;
+      case 'x':
+        break;
+    }
+  }
+
   void handleArrowKeys(LogicalKeyboardKey key) {
     setState(() {
       switch (key) {
         case LogicalKeyboardKey.arrowDown:
           moveCaretVertically(1);
+          selectionStart = selectionEnd = -1;
           break;
         case LogicalKeyboardKey.arrowUp:
+          selectionStart = selectionEnd = -1;
           moveCaretVertically(-1);
           break;
         case LogicalKeyboardKey.arrowLeft:
+          selectionStart = selectionEnd = -1;
           moveCaretHorizontally(-1);
           break;
         case LogicalKeyboardKey.arrowRight:
+          selectionStart = selectionEnd = -1;
           moveCaretHorizontally(1);
           break;
       }
@@ -199,13 +277,20 @@ class _EditorState extends State<Editor> {
 
   void handleBackspaceKey() {
     if (absoluteCaretPosition > 0) {
+      // Delete selection if present
+      if (selectionStart != selectionEnd) {
+        _deleteSelection();
+        return;
+      }
+    }
+    {
       if (caretPosition == 0 && caretLine > 0) {
         caretLine--;
         caretPosition = rope.getLineLength(caretLine);
-        rope.delete(absoluteCaretPosition - 1); // Delete the newline
+        rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
         absoluteCaretPosition--;
       } else if (caretPosition > 0) {
-        rope.delete(absoluteCaretPosition - 1);
+        rope.delete(absoluteCaretPosition - 1, 1);
         caretPosition--;
         absoluteCaretPosition--;
       }
@@ -270,11 +355,19 @@ class EditorPainter extends CustomPainter {
   var caretLine = 0;
   var charWidth = 0.0;
   double lineHeight = 0.0;
+  int selectionStart = 0;
+  int selectionEnd = 0;
+  List<int> lineStarts = [];
+  String text = "";
 
   EditorPainter(
       {required this.lines,
       required this.caretPosition,
-      required this.caretLine}) {
+      required this.caretLine,
+      required this.selectionStart,
+      required this.selectionEnd,
+      required this.lineStarts,
+      required this.text}) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
 
@@ -303,6 +396,9 @@ class EditorPainter extends CustomPainter {
       tp.paint(canvas, Offset(0, lineHeight * i));
     }
 
+    // Draw selection
+    drawSelection(canvas);
+
     canvas.drawRect(
         Rect.fromLTWH(caretPosition.toDouble() * charWidth,
             lineHeight * (caretLine + 1) - lineHeight, 2, lineHeight),
@@ -314,7 +410,9 @@ class EditorPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant EditorPainter oldDelegate) {
     return oldDelegate.lines != lines ||
-        oldDelegate.caretPosition != caretPosition;
+        oldDelegate.caretPosition != caretPosition ||
+        oldDelegate.selectionStart != selectionStart ||
+        oldDelegate.selectionEnd != selectionEnd;
   }
 
   double _measureCharWidth(String s) {
@@ -343,5 +441,45 @@ class EditorPainter extends CustomPainter {
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
     tp.layout();
     return tp.height;
+  }
+
+  void drawSelection(Canvas canvas) {
+    if (selectionStart != selectionEnd && lines.isNotEmpty) {
+      for (int i = 0; i < lines.length; i++) {
+        if (i >= lineStarts.length) {
+          int lineStart =
+              (i > 0 ? lineStarts[i - 1] + lines[i - 1].length : 0).toInt();
+          int lineEnd = text.length;
+          drawSelectionForLine(canvas, i, lineStart, lineEnd);
+          continue;
+        }
+
+        int lineStart = lineStarts[i];
+        int lineEnd;
+
+        if (i < lineStarts.length - 1) {
+          lineEnd = lineStarts[i + 1];
+        } else {
+          lineEnd = text.length;
+        }
+
+        drawSelectionForLine(canvas, i, lineStart, lineEnd);
+      }
+    }
+  }
+
+  void drawSelectionForLine(
+      Canvas canvas, int lineIndex, int lineStart, int lineEnd) {
+    if (lineStart < selectionEnd && lineEnd > selectionStart) {
+      double startX = (max(selectionStart, lineStart) - lineStart).toDouble();
+      double endX = (min(selectionEnd, lineEnd) - lineStart).toDouble();
+
+      canvas.drawRect(
+          Rect.fromLTWH(startX * charWidth, lineHeight * lineIndex,
+              (endX - startX) * charWidth, lineHeight),
+          Paint()
+            ..color = Colors.blue.withOpacity(0.3)
+            ..style = PaintingStyle.fill);
+    }
   }
 }

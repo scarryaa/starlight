@@ -54,25 +54,38 @@ class Rope {
     }
   }
 
-  void delete(int position) {
-    if (position < 0 || position >= length) {
-      throw RangeError('Delete position out of bounds');
+  void delete(int position, int deletionLength) {
+    if (position < 0 ||
+        position >= length ||
+        position + deletionLength > length) {
+      throw RangeError('Delete range out of bounds');
     }
 
-    bool deletingNewline = _root.text[position] == '\n';
-    _root.text =
-        _root.text.substring(0, position) + _root.text.substring(position + 1);
-    length--;
+    String deletedSubstring =
+        _root.text.substring(position, position + deletionLength);
 
-    // Update lineStarts
-    int lineIndex = _findLineIndex(position);
-    for (int i = lineIndex + 1; i < lineStarts.length; i++) {
-      lineStarts[i]--;
+    _root.text = _root.text.substring(0, position) +
+        _root.text.substring(position + deletionLength);
+    length -= deletionLength;
+
+    int startLineIndex = _findLineIndex(position);
+    int endLineIndex = _findLineIndex(position + deletionLength - 1);
+
+    int deletedNewlines = '\n'.allMatches(deletedSubstring).length;
+
+    for (int i = startLineIndex + 1; i < lineStarts.length; i++) {
+      if (i > endLineIndex) {
+        lineStarts[i] -= deletionLength;
+      } else if (deletedNewlines > 0) {
+        lineStarts.removeAt(i);
+        i--;
+        deletedNewlines--;
+      }
     }
 
-    // Remove line start if we deleted a newline
-    if (deletingNewline) {
-      lineStarts.removeAt(lineIndex + 1);
+    if (deletedSubstring.endsWith('\n') &&
+        endLineIndex + 1 < lineStarts.length) {
+      lineStarts.removeAt(endLineIndex + 1);
     }
   }
 
