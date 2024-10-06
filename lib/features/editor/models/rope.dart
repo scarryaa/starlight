@@ -4,9 +4,24 @@ class Rope {
   List<int> lineStarts = [0];
   static const splitThreshold = 1024;
 
-  Rope(String? initialText) : _root = Node() {
-    _root.text = initialText ?? "";
-    length = initialText?.length ?? 0;
+  Rope([String? initialText]) : _root = Node() {
+    if (initialText == null || initialText.isEmpty) {
+      _root.text = "\n";
+      length = 1;
+    } else {
+      _root.text = initialText.endsWith("\n") ? initialText : "$initialText\n";
+      length = _root.text.length;
+    }
+    _updateLineStarts();
+  }
+
+  void _updateLineStarts() {
+    lineStarts = [0];
+    for (int i = 1; i < _root.text.length; i++) {
+      if (_root.text[i] == '\n') {
+        lineStarts.add(i + 1);
+      }
+    }
   }
 
   // Getters
@@ -14,28 +29,60 @@ class Rope {
   get lineCount => lineStarts.length;
 
   void insert(String s, int position) {
-    Node? foundNode = findNodeFromCharIndex(position,
-        updateWeights: true, weightToAdd: s.length, subtract: false);
-    if (foundNode == null) throw Exception("Node to insert at not found.");
-
-    foundNode.text = foundNode.text.substring(0, position) +
-        s +
-        foundNode.text.substring(position, foundNode.text.length);
-
-    // Update line starts if needed
-    int closestLineStart = _findClosestLineStartFromCharIndex(position);
-    int closestLineStartIndex = lineStarts.indexOf(closestLineStart);
-    for (int i = closestLineStartIndex + 1; i < lineStarts.length; i++) {
-      lineStarts[i]++;
+    if (position < 0 || position > length) {
+      throw RangeError('Insert position out of bounds');
     }
 
-    if (s == '\n') {
-      lineStarts.insert(closestLineStartIndex + 1, position);
+    _root.text =
+        _root.text.substring(0, position) + s + _root.text.substring(position);
+    length += s.length;
+
+    // Update lineStarts
+    int lineIndex = _findLineIndex(position);
+    for (int i = lineIndex + 1; i < lineStarts.length; i++) {
+      lineStarts[i] += s.length;
     }
 
-    if (foundNode.weight > splitThreshold) {
-      balance();
+    // Add new line starts if we're inserting newlines
+    int newLineCount = s.split('\n').length - 1;
+    if (newLineCount > 0) {
+      int newLinePosition = position;
+      for (int i = 0; i < newLineCount; i++) {
+        newLinePosition = _root.text.indexOf('\n', newLinePosition) + 1;
+        lineStarts.insert(lineIndex + 1 + i, newLinePosition);
+      }
     }
+  }
+
+  void delete(int position) {
+    if (position < 0 || position >= length) {
+      throw RangeError('Delete position out of bounds');
+    }
+
+    bool deletingNewline = _root.text[position] == '\n';
+    _root.text =
+        _root.text.substring(0, position) + _root.text.substring(position + 1);
+    length--;
+
+    // Update lineStarts
+    int lineIndex = _findLineIndex(position);
+    for (int i = lineIndex + 1; i < lineStarts.length; i++) {
+      lineStarts[i]--;
+    }
+
+    // Remove line start if we deleted a newline
+    if (deletingNewline) {
+      lineStarts.removeAt(lineIndex + 1);
+    }
+  }
+
+  int _findLineIndex(int position) {
+    for (int i = 1; i < lineStarts.length; i++) {
+      if (lineStarts[i] > position) {
+        return i - 1;
+      }
+    }
+    return lineStarts.length - 1;
   }
 
   String charAt(int index) {
@@ -44,26 +91,6 @@ class Rope {
 
   String getLine(int index) {
     return _root.text.split('\n')[index];
-  }
-
-  void delete(int position) {
-    Node? foundNode = findNodeFromCharIndex(position,
-        updateWeights: true, weightToAdd: 1, subtract: true);
-    if (foundNode == null) throw Exception("Node to delete at not found.");
-    int closestLineStart = _findClosestLineStartFromCharIndex(position);
-    int closestLineStartIndex = lineStarts.indexOf(closestLineStart);
-
-    // Remove corresponding line start if needed
-    if (foundNode.text.substring(position, position + 1) == '\n') {
-      lineStarts.remove(position);
-    } else {
-      for (int i = closestLineStartIndex + 1; i < lineStarts.length; i++) {
-        lineStarts[i]--;
-      }
-    }
-
-    foundNode.text = foundNode.text.substring(0, position) +
-        foundNode.text.substring(position + 1, foundNode.text.length);
   }
 
   Node? findNodeFromCharIndex(int index,
@@ -131,16 +158,19 @@ class Rope {
   }
 
   int getLineLength(int lineNumber) {
-    if (lineNumber > lineStarts.length) return 0;
-    if (lineNumber == 0) {
-      return _root.text.split('\n')[0].length;
+    if (lineNumber < 0 || lineNumber >= lineStarts.length) {
+      return 0;
     }
 
+    int start = lineStarts[lineNumber];
+    int end;
     if (lineNumber == lineStarts.length - 1) {
-      return _root.weight - lineStarts[lineNumber] - 1;
+      end = length - 1;
+    } else {
+      end = lineStarts[lineNumber + 1] - 1; // Exclude the newline character
     }
 
-    return lineStarts[lineNumber + 1] - lineStarts[lineNumber] - 1;
+    return end - start;
   }
 
   void balance() {}

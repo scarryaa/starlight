@@ -198,40 +198,52 @@ class _EditorState extends State<Editor> {
   }
 
   void handleBackspaceKey() {
-    if (caretPosition > 0 || caretLine != 0) {
-      if (rope.text.isNotEmpty) {
-        if (rope.text[absoluteCaretPosition - 1] == '\n') {
-          caretPosition =
-              rope.getLineLength(caretLine == 0 ? caretLine : caretLine - 1);
-          rope.delete(absoluteCaretPosition - 1);
-          caretLine--;
-          absoluteCaretPosition = caretPosition +
-              rope.findClosestLineStart(caretLine) +
-              1 -
-              (caretLine == 0 ? 1 : 0);
-        } else {
-          rope.delete(absoluteCaretPosition - 1);
-          caretPosition--;
-          absoluteCaretPosition--;
-        }
+    if (absoluteCaretPosition > 0) {
+      if (caretPosition == 0 && caretLine > 0) {
+        caretLine--;
+        caretPosition = rope.getLineLength(caretLine);
+        rope.delete(absoluteCaretPosition - 1); // Delete the newline
+        absoluteCaretPosition--;
+      } else if (caretPosition > 0) {
+        rope.delete(absoluteCaretPosition - 1);
+        caretPosition--;
+        absoluteCaretPosition--;
       }
+
+      caretLine = max(0, caretLine);
+      caretPosition = max(0, min(caretPosition, rope.getLineLength(caretLine)));
+      absoluteCaretPosition =
+          max(0, min(absoluteCaretPosition, rope.length - 1));
     }
   }
 
   void handleEnterKey() {
     rope.insert('\n', absoluteCaretPosition);
+    caretLine++;
     caretPosition = 0;
     absoluteCaretPosition++;
-    caretLine++;
   }
 
-  moveCaretHorizontally(int amount) {
-    if (caretPosition + amount >= 0 &&
-        absoluteCaretPosition + amount <= rope.text.length &&
-        caretPosition + amount <= rope.getLineLength(caretLine)) {
-      caretPosition += amount;
+  void moveCaretHorizontally(int amount) {
+    int newCaretPosition = caretPosition + amount;
+    int currentLineLength = rope.getLineLength(caretLine);
+
+    if (newCaretPosition >= 0 && newCaretPosition <= currentLineLength) {
+      caretPosition = newCaretPosition;
       absoluteCaretPosition += amount;
+    } else if (newCaretPosition < 0 && caretLine > 0) {
+      caretLine--;
+      caretPosition = rope.getLineLength(caretLine);
+      absoluteCaretPosition =
+          rope.findClosestLineStart(caretLine) + caretPosition;
+    } else if (newCaretPosition > currentLineLength &&
+        caretLine < rope.lineCount - 1) {
+      caretLine++;
+      caretPosition = 0;
+      absoluteCaretPosition = rope.findClosestLineStart(caretLine);
     }
+
+    absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length - 1));
   }
 
   void moveCaretVertically(int amount) {
@@ -240,11 +252,14 @@ class _EditorState extends State<Editor> {
       int targetLineStart = rope.findClosestLineStart(targetLine);
       int targetLineLength = rope.getLineLength(targetLine);
 
-      int targetPosition = min(
-          targetLineStart + caretPosition, targetLineStart + targetLineLength);
-      absoluteCaretPosition = targetPosition + 1;
+      if (targetLineLength <= 1) {
+        caretPosition = 0;
+      } else {
+        caretPosition = min(caretPosition, targetLineLength - 1);
+      }
+
       caretLine = targetLine;
-      caretPosition = targetPosition - targetLineStart;
+      absoluteCaretPosition = targetLineStart + caretPosition;
     }
   }
 }
