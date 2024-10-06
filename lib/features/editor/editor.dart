@@ -35,6 +35,12 @@ class _EditorState extends State<Editor> {
   int selectionFocus = -1;
 
   @override
+  void initState() {
+    super.initState();
+    _scrollManager.preventOverscroll(editorPadding, viewPadding);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Expanded(
         child: Row(children: [
@@ -49,11 +55,11 @@ class _EditorState extends State<Editor> {
           child: Scrollbar(
               controller: _scrollManager.horizontalScrollController,
               child: SingleChildScrollView(
-                  physics: const ClampingScrollPhysics(),
+                  physics: _scrollManager.clampingScrollPhysics,
                   scrollDirection: Axis.horizontal,
                   controller: _scrollManager.horizontalScrollController,
                   child: SingleChildScrollView(
-                      physics: const ClampingScrollPhysics(),
+                      physics: _scrollManager.clampingScrollPhysics,
                       scrollDirection: Axis.vertical,
                       controller: _scrollManager.verticalScrollController,
                       child: SizedBox(
@@ -115,12 +121,9 @@ class _EditorState extends State<Editor> {
 
     if ((isCtrlPressed && !Platform.isMacOS) ||
         (Platform.isMacOS && isMetaPressed) && keyEvent.character != null) {
-      setState(() {
-        _handleCtrlKeys(keyEvent.character!);
-      });
+      _handleCtrlKeys(keyEvent.character!).then((_) {});
       return KeyEventResult.handled;
     }
-
     if ((isKeyDownEvent || isKeyRepeatEvent) &&
         keyEvent.character != null &&
         keyEvent.logicalKey != LogicalKeyboardKey.backspace &&
@@ -136,19 +139,10 @@ class _EditorState extends State<Editor> {
         absoluteCaretPosition++;
 
         updateLineCounts();
-        _scrollManager.scrollToCursor(
-            charWidth,
-            caretPosition,
-            lineHeight,
-            caretLine,
-            MediaQuery.of(context).size.width,
-            MediaQuery.of(context).size.height,
-            editorPadding,
-            viewPadding,
-            horizontalDirection,
-            verticalDirection);
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _ensureCursorVisible();
+        });
       });
-
       return KeyEventResult.handled;
     } else {
       if ((isKeyDownEvent || isKeyRepeatEvent)) {
@@ -183,17 +177,9 @@ class _EditorState extends State<Editor> {
           }
 
           updateLineCounts();
-          _scrollManager.scrollToCursor(
-              charWidth,
-              caretPosition,
-              lineHeight,
-              caretLine,
-              MediaQuery.of(context).size.width,
-              MediaQuery.of(context).size.height,
-              editorPadding,
-              viewPadding,
-              horizontalDirection,
-              verticalDirection);
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            _ensureCursorVisible();
+          });
         });
         return KeyEventResult.handled;
       }
@@ -206,18 +192,26 @@ class _EditorState extends State<Editor> {
     switch (key) {
       case 'a':
         // Select all
-        selectionAnchor = 0;
-        selectionFocus = rope.length - 1;
-        updateSelection();
+        setState(() {
+          selectionAnchor = 0;
+          selectionFocus = rope.length - 1;
+          updateSelection();
+        });
         break;
       case 'v':
         await pasteText();
+        setState(() {
+          // Update UI after paste if needed
+        });
         break;
       case 'c':
         copyText();
         break;
       case 'x':
         cutText();
+        setState(() {
+          // Update UI after cut if needed
+        });
         break;
     }
   }
@@ -230,34 +224,41 @@ class _EditorState extends State<Editor> {
       return; // Nothing to paste
     }
 
-    if (hasSelection()) {
-      deleteSelection();
-    }
+    setState(() {
+      if (hasSelection()) {
+        deleteSelection();
+      }
 
-    rope.insert(textToBePasted, absoluteCaretPosition);
-    absoluteCaretPosition += textToBePasted.length;
-    int line = rope.findLineForPosition(absoluteCaretPosition);
-    int caretAdjustment =
-        absoluteCaretPosition - rope.findClosestLineStart(line);
+      rope.insert(textToBePasted, absoluteCaretPosition);
+      absoluteCaretPosition += textToBePasted.length;
+      int line = rope.findLineForPosition(absoluteCaretPosition);
+      int caretAdjustment =
+          absoluteCaretPosition - rope.findClosestLineStart(line);
 
-    caretLine = line;
-    caretPosition = caretAdjustment;
+      caretLine = line;
+      caretPosition = caretAdjustment;
 
-    // Clear selection after paste
-    selectionStart = selectionEnd = absoluteCaretPosition;
+      // Clear selection after paste
+      selectionStart = selectionEnd = absoluteCaretPosition;
 
-    updateLineCounts();
-    _scrollManager.scrollToCursor(
-        charWidth,
-        caretPosition,
-        lineHeight,
-        caretLine,
-        MediaQuery.of(context).size.width,
-        MediaQuery.of(context).size.height,
-        editorPadding,
-        viewPadding,
-        horizontalDirection,
-        verticalDirection);
+      updateLineCounts();
+    });
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureCursorVisible();
+    });
+  }
+
+  Future<void> _ensureCursorVisible() async {
+    await _scrollManager.ensureCursorVisible(
+      charWidth,
+      caretPosition,
+      lineHeight,
+      caretLine,
+      editorPadding,
+      viewPadding,
+      context,
+    );
   }
 
   void copyText() {
