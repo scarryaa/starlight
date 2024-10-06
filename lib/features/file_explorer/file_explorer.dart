@@ -33,6 +33,9 @@ class _FileExplorerState extends State<FileExplorer> {
     final directory = Directory(widget.initialDirectory);
     rootNodes =
         directory.listSync().map((entity) => FileSystemNode(entity)).toList();
+    rootNodes.sort(
+      (a, b) => a.entity.toString().compareTo(b.entity.toString()),
+    );
   }
 
   void _toggleDirectory(FileSystemNode node) {
@@ -47,7 +50,10 @@ class _FileExplorerState extends State<FileExplorer> {
           node.children = directory
               .listSync()
               .map((entity) => FileSystemNode(entity))
-              .toList();
+              .toList()
+            ..sort(
+              (a, b) => a.entity.toString().compareTo(b.entity.toString()),
+            );
         } catch (e) {
           print(e);
         }
@@ -62,8 +68,11 @@ class _FileExplorerState extends State<FileExplorer> {
         border: Border(right: BorderSide(width: 1, color: Colors.black)),
       ),
       width: 250,
-      child: ListView(
-        children: rootNodes.map((node) => _buildFileItem(node, 0)).toList(),
+      child: SizedBox(
+        width: 250,
+        child: ListView(
+          children: rootNodes.map((node) => _buildFileItem(node, 0)).toList(),
+        ),
       ),
     );
   }
@@ -77,10 +86,9 @@ class _FileExplorerState extends State<FileExplorer> {
       children: [
         InkWell(
           onTap: isDirectory ? () => _toggleDirectory(node) : () {},
-          splashFactory: NoSplash.splashFactory,
           child: Container(
             height: fileHeight,
-            padding: EdgeInsets.only(left: 15.0 * depth),
+            padding: EdgeInsets.only(left: 15.0 * depth + 4),
             child: Row(
               children: [
                 Icon(
@@ -90,7 +98,13 @@ class _FileExplorerState extends State<FileExplorer> {
                   size: 16,
                 ),
                 const SizedBox(width: 5),
-                Text(fileName, style: const TextStyle(fontSize: 14)),
+                Expanded(
+                  child: Text(
+                    fileName,
+                    style: const TextStyle(fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),
