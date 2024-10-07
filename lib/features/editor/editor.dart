@@ -366,8 +366,12 @@ class _EditorContentState extends State<EditorContent> {
       case 'a':
         setState(() {
           selectionAnchor = 0;
-          selectionFocus = rope.length - 1;
+          selectionFocus = rope.length;
           updateSelection();
+          int lastLineLength = rope.getLineLength(rope.lineCount - 1);
+          caretPosition = lastLineLength;
+          absoluteCaretPosition = rope.length;
+          caretLine = rope.lineCount - 1;
         });
         break;
       case 'v':
@@ -737,7 +741,12 @@ class EditorPainter extends CustomPainter {
 
         int lineStart = lineStarts[i];
         int lineEnd =
-            i < lineStarts.length - 1 ? lineStarts[i + 1] : text.length;
+            i < lineStarts.length - 1 ? lineStarts[i + 1] - 1 : text.length;
+
+        // For empty lines that are not the last line, print a 1 char selection
+        if (lineEnd - lineStart == 0) {
+          lineEnd++;
+        }
 
         drawSelectionForLine(canvas, i, lineStart, lineEnd);
       }
