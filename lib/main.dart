@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
+import 'package:starlight/services/file_service.dart';
+import 'package:starlight/services/tab_service.dart';
 
 void main() {
   runApp(const MyApp());
@@ -18,14 +20,18 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: MyHomePage(title: 'starlight'),
     );
   }
 }
 
 class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
+  MyHomePage({super.key, required this.title}) {
+    tabService = TabService(fileService: fileService);
+  }
 
+  final FileService fileService = FileService();
+  late TabService tabService;
   final String title;
 
   @override
@@ -35,11 +41,23 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
+    return Scaffold(
       body: Row(
         mainAxisAlignment: MainAxisAlignment.start,
-        children: <Widget>[FileExplorer(initialDirectory: ''), Editor()],
+        children: <Widget>[
+          FileExplorer(
+            initialDirectory: '',
+            tabService: widget.tabService,
+          ),
+          Editor(
+              tabService: widget.tabService, fileService: widget.fileService),
+        ],
       ),
     );
+  }
+
+  @override
+  void didUpdateWidget(covariant MyHomePage oldWidget) {
+    super.didUpdateWidget(oldWidget);
   }
 }

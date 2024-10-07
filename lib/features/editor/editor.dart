@@ -7,20 +7,155 @@ import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
+import 'package:starlight/models/tab.dart' as CustomTab;
+import 'package:starlight/services/file_service.dart';
+import 'package:starlight/services/tab_service.dart';
 
 class Editor extends StatefulWidget {
-  const Editor({super.key});
+  final TabService tabService;
+  final FileService fileService;
+
+  const Editor(
+      {super.key, required this.tabService, required this.fileService});
 
   @override
   State<Editor> createState() => _EditorState();
 }
 
-class _EditorState extends State<Editor> {
-  final f = FocusNode();
-  Rope rope = Rope("");
+class _EditorState extends State<Editor> with TickerProviderStateMixin {
+  final EditorScrollManager _scrollManager = EditorScrollManager();
+  late List<ScrollController> _verticalControllers;
+  late List<ScrollController> _horizontalControllers;
+  List<Widget> _editorInstances = [];
+  late TabController tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _initScrollControllers();
+    tabController = TabController(
+        length: widget.tabService.tabs.length,
+        vsync: this,
+        animationDuration: Duration.zero);
+    _updateEditorInstances();
+    widget.tabService.addListener(_handleTabsChanged);
+  }
+
+  void _initScrollControllers() {
+    _verticalControllers = List.generate(
+      widget.tabService.tabs.length,
+      (_) => ScrollController(),
+    );
+    _horizontalControllers = List.generate(
+      widget.tabService.tabs.length,
+      (_) => ScrollController(),
+    );
+  }
+
+  void _handleTabsChanged() {
+    setState(() {
+      _disposeScrollControllers();
+      _initScrollControllers();
+      tabController.dispose();
+      tabController = TabController(
+          length: widget.tabService.tabs.length,
+          vsync: this,
+          animationDuration: Duration.zero);
+      _updateEditorInstances();
+    });
+  }
+
+  void _updateEditorInstances() {
+    _editorInstances = List.generate(
+      widget.tabService.tabs.length,
+      (index) => _buildEditor(index),
+    );
+  }
+
+  void _disposeScrollControllers() {
+    for (var controller in _verticalControllers) {
+      controller.dispose();
+    }
+    for (var controller in _horizontalControllers) {
+      controller.dispose();
+    }
+  }
+
+  @override
+  void dispose() {
+    _disposeScrollControllers();
+    tabController.dispose();
+    widget.tabService.removeListener(_handleTabsChanged);
+    super.dispose();
+  }
+
+  Widget _buildEditor(int index) {
+    return EditorContent(
+      verticalController: _verticalControllers[index],
+      horizontalController: _horizontalControllers[index],
+      scrollManager: _scrollManager,
+      tab: widget.tabService.tabs[index],
+      fileService: widget.fileService,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          SizedBox(
+            height: 50,
+            child: TabBar(
+              tabAlignment: TabAlignment.start,
+              padding: EdgeInsets.zero,
+              controller: tabController,
+              isScrollable: true,
+              tabs: widget.tabService.tabs
+                  .map((CustomTab.Tab tab) =>
+                      Tab(text: tab.path.split('/').last))
+                  .toList(),
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              physics: const NeverScrollableScrollPhysics(),
+              controller: tabController,
+              children: _editorInstances,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class EditorContent extends StatefulWidget {
+  final ScrollController verticalController;
+  final ScrollController horizontalController;
+  final EditorScrollManager scrollManager;
+  final CustomTab.Tab tab;
+  final FileService fileService;
+
+  const EditorContent({
+    super.key,
+    required this.verticalController,
+    required this.horizontalController,
+    required this.scrollManager,
+    required this.tab,
+    required this.fileService,
+  });
+
+  @override
+  State<EditorContent> createState() => _EditorContentState();
+}
+
+class _EditorContentState extends State<EditorContent> {
+  final FocusNode f = FocusNode();
+  late Rope rope;
   int absoluteCaretPosition = 0;
-  var caretPosition = 0;
-  var caretLine = 0;
+  int caretPosition = 0;
+  int caretLine = 0;
   static double lineHeight = 0;
   static double charWidth = 0;
   List<int> lineCounts = [0];
@@ -28,103 +163,96 @@ class _EditorState extends State<Editor> {
   double editorPadding = 5;
   HorizontalDirection horizontalDirection = HorizontalDirection.right;
   VerticalDirection verticalDirection = VerticalDirection.down;
-  final EditorScrollManager _scrollManager = EditorScrollManager();
   int selectionStart = -1;
   int selectionEnd = -1;
   int selectionAnchor = -1;
   int selectionFocus = -1;
 
-  late ScrollController _verticalController;
-  late ScrollController _horizontalController;
-
   @override
   void initState() {
     super.initState();
-    _verticalController = _scrollManager.verticalScrollController;
-    _horizontalController = _scrollManager.horizontalScrollController;
-    _scrollManager.preventOverscroll(editorPadding, viewPadding);
-  }
-
-  @override
-  void dispose() {
-    _verticalController.dispose();
-    _horizontalController.dispose();
-    super.dispose();
+    rope = Rope(widget.tab.content);
+    updateLineCounts();
+    widget.scrollManager.preventOverscroll(widget.horizontalController,
+        widget.verticalController, editorPadding, viewPadding);
   }
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Row(
-        children: [
-          EditorGutter(
-            height: max(
-                (lineHeight * rope.lineCount) - editorPadding + viewPadding,
-                MediaQuery.of(context).size.height),
-            editorVerticalScrollController: _verticalController,
-            lineCount: rope.lineCount,
-            editorPadding: editorPadding,
+    return Row(
+      children: [
+        EditorGutter(
+          height: max(
+            (lineHeight * rope.lineCount) - editorPadding + viewPadding,
+            MediaQuery.of(context).size.height,
           ),
-          Expanded(
-            child: GestureDetector(
-              onTapDown: (TapDownDetails details) => f.requestFocus(),
-              behavior: HitTestBehavior.translucent,
-              child: Focus(
-                focusNode: f,
-                onKeyEvent: (node, event) => handleInput(event),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Stack(
-                      children: [
-                        Positioned.fill(
+          editorVerticalScrollController: widget.verticalController,
+          lineCount: rope.lineCount,
+          editorPadding: editorPadding,
+        ),
+        Expanded(
+          child: GestureDetector(
+            onTapDown: (TapDownDetails details) => f.requestFocus(),
+            behavior: HitTestBehavior.translucent,
+            child: Focus(
+              focusNode: f,
+              onKeyEvent: (node, event) => handleInput(event),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Stack(
+                    children: [
+                      Positioned.fill(
+                        child: RawScrollbar(
+                          controller: widget.verticalController,
+                          thumbVisibility: true,
+                          thickness: 8,
+                          radius: const Radius.circular(4),
+                          thumbColor: Colors.grey.withOpacity(0.5),
+                          minThumbLength: 30,
                           child: RawScrollbar(
-                            controller: _verticalController,
+                            controller: widget.horizontalController,
                             thumbVisibility: true,
                             thickness: 8,
                             radius: const Radius.circular(4),
                             thumbColor: Colors.grey.withOpacity(0.5),
                             minThumbLength: 30,
-                            child: RawScrollbar(
-                              controller: _horizontalController,
-                              thumbVisibility: true,
-                              thickness: 8,
-                              radius: const Radius.circular(4),
-                              thumbColor: Colors.grey.withOpacity(0.5),
-                              minThumbLength: 30,
-                              notificationPredicate: (notification) =>
-                                  notification.depth == 1,
+                            notificationPredicate: (notification) =>
+                                notification.depth == 1,
+                            child: SingleChildScrollView(
+                              physics:
+                                  widget.scrollManager.clampingScrollPhysics,
+                              controller: widget.verticalController,
+                              scrollDirection: Axis.vertical,
                               child: SingleChildScrollView(
-                                physics: _scrollManager.clampingScrollPhysics,
-                                controller: _verticalController,
-                                scrollDirection: Axis.vertical,
-                                child: SingleChildScrollView(
-                                  physics: _scrollManager.clampingScrollPhysics,
-                                  controller: _horizontalController,
-                                  scrollDirection: Axis.horizontal,
-                                  child: SizedBox(
-                                    width: max(
-                                        getMaxLineCount() * charWidth +
-                                            charWidth +
-                                            viewPadding,
-                                        constraints.maxWidth),
-                                    height: max(
-                                        (lineHeight * rope.lineCount) +
-                                            viewPadding -
-                                            editorPadding,
-                                        constraints.maxHeight),
-                                    child: Padding(
-                                      padding: EdgeInsets.fromLTRB(
-                                          editorPadding, editorPadding, 0, 0),
-                                      child: CustomPaint(
-                                        painter: EditorPainter(
-                                          lines: rope.text.split('\n'),
-                                          caretPosition: caretPosition,
-                                          caretLine: caretLine,
-                                          selectionStart: selectionStart,
-                                          selectionEnd: selectionEnd,
-                                          lineStarts: rope.lineStarts,
-                                          text: rope.text,
-                                        ),
+                                physics:
+                                    widget.scrollManager.clampingScrollPhysics,
+                                controller: widget.horizontalController,
+                                scrollDirection: Axis.horizontal,
+                                child: SizedBox(
+                                  width: max(
+                                    getMaxLineCount() * charWidth +
+                                        charWidth +
+                                        viewPadding,
+                                    constraints.maxWidth,
+                                  ),
+                                  height: max(
+                                    (lineHeight * rope.lineCount) +
+                                        viewPadding -
+                                        editorPadding,
+                                    constraints.maxHeight,
+                                  ),
+                                  child: Padding(
+                                    padding: EdgeInsets.fromLTRB(
+                                        editorPadding, editorPadding, 0, 0),
+                                    child: CustomPaint(
+                                      painter: EditorPainter(
+                                        lines: rope.text.split('\n'),
+                                        caretPosition: caretPosition,
+                                        caretLine: caretLine,
+                                        selectionStart: selectionStart,
+                                        selectionEnd: selectionEnd,
+                                        lineStarts: rope.lineStarts,
+                                        text: rope.text,
                                       ),
                                     ),
                                   ),
@@ -133,16 +261,15 @@ class _EditorState extends State<Editor> {
                             ),
                           ),
                         ),
-                      ],
-                    );
-                  },
-                ),
+                      ),
+                    ],
+                  );
+                },
               ),
             ),
           ),
-          // TODO: Implement Minimap widget
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -167,15 +294,15 @@ class _EditorState extends State<Editor> {
 
     if ((isCtrlPressed && !Platform.isMacOS) ||
         (Platform.isMacOS && isMetaPressed) && keyEvent.character != null) {
-      _handleCtrlKeys(keyEvent.character!).then((_) {});
+      _handleCtrlKeys(keyEvent.character!);
       return KeyEventResult.handled;
     }
+
     if ((isKeyDownEvent || isKeyRepeatEvent) &&
         keyEvent.character != null &&
         keyEvent.logicalKey != LogicalKeyboardKey.backspace &&
         keyEvent.logicalKey != LogicalKeyboardKey.enter) {
       setState(() {
-        // Delete selection if present
         if (selectionStart != selectionEnd) {
           deleteSelection();
         }
@@ -210,7 +337,6 @@ class _EditorState extends State<Editor> {
             case LogicalKeyboardKey.arrowRight:
               handleArrowKeys(LogicalKeyboardKey.arrowRight, isShiftPressed);
               horizontalDirection = HorizontalDirection.right;
-
               break;
             case LogicalKeyboardKey.arrowUp:
               handleArrowKeys(LogicalKeyboardKey.arrowUp, isShiftPressed);
@@ -234,10 +360,9 @@ class _EditorState extends State<Editor> {
     }
   }
 
-  Future<void> _handleCtrlKeys(String key) async {
+  void _handleCtrlKeys(String key) {
     switch (key) {
       case 'a':
-        // Select all
         setState(() {
           selectionAnchor = 0;
           selectionFocus = rope.length - 1;
@@ -245,19 +370,13 @@ class _EditorState extends State<Editor> {
         });
         break;
       case 'v':
-        await pasteText();
-        setState(() {
-          // Update UI after paste if needed
-        });
+        pasteText();
         break;
       case 'c':
         copyText();
         break;
       case 'x':
         cutText();
-        setState(() {
-          // Update UI after cut if needed
-        });
         break;
     }
   }
@@ -267,7 +386,7 @@ class _EditorState extends State<Editor> {
     final textToBePasted = clipboardData?.text;
 
     if (textToBePasted == null || textToBePasted.isEmpty) {
-      return; // Nothing to paste
+      return;
     }
 
     setState(() {
@@ -284,7 +403,6 @@ class _EditorState extends State<Editor> {
       caretLine = line;
       caretPosition = caretAdjustment;
 
-      // Clear selection after paste
       selectionStart = selectionEnd = absoluteCaretPosition;
 
       updateLineCounts();
@@ -296,7 +414,9 @@ class _EditorState extends State<Editor> {
   }
 
   Future<void> _ensureCursorVisible() async {
-    await _scrollManager.ensureCursorVisible(
+    await widget.scrollManager.ensureCursorVisible(
+      widget.horizontalController,
+      widget.verticalController,
       charWidth,
       caretPosition,
       lineHeight,
@@ -310,13 +430,14 @@ class _EditorState extends State<Editor> {
   void copyText() {
     if (hasSelection()) {
       Clipboard.setData(ClipboardData(
-          text: (rope.text.substring(selectionStart, selectionEnd))));
+        text: rope.text.substring(selectionStart, selectionEnd),
+      ));
     } else {
-      // Copy line
       int closestLineStart = rope.findClosestLineStart(caretLine);
       int lineEnd = rope.getLineLength(caretLine) + closestLineStart;
       Clipboard.setData(ClipboardData(
-          text: (rope.text.substring(closestLineStart, lineEnd))));
+        text: rope.text.substring(closestLineStart, lineEnd),
+      ));
     }
   }
 
@@ -326,35 +447,33 @@ class _EditorState extends State<Editor> {
   }
 
   void handleArrowKeys(LogicalKeyboardKey key, bool isShiftPressed) {
-    setState(() {
-      int oldCaretPosition = absoluteCaretPosition;
+    int oldCaretPosition = absoluteCaretPosition;
 
-      switch (key) {
-        case LogicalKeyboardKey.arrowDown:
-          moveCaretVertically(1);
-          break;
-        case LogicalKeyboardKey.arrowUp:
-          moveCaretVertically(-1);
-          break;
-        case LogicalKeyboardKey.arrowLeft:
-          moveCaretHorizontally(-1);
-          break;
-        case LogicalKeyboardKey.arrowRight:
-          moveCaretHorizontally(1);
-          break;
+    switch (key) {
+      case LogicalKeyboardKey.arrowDown:
+        moveCaretVertically(1);
+        break;
+      case LogicalKeyboardKey.arrowUp:
+        moveCaretVertically(-1);
+        break;
+      case LogicalKeyboardKey.arrowLeft:
+        moveCaretHorizontally(-1);
+        break;
+      case LogicalKeyboardKey.arrowRight:
+        moveCaretHorizontally(1);
+        break;
+    }
+
+    if (isShiftPressed) {
+      if (selectionAnchor == -1) {
+        selectionAnchor = oldCaretPosition;
       }
+      selectionFocus = absoluteCaretPosition;
+    } else {
+      clearSelection();
+    }
 
-      if (isShiftPressed) {
-        if (selectionAnchor == -1) {
-          selectionAnchor = oldCaretPosition;
-        }
-        selectionFocus = absoluteCaretPosition;
-      } else {
-        clearSelection();
-      }
-
-      updateSelection();
-    });
+    updateSelection();
   }
 
   void clearSelection() {
@@ -376,27 +495,22 @@ class _EditorState extends State<Editor> {
   void handleBackspaceKey() {
     if (hasSelection()) {
       deleteSelection();
-    }
-
-    if (absoluteCaretPosition > 0) {
-      {
-        if (caretPosition == 0 && caretLine > 0) {
-          caretLine--;
-          caretPosition = rope.getLineLength(caretLine);
-          rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
-          absoluteCaretPosition--;
-        } else if (caretPosition > 0) {
-          rope.delete(absoluteCaretPosition - 1, 1);
-          caretPosition--;
-          absoluteCaretPosition--;
-        }
-
-        caretLine = max(0, caretLine);
-        caretPosition =
-            max(0, min(caretPosition, rope.getLineLength(caretLine)));
-        absoluteCaretPosition =
-            max(0, min(absoluteCaretPosition, rope.length - 1));
+    } else if (absoluteCaretPosition > 0) {
+      if (caretPosition == 0 && caretLine > 0) {
+        caretLine--;
+        caretPosition = rope.getLineLength(caretLine);
+        rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
+        absoluteCaretPosition--;
+      } else if (caretPosition > 0) {
+        rope.delete(absoluteCaretPosition - 1, 1);
+        caretPosition--;
+        absoluteCaretPosition--;
       }
+
+      caretLine = max(0, caretLine);
+      caretPosition = max(0, min(caretPosition, rope.getLineLength(caretLine)));
+      absoluteCaretPosition =
+          max(0, min(absoluteCaretPosition, rope.length - 1));
     }
   }
 
@@ -504,29 +618,30 @@ class _EditorState extends State<Editor> {
 }
 
 class EditorPainter extends CustomPainter {
-  var lines = [];
-  var caretPosition = 0;
-  var caretLine = 0;
-  var charWidth = 0.0;
-  double lineHeight = 0.0;
-  int selectionStart = 0;
-  int selectionEnd = 0;
-  List<int> lineStarts = [];
-  String text = "";
+  final List<String> lines;
+  final int caretPosition;
+  final int caretLine;
+  final int selectionStart;
+  final int selectionEnd;
+  final List<int> lineStarts;
+  final String text;
+  late double charWidth;
+  late double lineHeight;
 
-  EditorPainter(
-      {required this.lines,
-      required this.caretPosition,
-      required this.caretLine,
-      required this.selectionStart,
-      required this.selectionEnd,
-      required this.lineStarts,
-      required this.text}) {
+  EditorPainter({
+    required this.lines,
+    required this.caretPosition,
+    required this.caretLine,
+    required this.selectionStart,
+    required this.selectionEnd,
+    required this.lineStarts,
+    required this.text,
+  }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
 
-    _EditorState.lineHeight = lineHeight;
-    _EditorState.charWidth = charWidth;
+    _EditorContentState.lineHeight = lineHeight;
+    _EditorContentState.charWidth = charWidth;
   }
 
   @override
@@ -550,15 +665,19 @@ class EditorPainter extends CustomPainter {
       tp.paint(canvas, Offset(0, lineHeight * i));
     }
 
-    // Draw selection
     drawSelection(canvas);
 
     canvas.drawRect(
-        Rect.fromLTWH(caretPosition.toDouble() * charWidth,
-            lineHeight * (caretLine + 1) - lineHeight, 2, lineHeight),
-        Paint()
-          ..color = Colors.blue
-          ..style = PaintingStyle.fill);
+      Rect.fromLTWH(
+        caretPosition.toDouble() * charWidth,
+        lineHeight * (caretLine + 1) - lineHeight,
+        2,
+        lineHeight,
+      ),
+      Paint()
+        ..color = Colors.blue
+        ..style = PaintingStyle.fill,
+    );
   }
 
   @override
@@ -610,13 +729,8 @@ class EditorPainter extends CustomPainter {
         }
 
         int lineStart = lineStarts[i];
-        int lineEnd;
-
-        if (i < lineStarts.length - 1) {
-          lineEnd = lineStarts[i + 1];
-        } else {
-          lineEnd = text.length;
-        }
+        int lineEnd =
+            i < lineStarts.length - 1 ? lineStarts[i + 1] : text.length;
 
         drawSelectionForLine(canvas, i, lineStart, lineEnd);
       }
@@ -630,11 +744,16 @@ class EditorPainter extends CustomPainter {
       double endX = (min(selectionEnd, lineEnd) - lineStart).toDouble();
 
       canvas.drawRect(
-          Rect.fromLTWH(startX * charWidth, lineHeight * lineIndex,
-              (endX - startX) * charWidth, lineHeight),
-          Paint()
-            ..color = Colors.blue.withOpacity(0.3)
-            ..style = PaintingStyle.fill);
+        Rect.fromLTWH(
+          startX * charWidth,
+          lineHeight * lineIndex,
+          (endX - startX) * charWidth,
+          lineHeight,
+        ),
+        Paint()
+          ..color = Colors.blue.withOpacity(0.3)
+          ..style = PaintingStyle.fill,
+      );
     }
   }
 }
