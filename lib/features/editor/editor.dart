@@ -593,6 +593,13 @@ class _EditorContentState extends State<EditorContent> {
       caretLine = targetLine;
       absoluteCaretPosition = targetLineStart + caretPosition;
       moveSelectionVertically(absoluteCaretPosition);
+    } else if (targetLine == rope.lineCount) {
+      // Move to the end of the last line
+      int targetLineLength = rope.getLineLength(targetLine - 1);
+      caretPosition = targetLineLength;
+    } else if (targetLine < 0) {
+      // Move to the beginning of the first line
+      caretPosition = 0;
     }
   }
 
