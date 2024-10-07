@@ -539,7 +539,12 @@ class _EditorContentState extends State<EditorContent> {
       absoluteCaretPosition = rope.findClosestLineStart(caretLine);
     }
 
-    absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length - 1));
+    if (caretLine == rope.lineCount - 1) {
+      absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
+    } else {
+      absoluteCaretPosition =
+          max(0, min(absoluteCaretPosition, rope.length - 1));
+    }
     moveSelectionHorizontally(absoluteCaretPosition);
   }
 
@@ -551,7 +556,10 @@ class _EditorContentState extends State<EditorContent> {
 
       if (targetLineLength <= 1) {
         caretPosition = 0;
+      } else if (targetLine == rope.lineCount - 1) {
+        caretPosition = min(caretPosition, targetLineLength);
       } else {
+        // Skip the newline
         caretPosition = min(caretPosition, targetLineLength - 1);
       }
 
