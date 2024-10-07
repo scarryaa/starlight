@@ -37,8 +37,9 @@ class _EditorGutterState extends State<EditorGutter> {
     super.initState();
 
     widget.editorVerticalScrollController.addListener(() {
-      if (widget.editorVerticalScrollController.offset !=
-          widget.gutterScrollController.offset) {
+      if (widget.editorVerticalScrollController.hasClients &&
+          widget.editorVerticalScrollController.offset !=
+              widget.gutterScrollController.offset) {
         widget.gutterScrollController
             .jumpTo(widget.editorVerticalScrollController.offset);
       }
@@ -68,8 +69,8 @@ class _EditorGutterState extends State<EditorGutter> {
                                     child: Text(
                                         style: TextStyle(
                                             fontFamily: "Spot Mono",
-                                            fontSize: 14,
-                                            height: 1.4,
+                                            fontSize: 16,
+                                            height: 1.5,
                                             color: widget.lineNumberColor),
                                         (index + 1).toString()));
                               }

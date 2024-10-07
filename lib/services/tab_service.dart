@@ -5,10 +5,15 @@ import 'package:starlight/widgets/tab/tab.dart';
 class TabService extends ChangeNotifier {
   List<Tab> _tabs = [];
   FileService fileService;
+  int? currentTabIndex;
 
   TabService({required this.fileService});
 
   List<Tab> get tabs => List.unmodifiable(_tabs);
+
+  void setCurrentTab(int index) {
+    currentTabIndex = index;
+  }
 
   void addTab(String path) {
     if (!_tabs.any((tab) => tab.path == path)) {

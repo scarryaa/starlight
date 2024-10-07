@@ -62,6 +62,8 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
           vsync: this,
           animationDuration: Duration.zero);
       _updateEditorInstances();
+      tabController.animateTo(
+          widget.tabService.tabs.lastIndexOf(widget.tabService.tabs.last));
     });
   }
 
@@ -692,8 +694,9 @@ class EditorPainter extends CustomPainter {
         text: lines[i],
         style: const TextStyle(
           fontFamily: "Spot Mono",
+          height: 1.5,
           color: Colors.black,
-          fontSize: 14,
+          fontSize: 16,
         ),
       );
       TextPainter tp = TextPainter(
@@ -734,7 +737,7 @@ class EditorPainter extends CustomPainter {
     final textSpan = TextSpan(
       text: s,
       style: const TextStyle(
-        fontSize: 14,
+        fontSize: 16,
         color: Colors.white,
         fontFamily: "Spot Mono",
       ),
@@ -748,7 +751,8 @@ class EditorPainter extends CustomPainter {
     final textSpan = TextSpan(
       text: s,
       style: const TextStyle(
-        fontSize: 14,
+        fontSize: 16,
+        height: 1.5,
         color: Colors.white,
         fontFamily: "Spot Mono",
       ),
