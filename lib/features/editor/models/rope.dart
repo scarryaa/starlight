@@ -184,7 +184,7 @@ class Rope {
     int start = lineStarts[lineNumber];
     int end;
     if (lineNumber == lineStarts.length - 1) {
-      end = length - 1;
+      end = length;
     } else {
       end = lineStarts[lineNumber + 1] - 1; // Exclude the newline character
     }

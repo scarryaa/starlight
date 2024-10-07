@@ -107,6 +107,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
           SizedBox(
             height: 50,
             child: TabBar(
+              splashFactory: NoSplash.splashFactory,
               tabAlignment: TabAlignment.start,
               padding: EdgeInsets.zero,
               controller: tabController,
@@ -506,11 +507,9 @@ class _EditorContentState extends State<EditorContent> {
         caretPosition--;
         absoluteCaretPosition--;
       }
-
       caretLine = max(0, caretLine);
       caretPosition = max(0, min(caretPosition, rope.getLineLength(caretLine)));
-      absoluteCaretPosition =
-          max(0, min(absoluteCaretPosition, rope.length - 1));
+      absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
     }
   }
 

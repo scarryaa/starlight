@@ -71,7 +71,7 @@ class _FileExplorerState extends State<FileExplorer> {
   Widget build(BuildContext context) {
     return Container(
       decoration: const BoxDecoration(
-        border: Border(right: BorderSide(width: 1, color: Colors.black)),
+        border: Border(right: BorderSide(width: 1, color: Colors.deepPurple)),
       ),
       width: 250,
       child: SizedBox(
@@ -91,6 +91,7 @@ class _FileExplorerState extends State<FileExplorer> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         InkWell(
+          splashFactory: NoSplash.splashFactory,
           onTap: isDirectory
               ? () => _toggleDirectory(node)
               : () {
