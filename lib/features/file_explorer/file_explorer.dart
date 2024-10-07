@@ -70,8 +70,8 @@ class _FileExplorerState extends State<FileExplorer> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      decoration: const BoxDecoration(
-        border: Border(right: BorderSide(width: 1, color: Colors.deepPurple)),
+      decoration: BoxDecoration(
+        border: Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
       ),
       width: 250,
       child: SizedBox(

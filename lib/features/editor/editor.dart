@@ -7,7 +7,7 @@ import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
-import 'package:starlight/models/tab.dart' as CustomTab;
+import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
 
@@ -105,17 +105,38 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       child: Column(
         children: [
           SizedBox(
-            height: 50,
+            height: 35,
             child: TabBar(
               splashFactory: NoSplash.splashFactory,
               tabAlignment: TabAlignment.start,
               padding: EdgeInsets.zero,
+              dividerHeight: 1,
+              dividerColor: Colors.blue[200],
               controller: tabController,
               isScrollable: true,
-              tabs: widget.tabService.tabs
-                  .map((CustomTab.Tab tab) =>
-                      Tab(text: tab.path.split('/').last))
-                  .toList(),
+              indicatorPadding: EdgeInsets.zero,
+              labelPadding: EdgeInsets.zero,
+              indicatorColor: Colors.transparent,
+              overlayColor: WidgetStateProperty.all(Colors.transparent),
+              splashBorderRadius: BorderRadius.zero,
+              indicatorWeight: 0,
+              indicator: const BoxDecoration(color: Colors.transparent),
+              onTap: (index) {
+                setState(() {
+                  tabController.index = index;
+                });
+              },
+              tabs: widget.tabService.tabs.asMap().entries.map((entry) {
+                final index = entry.key;
+                final tab = entry.value;
+                final isSelected = tabController.index == index;
+                return CustomTab.Tab(
+                  content: "",
+                  path: tab.path.split('/').last,
+                  isSelected: isSelected,
+                  onCloseTap: () => widget.tabService.removeTab(tab.path),
+                );
+              }).toList(),
             ),
           ),
           Expanded(

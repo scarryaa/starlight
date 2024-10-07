@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
-import 'package:starlight/models/tab.dart';
 import 'package:starlight/services/file_service.dart';
+import 'package:starlight/widgets/tab/tab.dart';
 
 class TabService extends ChangeNotifier {
   List<Tab> _tabs = [];
@@ -13,7 +13,7 @@ class TabService extends ChangeNotifier {
   void addTab(String path) {
     if (!_tabs.any((tab) => tab.path == path)) {
       final fileContent = fileService.readFile(path);
-      _tabs.add(Tab(path: path, content: fileContent));
+      _tabs.add(Tab(path: path, content: fileContent, isSelected: false));
       notifyListeners();
     }
   }
@@ -26,7 +26,11 @@ class TabService extends ChangeNotifier {
   void updateTabContent(String path, String content) {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
-      _tabs[index] = Tab(path: path, content: content);
+      _tabs[index] = Tab(
+        path: path,
+        content: content,
+        isSelected: _tabs[index].isSelected,
+      );
       fileService.writeFile(path, content);
       notifyListeners();
     }
