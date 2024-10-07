@@ -6,10 +6,10 @@ class Rope {
 
   Rope([String? initialText]) : _root = Node() {
     if (initialText == null || initialText.isEmpty) {
-      _root.text = "\n";
-      length = 1;
+      _root.text = "";
+      length = 0;
     } else {
-      _root.text = initialText.endsWith("\n") ? initialText : "$initialText\n";
+      _root.text = initialText;
       length = _root.text.length;
     }
     _updateLineStarts();

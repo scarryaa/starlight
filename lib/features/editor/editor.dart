@@ -334,6 +334,7 @@ class _EditorContentState extends State<EditorContent> {
         absoluteCaretPosition++;
 
         updateLineCounts();
+        widget.tab.content = rope.text;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           await _ensureCursorVisible();
         });
@@ -371,6 +372,7 @@ class _EditorContentState extends State<EditorContent> {
           }
 
           updateLineCounts();
+          widget.tab.content = rope.text;
           WidgetsBinding.instance.addPostFrameCallback((_) async {
             await _ensureCursorVisible();
           });

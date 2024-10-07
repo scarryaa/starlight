@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 class Tab extends StatefulWidget {
   final String path;
-  final String content;
+  String content;
   final bool isSelected;
   final VoidCallback? onTap;
   final VoidCallback? onCloseTap;
 
-  const Tab({
+  Tab({
     super.key,
     required this.path,
     required this.content,
