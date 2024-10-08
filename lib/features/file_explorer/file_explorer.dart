@@ -1,6 +1,18 @@
 import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:starlight/services/tab_service.dart';
+
+class FileExplorer extends StatefulWidget {
+  final String initialDirectory;
+  final TabService tabService;
+
+  const FileExplorer(
+      {super.key, required this.initialDirectory, required this.tabService});
+
+  @override
+  State<FileExplorer> createState() => _FileExplorerState();
+}
 
 class FileSystemNode {
   final FileSystemEntity entity;
@@ -14,58 +26,10 @@ class FileSystemNode {
   });
 }
 
-class FileExplorer extends StatefulWidget {
-  final String initialDirectory;
-  final TabService tabService;
-
-  const FileExplorer(
-      {super.key, required this.initialDirectory, required this.tabService});
-
-  @override
-  State<FileExplorer> createState() => _FileExplorerState();
-}
-
 class _FileExplorerState extends State<FileExplorer> {
   final double fileHeight = 25.0;
   late List<FileSystemNode> rootNodes;
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeRootNodes();
-  }
-
-  void _initializeRootNodes() {
-    final directory = Directory(widget.initialDirectory);
-    rootNodes =
-        directory.listSync().map((entity) => FileSystemNode(entity)).toList();
-    rootNodes.sort(
-      (a, b) => a.entity.toString().compareTo(b.entity.toString()),
-    );
-  }
-
-  void _toggleDirectory(FileSystemNode node) {
-    setState(() {
-      if (node.isExpanded) {
-        node.isExpanded = false;
-        node.children.clear();
-      } else {
-        try {
-          node.isExpanded = true;
-          final directory = Directory(node.entity.path);
-          node.children = directory
-              .listSync()
-              .map((entity) => FileSystemNode(entity))
-              .toList()
-            ..sort(
-              (a, b) => a.entity.toString().compareTo(b.entity.toString()),
-            );
-        } catch (e) {
-          print(e);
-        }
-      }
-    });
-  }
+  final double bottomPadding = 25.0;
 
   @override
   Widget build(BuildContext context) {
@@ -74,13 +38,19 @@ class _FileExplorerState extends State<FileExplorer> {
         border: Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
       ),
       width: 250,
-      child: SizedBox(
-        width: 250,
-        child: ListView(
-          children: rootNodes.map((node) => _buildFileItem(node, 0)).toList(),
-        ),
+      child: ListView(
+        children: [
+          ...rootNodes.map((node) => _buildFileItem(node, 0)),
+          SizedBox(height: bottomPadding),
+        ],
       ),
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initializeRootNodes();
   }
 
   Widget _buildFileItem(FileSystemNode node, int depth) {
@@ -124,5 +94,37 @@ class _FileExplorerState extends State<FileExplorer> {
           ...node.children.map((child) => _buildFileItem(child, depth + 1)),
       ],
     );
+  }
+
+  void _initializeRootNodes() {
+    final directory = Directory(widget.initialDirectory);
+    rootNodes =
+        directory.listSync().map((entity) => FileSystemNode(entity)).toList();
+    rootNodes.sort(
+      (a, b) => a.entity.toString().compareTo(b.entity.toString()),
+    );
+  }
+
+  void _toggleDirectory(FileSystemNode node) {
+    setState(() {
+      if (node.isExpanded) {
+        node.isExpanded = false;
+        node.children.clear();
+      } else {
+        try {
+          node.isExpanded = true;
+          final directory = Directory(node.entity.path);
+          node.children = directory
+              .listSync()
+              .map((entity) => FileSystemNode(entity))
+              .toList()
+            ..sort(
+              (a, b) => a.entity.toString().compareTo(b.entity.toString()),
+            );
+        } catch (e) {
+          print(e);
+        }
+      }
+    });
   }
 }

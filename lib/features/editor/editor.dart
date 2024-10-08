@@ -62,8 +62,11 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
           vsync: this,
           animationDuration: Duration.zero);
       _updateEditorInstances();
-      tabController.animateTo(
-          widget.tabService.tabs.lastIndexOf(widget.tabService.tabs.last));
+
+      if (widget.tabService.tabs.isNotEmpty) {
+        tabController.animateTo(
+            widget.tabService.tabs.lastIndexOf(widget.tabService.tabs.last));
+      }
     });
   }
 
@@ -98,6 +101,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       scrollManager: _scrollManager,
       tab: widget.tabService.tabs[index],
       fileService: widget.fileService,
+      tabService: widget.tabService,
     );
   }
 
@@ -125,6 +129,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
               indicator: const BoxDecoration(color: Colors.transparent),
               onTap: (index) {
                 setState(() {
+                  widget.tabService.setCurrentTab((index));
                   tabController.index = index;
                 });
               },
@@ -160,6 +165,7 @@ class EditorContent extends StatefulWidget {
   final EditorScrollManager scrollManager;
   final CustomTab.Tab tab;
   final FileService fileService;
+  final TabService tabService;
 
   const EditorContent({
     super.key,
@@ -168,6 +174,7 @@ class EditorContent extends StatefulWidget {
     required this.scrollManager,
     required this.tab,
     required this.fileService,
+    required this.tabService,
   });
 
   @override
@@ -242,9 +249,10 @@ class _EditorContentState extends State<EditorContent> {
   @override
   Widget build(BuildContext context) {
     final contentHeight = max(
-      (lineHeight * rope.lineCount) + viewPadding,
-      MediaQuery.of(context).size.height,
-    );
+          (lineHeight * rope.lineCount) + viewPadding,
+          MediaQuery.of(context).size.height,
+        ) -
+        35;
 
     return Row(
       children: [
@@ -444,6 +452,23 @@ class _EditorContentState extends State<EditorContent> {
       case 'x':
         cutText();
         break;
+      case 's':
+        saveFile();
+        break;
+    }
+  }
+
+  void saveFile() {
+    if (widget.tabService.currentTabIndex == null) return;
+
+    final currentTab =
+        widget.tabService.tabs[widget.tabService.currentTabIndex!];
+    try {
+      File(currentTab.path).writeAsStringSync(rope.text);
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error saving file: $e')),
+      );
     }
   }
 
@@ -797,7 +822,7 @@ class EditorPainter extends CustomPainter {
         color: Colors.white,
         fontFamily: "ZedMono Nerd Font",
       ),
-     );
+    );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
     tp.layout();
     return tp.width;

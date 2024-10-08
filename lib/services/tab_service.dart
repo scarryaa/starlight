@@ -3,7 +3,7 @@ import 'package:starlight/services/file_service.dart';
 import 'package:starlight/widgets/tab/tab.dart';
 
 class TabService extends ChangeNotifier {
-  List<Tab> _tabs = [];
+  final List<Tab> _tabs = [];
   FileService fileService;
   int? currentTabIndex;
 
@@ -18,7 +18,8 @@ class TabService extends ChangeNotifier {
   void addTab(String path) {
     if (!_tabs.any((tab) => tab.path == path)) {
       final fileContent = fileService.readFile(path);
-      _tabs.add(Tab(path: path, content: fileContent, isSelected: false));
+      _tabs.add(Tab(path: path, content: fileContent, isSelected: true));
+      setCurrentTab(_tabs.length - 1);
       notifyListeners();
     }
   }
