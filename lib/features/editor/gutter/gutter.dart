@@ -8,7 +8,7 @@ class EditorGutter extends StatefulWidget {
   final double editorPadding;
   final double viewPadding;
 
-  static const double width = 70;
+  static const double width = 40;
 
   const EditorGutter({
     Key? key,
@@ -69,7 +69,7 @@ class _EditorGutterState extends State<EditorGutter> {
   Widget build(BuildContext context) {
     return SizedBox(
         width: EditorGutter.width,
-        height: widget.height,
+        height: widget.height + widget.viewPadding * 2,
         child: ScrollConfiguration(
           behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
           child: ListView.builder(
@@ -87,7 +87,7 @@ class _EditorGutterState extends State<EditorGutter> {
                   child: Text(
                     (index + 1).toString(),
                     style: const TextStyle(
-                      fontFamily: "Spot Mono",
+                      fontFamily: "ZedMono Nerd Font",
                       fontSize: 16,
                       height: 1.5,
                       color: Colors.grey,

@@ -408,9 +408,12 @@ class _EditorContentState extends State<EditorContent> {
 
           updateLineCounts();
           widget.tab.content = rope.text;
-          WidgetsBinding.instance.addPostFrameCallback((_) async {
-            await _ensureCursorVisible();
-          });
+
+          if (!isShiftPressed && !isCtrlPressed && !isMetaPressed) {
+            WidgetsBinding.instance.addPostFrameCallback((_) async {
+              await _ensureCursorVisible();
+            });
+          }
         });
         return KeyEventResult.handled;
       }
@@ -739,7 +742,7 @@ class EditorPainter extends CustomPainter {
         TextSpan span = TextSpan(
           text: lines[i],
           style: const TextStyle(
-            fontFamily: "Spot Mono",
+            fontFamily: "ZedMono Nerd Font",
             height: 1.5,
             color: Colors.black,
             fontSize: 16,
@@ -792,9 +795,9 @@ class EditorPainter extends CustomPainter {
       style: const TextStyle(
         fontSize: 16,
         color: Colors.white,
-        fontFamily: "Spot Mono",
+        fontFamily: "ZedMono Nerd Font",
       ),
-    );
+     );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
     tp.layout();
     return tp.width;
@@ -807,7 +810,7 @@ class EditorPainter extends CustomPainter {
         fontSize: 16,
         height: 1.5,
         color: Colors.white,
-        fontFamily: "Spot Mono",
+        fontFamily: "ZedMono Nerd Font",
       ),
     );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);

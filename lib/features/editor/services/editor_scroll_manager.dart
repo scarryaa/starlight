@@ -1,163 +1,11 @@
 import 'package:flutter/material.dart' hide VerticalDirection;
-import 'package:starlight/features/editor/models/direction.dart';
 
 class EditorScrollManager {
-  void scrollTo(ScrollController horizontalController,
-      ScrollController verticalController, Offset offset) {
-    horizontalController.jumpTo(offset.dx);
-    verticalController.jumpTo(offset.dy);
-  }
-
-  bool isCursorInViewHorizontal(
-      ScrollController controller,
-      double charWidth,
-      int caretPosition,
-      double lineHeight,
-      int caretLine,
-      double screenWidth,
-      double screenHeight,
-      double editorPadding,
-      double viewPadding,
-      HorizontalDirection horizontalDirection,
-      VerticalDirection verticalDirection) {
-    var horizOffset = (charWidth * caretPosition);
-
-    if (horizOffset > controller.offset &&
-        horizontalDirection == HorizontalDirection.right &&
-        controller.offset <= horizOffset - screenWidth + viewPadding) {
-      return false;
-    } else if (horizOffset + charWidth - editorPadding * 4 - viewPadding <
-            controller.offset &&
-        horizontalDirection == HorizontalDirection.left &&
-        controller.offset > 0) {
-      return false;
-    }
-
-    return true;
-  }
-
-  bool isCursorInViewVertical(
-      ScrollController controller,
-      double charWidth,
-      int caretPosition,
-      double lineHeight,
-      int caretLine,
-      double screenWidth,
-      double screenHeight,
-      double editorPadding,
-      double viewPadding,
-      HorizontalDirection horizontalDirection,
-      VerticalDirection verticalDirection) {
-    var vertOffset = (lineHeight * caretLine) + editorPadding * 3;
-
-    if (vertOffset - screenHeight + viewPadding > controller.offset &&
-        verticalDirection == VerticalDirection.down) {
-      return false;
-    }
-    if (vertOffset < controller.offset + lineHeight + viewPadding &&
-        controller.offset > 0 &&
-        verticalDirection == VerticalDirection.up) {
-      return false;
-    }
-
-    return true;
-  }
-
-  void scrollToCursorIncremental(
-      ScrollController horizontalController,
-      ScrollController verticalController,
-      double charWidth,
-      int caretPosition,
-      double lineHeight,
-      int caretLine,
-      double screenWidth,
-      double screenHeight,
-      double editorPadding,
-      double viewPadding,
-      HorizontalDirection horizontalDirection,
-      VerticalDirection verticalDirection) {
-    var horizOffset = (charWidth * caretPosition) + editorPadding * 2.625;
-    var vertOffset = (lineHeight * caretLine) + editorPadding * 3;
-
-    // Horizontal scroll (right)
-    if (horizOffset > horizontalController.offset + screenWidth - viewPadding &&
-        horizontalDirection == HorizontalDirection.right) {
-      double targetOffset = horizOffset - screenWidth + viewPadding;
-      horizontalController.jumpTo(targetOffset);
-    }
-
-    // Horizontal scroll (left)
-    if (horizOffset < horizontalController.offset + viewPadding &&
-        horizontalDirection == HorizontalDirection.left) {
-      double targetOffset = horizOffset - viewPadding;
-      horizontalController.jumpTo(targetOffset.clamp(
-          0.0, horizontalController.position.maxScrollExtent));
-    }
-
-    // Vertical scroll (down)
-    if (vertOffset > verticalController.offset + screenHeight - viewPadding &&
-        verticalDirection == VerticalDirection.down) {
-      double targetOffset = vertOffset - screenHeight + viewPadding;
-      verticalController.jumpTo(targetOffset);
-    }
-
-    // Vertical scroll (up)
-    if (vertOffset < verticalController.offset + viewPadding &&
-        verticalDirection == VerticalDirection.up) {
-      double targetOffset = vertOffset - viewPadding;
-      verticalController.jumpTo(
-          targetOffset.clamp(0.0, verticalController.position.maxScrollExtent));
-    }
-  }
-
-  void scrollToCursor(
-      ScrollController horizontalController,
-      ScrollController verticalController,
-      double charWidth,
-      int caretPosition,
-      double lineHeight,
-      int caretLine,
-      double screenWidth,
-      double screenHeight,
-      double editorPadding,
-      double viewPadding,
-      HorizontalDirection horizontalDirection,
-      VerticalDirection verticalDirection) {
-    var horizOffset = (charWidth * caretPosition) + editorPadding * 2.625;
-    var vertOffset = (lineHeight * caretLine) + editorPadding * 3;
-
-    if (!isCursorInViewHorizontal(
-        horizontalController,
-        charWidth,
-        caretPosition,
-        lineHeight,
-        caretLine,
-        screenWidth,
-        screenHeight,
-        editorPadding,
-        viewPadding,
-        horizontalDirection,
-        verticalDirection)) {
-      horizontalController.jumpTo(horizOffset);
-    }
-
-    if (!isCursorInViewVertical(
-        verticalController,
-        charWidth,
-        caretPosition,
-        lineHeight,
-        caretLine,
-        screenWidth,
-        screenHeight,
-        editorPadding,
-        viewPadding,
-        horizontalDirection,
-        verticalDirection)) {
-      verticalController.jumpTo(vertOffset);
-    }
-  }
-
-  Future<void> ensureCursorVisible(
+  static const int _scrollAnimationDuration = 200;
+  static const double _gutterWidth = 40.0;
+  static const double _verticalBuffer = 2.0;
+ 
+ Future<void> ensureCursorVisible(
     ScrollController horizontalController,
     ScrollController verticalController,
     double charWidth,
@@ -168,96 +16,133 @@ class EditorScrollManager {
     double viewPadding,
     BuildContext context,
   ) async {
-    final RenderBox? box = context.findRenderObject() as RenderBox?;
-    if (box == null) return;
-
-    final caretOffset = Offset(
-      charWidth * caretPosition + editorPadding * 2.625,
-      lineHeight * caretLine + editorPadding * 3,
-    );
-
-    final targetRect = Rect.fromPoints(
-      box.localToGlobal(caretOffset),
-      box.localToGlobal(caretOffset + Offset(charWidth, lineHeight)),
-    );
-
-    await Future.wait([
-      _ensureVisible(horizontalController, targetRect,
-          horizontal: true, padding: viewPadding),
-      _ensureVisible(verticalController, targetRect,
-          horizontal: false, padding: viewPadding),
-    ]);
-  }
-
-  Future<void> _ensureVisible(
-    ScrollController controller,
-    Rect targetRect, {
-    required bool horizontal,
-    double alignment = 0.5,
-    Duration duration = const Duration(milliseconds: 50),
-    Curve curve = Curves.easeInOut,
-    double padding = 0,
-  }) async {
-    if (!controller.hasClients) return;
-
-    final ScrollPosition position = controller.position;
-    double leadingEdge = horizontal ? targetRect.left : targetRect.top;
-    double trailingEdge = horizontal ? targetRect.right : targetRect.bottom;
-    double viewportDimension = position.viewportDimension;
-
-    double targetPixels;
-    if (leadingEdge < position.pixels + padding) {
-      targetPixels = leadingEdge - viewportDimension * alignment - padding;
-    } else if (trailingEdge > position.pixels + viewportDimension - padding) {
-      targetPixels =
-          trailingEdge - viewportDimension * (1.0 - alignment) + padding;
-    } else {
+    if (!horizontalController.hasClients || !verticalController.hasClients) {
       return;
     }
 
-    await controller.animateTo(
-      targetPixels.clamp(position.minScrollExtent, position.maxScrollExtent),
-      duration: duration,
-      curve: curve,
+    final RenderBox? box = context.findRenderObject() as RenderBox?;
+    if (box == null) return;
+
+    final Size viewportSize = box.size;
+
+    final double caretX = charWidth * caretPosition + editorPadding;
+    final double caretY = lineHeight * caretLine + editorPadding;
+
+    await Future.wait([
+      _ensureVisibleHorizontal(
+        horizontalController,
+        caretX,
+        charWidth,
+        viewportSize.width,
+        editorPadding,
+        viewPadding,
+      ),
+      _ensureVisibleVertical(
+        verticalController,
+        caretY,
+        lineHeight,
+        viewportSize.height,
+        editorPadding,
+        viewPadding,
+      ),
+    ]);
+  }
+
+  Future<void> _ensureVisibleHorizontal(
+    ScrollController controller,
+    double caretX,
+    double charWidth,
+    double viewportWidth,
+    double editorPadding,
+    double viewPadding,
+  ) async {
+    final double effectiveViewportWidth = viewportWidth - _gutterWidth - viewPadding;
+    final double leftEdge = controller.offset + _gutterWidth + editorPadding;
+    final double rightEdge = leftEdge + effectiveViewportWidth - charWidth;
+
+    if (caretX < leftEdge) {
+      await _animateScrollTo(
+        controller,
+        caretX - _gutterWidth - editorPadding,
+      );
+    } else if (caretX > rightEdge) {
+      await _animateScrollTo(
+        controller,
+        caretX - effectiveViewportWidth + charWidth + editorPadding,
+      );
+    }
+  }
+
+  Future<void> _ensureVisibleVertical(
+    ScrollController controller,
+    double caretY,
+    double lineHeight,
+    double viewportHeight,
+    double editorPadding,
+    double viewPadding,
+  ) async {
+    final double effectiveViewportHeight = viewportHeight - viewPadding;
+    final double topBufferSize = lineHeight * _verticalBuffer;
+    final double topEdge = controller.offset + editorPadding + topBufferSize;
+    final double bottomEdge = topEdge + effectiveViewportHeight - lineHeight - topBufferSize;
+
+    if (caretY < topEdge) {
+      await _animateScrollTo(
+        controller,
+        caretY - editorPadding - topBufferSize,
+      );
+    } else if (caretY > bottomEdge) {
+      await _animateScrollTo(
+        controller,
+        caretY - effectiveViewportHeight + lineHeight + editorPadding + topBufferSize,
+      );
+    }
+  }
+
+  Future<void> _animateScrollTo(ScrollController controller, double position) {
+    return controller.animateTo(
+      position,
+      duration: const Duration(milliseconds: _scrollAnimationDuration),
+      curve: Curves.easeOutCubic,
     );
   }
 
   void preventOverscroll(
-      ScrollController horizontalController,
-      ScrollController verticalController,
-      double editorPadding,
-      double viewPadding) {
-    horizontalController.addListener(() => _preventHorizontalOverscroll(
-        horizontalController, editorPadding, viewPadding));
-    verticalController.addListener(() => _preventVerticalOverscroll(
-        verticalController, editorPadding, viewPadding));
+    ScrollController horizontalController,
+    ScrollController verticalController,
+    double editorPadding,
+    double viewPadding,
+  ) {
+    horizontalController.addListener(() => _preventOverscroll(
+      horizontalController,
+      editorPadding,
+      viewPadding,
+      isHorizontal: true,
+    ));
+    verticalController.addListener(() => _preventOverscroll(
+      verticalController,
+      editorPadding,
+      viewPadding,
+      isHorizontal: false,
+    ));
   }
 
-  void _preventHorizontalOverscroll(
-      ScrollController controller, double editorPadding, double viewPadding) {
-    if (controller.position.outOfRange) {
-      if (controller.position.pixels < editorPadding * 2.625) {
-        controller.jumpTo(editorPadding * 2.625);
-      } else if (controller.position.pixels >
-          controller.position.maxScrollExtent -
-              editorPadding * 4 -
-              viewPadding) {
-        controller.jumpTo(controller.position.maxScrollExtent -
-            editorPadding * 4 -
-            viewPadding);
-      }
-    }
-  }
+  void _preventOverscroll(
+    ScrollController controller,
+    double editorPadding,
+    double viewPadding, {
+    required bool isHorizontal,
+  }) {
+    if (!controller.position.outOfRange) return;
 
-  void _preventVerticalOverscroll(
-      ScrollController controller, double editorPadding, double viewPadding) {
-    if (controller.position.outOfRange) {
-      if (controller.position.pixels < editorPadding * 3) {
-        controller.jumpTo(editorPadding * 3);
-      } else if (controller.position.pixels >
-          controller.position.maxScrollExtent - viewPadding) {
-        controller.jumpTo(controller.position.maxScrollExtent - viewPadding);
-      }
+    double minScroll = editorPadding;
+    double maxScroll = controller.position.maxScrollExtent - 
+        (isHorizontal ? editorPadding : viewPadding);
+
+    if (controller.position.pixels < minScroll) {
+      controller.jumpTo(minScroll);
+    } else if (controller.position.pixels > maxScroll) {
+      controller.jumpTo(maxScroll);
     }
   }
 
