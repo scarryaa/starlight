@@ -12,7 +12,18 @@ class TabService extends ChangeNotifier {
   List<Tab> get tabs => List.unmodifiable(_tabs);
 
   void setCurrentTab(int index) {
-    currentTabIndex = index;
+    if (index >= 0 && index < _tabs.length) {
+      currentTabIndex = index;
+      // Update isSelected for all tabs
+      for (int i = 0; i < _tabs.length; i++) {
+        _tabs[i] = Tab(
+          path: _tabs[i].path,
+          content: _tabs[i].content,
+          isSelected: i == index,
+        );
+      }
+      notifyListeners();
+    }
   }
 
   void addTab(String path) {
@@ -25,8 +36,18 @@ class TabService extends ChangeNotifier {
   }
 
   void removeTab(String path) {
-    _tabs.removeWhere((tab) => tab.path == path);
-    notifyListeners();
+    int index = _tabs.indexWhere((tab) => tab.path == path);
+    if (index != -1) {
+      _tabs.removeAt(index);
+      if (currentTabIndex != null) {
+        if (currentTabIndex! >= _tabs.length) {
+          currentTabIndex = _tabs.isEmpty ? null : _tabs.length - 1;
+        } else if (currentTabIndex! > index) {
+          currentTabIndex = currentTabIndex! - 1;
+        }
+      }
+      notifyListeners();
+    }
   }
 
   void updateTabContent(String path, String content) {
@@ -41,4 +62,23 @@ class TabService extends ChangeNotifier {
       notifyListeners();
     }
   }
+
+  void reorderTabs(int oldIndex, int newIndex) {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
+    final Tab tab = _tabs.removeAt(oldIndex);
+    _tabs.insert(newIndex, tab);
+
+    if (currentTabIndex == oldIndex) {
+      currentTabIndex = newIndex;
+    } else if (currentTabIndex! > oldIndex && currentTabIndex! <= newIndex) {
+      currentTabIndex = currentTabIndex! - 1;
+    } else if (currentTabIndex! < oldIndex && currentTabIndex! >= newIndex) {
+      currentTabIndex = currentTabIndex! + 1;
+    }
+
+    notifyListeners();
+  }
 }
+

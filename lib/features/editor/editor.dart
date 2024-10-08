@@ -112,36 +112,34 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
         children: [
           SizedBox(
             height: 35,
-            child: TabBar(
-              splashFactory: NoSplash.splashFactory,
-              tabAlignment: TabAlignment.start,
-              padding: EdgeInsets.zero,
-              dividerHeight: 1,
-              dividerColor: Colors.blue[200],
-              controller: tabController,
-              isScrollable: true,
-              indicatorPadding: EdgeInsets.zero,
-              labelPadding: EdgeInsets.zero,
-              indicatorColor: Colors.transparent,
-              overlayColor: WidgetStateProperty.all(Colors.transparent),
-              splashBorderRadius: BorderRadius.zero,
-              indicatorWeight: 0,
-              indicator: const BoxDecoration(color: Colors.transparent),
-              onTap: (index) {
+            child: ReorderableListView(
+              scrollDirection: Axis.horizontal,
+              buildDefaultDragHandles: false,
+              onReorder: (oldIndex, newIndex) {
                 setState(() {
-                  widget.tabService.setCurrentTab((index));
-                  tabController.index = index;
+                  widget.tabService.reorderTabs(oldIndex, newIndex);
+                  // Update tabController to reflect the new order
+                  tabController.index = widget.tabService.currentTabIndex ?? 0;
                 });
               },
-              tabs: widget.tabService.tabs.asMap().entries.map((entry) {
+              children: widget.tabService.tabs.asMap().entries.map((entry) {
                 final index = entry.key;
                 final tab = entry.value;
-                final isSelected = tabController.index == index;
-                return CustomTab.Tab(
-                  content: "",
-                  path: tab.path.split('/').last,
-                  isSelected: isSelected,
-                  onCloseTap: () => widget.tabService.removeTab(tab.path),
+                return ReorderableDragStartListener(
+                  key: ValueKey(tab.path),
+                  index: index,
+                  child: CustomTab.Tab(
+                    path: tab.path.split('/').last,
+                    content: tab.content,
+                    isSelected: tab.isSelected,
+                    onTap: () {
+                      setState(() {
+                        widget.tabService.setCurrentTab(index);
+                        tabController.index = index;
+                      });
+                    },
+                    onCloseTap: () => widget.tabService.removeTab(tab.path),
+                  ),
                 );
               }).toList(),
             ),
