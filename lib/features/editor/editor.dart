@@ -7,6 +7,7 @@ import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
+import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
@@ -14,9 +15,22 @@ import 'package:starlight/services/tab_service.dart';
 class Editor extends StatefulWidget {
   final TabService tabService;
   final FileService fileService;
+  final HotkeyService hotkeyService;
+  final double lineHeight;
+  final String fontFamily;
+  final double fontSize;
+  final int tabSize;
 
-  const Editor(
-      {super.key, required this.tabService, required this.fileService});
+  const Editor({
+    super.key,
+    required this.tabService,
+    required this.fileService,
+    required this.hotkeyService,
+    this.lineHeight = 1.5,
+    this.fontFamily = "ZedMono Nerd Font",
+    this.fontSize = 16,
+    this.tabSize = 4,
+  });
 
   @override
   State<Editor> createState() => _EditorState();
@@ -96,12 +110,17 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
 
   Widget _buildEditor(int index) {
     return EditorContent(
+      hotkeyService: widget.hotkeyService,
       verticalController: _verticalControllers[index],
       horizontalController: _horizontalControllers[index],
       scrollManager: _scrollManager,
       tab: widget.tabService.tabs[index],
       fileService: widget.fileService,
       tabService: widget.tabService,
+      lineHeight: widget.lineHeight,
+      fontFamily: widget.fontFamily,
+      fontSize: widget.fontSize,
+      tabSize: widget.tabSize,
     );
   }
 
@@ -161,9 +180,14 @@ class EditorContent extends StatefulWidget {
   final ScrollController verticalController;
   final ScrollController horizontalController;
   final EditorScrollManager scrollManager;
+  final HotkeyService hotkeyService;
   final CustomTab.Tab tab;
   final FileService fileService;
   final TabService tabService;
+  final double lineHeight;
+  final String fontFamily;
+  final double fontSize;
+  final int tabSize;
 
   const EditorContent({
     super.key,
@@ -173,6 +197,11 @@ class EditorContent extends StatefulWidget {
     required this.tab,
     required this.fileService,
     required this.tabService,
+    required this.lineHeight,
+    required this.fontFamily,
+    required this.fontSize,
+    required this.tabSize,
+    required this.hotkeyService,
   });
 
   @override
@@ -255,6 +284,8 @@ class _EditorContentState extends State<EditorContent> {
     return Row(
       children: [
         EditorGutter(
+          fontSize: widget.fontSize,
+          fontFamily: widget.fontFamily,
           height: contentHeight,
           lineHeight: lineHeight,
           editorVerticalScrollController: widget.verticalController,
@@ -303,6 +334,9 @@ class _EditorContentState extends State<EditorContent> {
                                 child: CustomPaint(
                                   key: _painterKey,
                                   painter: EditorPainter(
+                                    fontSize: widget.fontSize,
+                                    fontFamily: widget.fontFamily,
+                                    lineHeight: widget.lineHeight,
                                     viewportHeight:
                                         MediaQuery.of(context).size.height,
                                     viewportWidth:
@@ -354,6 +388,10 @@ class _EditorContentState extends State<EditorContent> {
     bool isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
     bool isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
     bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
+
+    if (widget.hotkeyService.isGlobalHotkey(keyEvent)) {
+      return KeyEventResult.ignored; // Let the global handler take care of it
+    }
 
     if ((isCtrlPressed && !Platform.isMacOS) ||
         (Platform.isMacOS && isMetaPressed) && keyEvent.character != null) {
@@ -610,6 +648,20 @@ class _EditorContentState extends State<EditorContent> {
     caretLine++;
     caretPosition = 0;
     absoluteCaretPosition++;
+
+    // Auto-indentation
+    int previousLineStart = rope.findClosestLineStart(caretLine - 1);
+    int indentationCount = 0;
+    while (rope.text[previousLineStart + indentationCount] == ' ' &&
+        indentationCount < rope.getLineLength(caretLine - 1)) {
+      indentationCount++;
+    }
+    if (indentationCount > 0) {
+      String indentation = ' ' * indentationCount;
+      rope.insert(indentation, absoluteCaretPosition);
+      caretPosition += indentationCount;
+      absoluteCaretPosition += indentationCount;
+    }
   }
 
   void moveCaretHorizontally(int amount) {
@@ -737,6 +789,8 @@ class EditorPainter extends CustomPainter {
   double verticalOffset;
   double viewportHeight;
   double viewportWidth;
+  final String fontFamily;
+  final double fontSize;
 
   EditorPainter({
     required this.lines,
@@ -750,6 +804,9 @@ class EditorPainter extends CustomPainter {
     required this.horizontalOffset,
     required this.viewportHeight,
     required this.viewportWidth,
+    required this.lineHeight,
+    required this.fontFamily,
+    required this.fontSize,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -768,11 +825,11 @@ class EditorPainter extends CustomPainter {
       for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
         TextSpan span = TextSpan(
           text: lines[i],
-          style: const TextStyle(
-            fontFamily: "ZedMono Nerd Font",
-            height: 1.5,
+          style: TextStyle(
+            fontFamily: fontFamily,
             color: Colors.black,
-            fontSize: 16,
+            fontSize: fontSize,
+            height: 1, // Set height to 1 to prevent additional line spacing
           ),
         );
         TextPainter tp = TextPainter(
@@ -782,10 +839,11 @@ class EditorPainter extends CustomPainter {
         );
         tp.layout(maxWidth: size.width);
 
-        tp.paint(canvas, Offset(0, lineHeight * i));
+        // Calculate the vertical position to center the text within the line
+        double yPosition = (lineHeight * i) + ((lineHeight - tp.height) / 2);
+        tp.paint(canvas, Offset(0, yPosition));
       }
     }
-
     drawSelection(canvas, firstVisibleLine, lastVisibleLine);
 
     // Draw caret
@@ -819,10 +877,10 @@ class EditorPainter extends CustomPainter {
   double _measureCharWidth(String s) {
     final textSpan = TextSpan(
       text: s,
-      style: const TextStyle(
-        fontSize: 16,
+      style: TextStyle(
+        fontSize: fontSize,
         color: Colors.white,
-        fontFamily: "ZedMono Nerd Font",
+        fontFamily: fontFamily,
       ),
     );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);
@@ -833,11 +891,11 @@ class EditorPainter extends CustomPainter {
   double _measureLineHeight(String s) {
     final textSpan = TextSpan(
       text: s,
-      style: const TextStyle(
-        fontSize: 16,
-        height: 1.5,
+      style: TextStyle(
+        fontSize: fontSize,
+        height: lineHeight,
         color: Colors.white,
-        fontFamily: "ZedMono Nerd Font",
+        fontFamily: fontFamily,
       ),
     );
     final tp = TextPainter(text: textSpan, textDirection: TextDirection.ltr);

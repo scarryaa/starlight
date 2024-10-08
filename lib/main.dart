@@ -1,5 +1,5 @@
 import 'dart:io';
-
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/editor.dart';
@@ -15,7 +15,6 @@ void main() {
 
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
-
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
@@ -36,7 +35,7 @@ class MyHomePage extends StatefulWidget {
     hotkeyService = HotkeyService();
     configService =
         ConfigService(fileService: fileService, tabService: tabService);
-    _createConfigFileIfNotExists();
+    _initializeConfig();
   }
 
   final FileService fileService = FileService();
@@ -45,12 +44,11 @@ class MyHomePage extends StatefulWidget {
   late ConfigService configService;
   final String title;
 
-  void _createConfigFileIfNotExists() {
-    File configFile = File(configService.configPath);
-    if (!configFile.existsSync()) {
-      configFile.createSync(recursive: true);
-      configFile.writeAsStringSync('{}');
+  void _initializeConfig() {
+    if (!File(configService.configPath).existsSync()) {
+      configService.createDefaultConfig();
     }
+    configService.loadConfig();
   }
 
   @override
@@ -71,7 +69,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _registerHotkeys() {
     final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
-    widget.hotkeyService.registerHotkey(
+    widget.hotkeyService.registerGlobalHotkey(
       SingleActivator(LogicalKeyboardKey.keyS,
           meta: isMacOS, control: !isMacOS),
       () {
@@ -85,11 +83,11 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       },
     );
-    widget.hotkeyService.registerHotkey(
+    widget.hotkeyService.registerGlobalHotkey(
         SingleActivator(LogicalKeyboardKey.keyN,
             meta: isMacOS, control: !isMacOS),
         () {});
-    widget.hotkeyService.registerHotkey(
+    widget.hotkeyService.registerGlobalHotkey(
       SingleActivator(LogicalKeyboardKey.comma,
           meta: isMacOS, control: !isMacOS),
       () {
@@ -116,12 +114,20 @@ class _MyHomePageState extends State<MyHomePage> {
             mainAxisAlignment: MainAxisAlignment.start,
             children: <Widget>[
               FileExplorer(
-                initialDirectory: '',
+                initialDirectory:
+                    widget.configService.config['initialDirectory'] ?? '',
                 tabService: widget.tabService,
               ),
               Editor(
+                hotkeyService: widget.hotkeyService,
                 tabService: widget.tabService,
                 fileService: widget.fileService,
+                lineHeight: widget.configService.config['lineHeight'] ?? 1.5,
+                fontFamily: widget.configService.config['fontFamily'] ??
+                    'ZedMono Nerd Font',
+                fontSize:
+                    widget.configService.config['fontSize'].toDouble() ?? 16,
+                tabSize: widget.configService.config['tabSize'] ?? 4,
               ),
             ],
           ),

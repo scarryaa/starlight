@@ -7,7 +7,8 @@ class EditorGutter extends StatefulWidget {
   final ScrollController editorVerticalScrollController;
   final int lineCount;
   final double editorPadding;
-
+  final double fontSize;
+  final String fontFamily;
   final double viewPadding;
 
   const EditorGutter({
@@ -18,6 +19,8 @@ class EditorGutter extends StatefulWidget {
     required this.lineCount,
     required this.editorPadding,
     required this.viewPadding,
+    required this.fontSize,
+    required this.fontFamily,
   });
 
   @override
@@ -48,9 +51,9 @@ class _EditorGutterState extends State<EditorGutter> {
                   alignment: Alignment.center,
                   child: Text(
                     (index + 1).toString(),
-                    style: const TextStyle(
-                      fontFamily: "ZedMono Nerd Font",
-                      fontSize: 16,
+                    style: TextStyle(
+                      fontFamily: widget.fontFamily,
+                      fontSize: widget.fontSize,
                       height: 1.5,
                       color: Colors.grey,
                     ),
