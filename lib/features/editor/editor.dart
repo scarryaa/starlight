@@ -191,6 +191,9 @@ class _EditorContentState extends State<EditorContent> {
   int selectionEnd = -1;
   int selectionAnchor = -1;
   int selectionFocus = -1;
+  double _verticalOffset = 0;
+  double _horizontalOffset = 0;
+  Key _painterKey = UniqueKey();
 
   @override
   void initState() {
@@ -199,20 +202,59 @@ class _EditorContentState extends State<EditorContent> {
     updateLineCounts();
     widget.scrollManager.preventOverscroll(widget.horizontalController,
         widget.verticalController, editorPadding, viewPadding);
+    widget.verticalController.addListener(_handleVerticalScroll);
+    widget.horizontalController.addListener(_handleHorizontalScroll);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _updateContentSize());
+  }
+
+  @override
+  void dispose() {
+    widget.verticalController.removeListener(_handleVerticalScroll);
+    widget.horizontalController.removeListener(_handleHorizontalScroll);
+    super.dispose();
+  }
+
+  void _handleVerticalScroll() {
+    setState(() {
+      _verticalOffset = widget.verticalController.offset;
+    });
+  }
+
+  void _handleHorizontalScroll() {
+    setState(() {
+      _horizontalOffset = widget.horizontalController.offset;
+    });
+  }
+
+  void _updateContentSize() {
+    setState(() {
+      // Update the content size and scroll extent
+      WidgetsBinding.instance.addPostFrameCallback(
+        (timeStamp) {
+          widget.verticalController.jumpTo(widget.verticalController.offset);
+          widget.horizontalController
+              .jumpTo(widget.horizontalController.offset);
+        },
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final contentHeight = max(
+      (lineHeight * rope.lineCount) + viewPadding,
+      MediaQuery.of(context).size.height,
+    );
+
     return Row(
       children: [
         EditorGutter(
-          height: max(
-            (lineHeight * rope.lineCount) - editorPadding + viewPadding,
-            MediaQuery.of(context).size.height,
-          ),
+          height: contentHeight,
+          lineHeight: lineHeight,
           editorVerticalScrollController: widget.verticalController,
           lineCount: rope.lineCount,
           editorPadding: editorPadding,
+          viewPadding: viewPadding,
         ),
         Expanded(
           child: GestureDetector(
@@ -227,58 +269,47 @@ class _EditorContentState extends State<EditorContent> {
                     children: [
                       Positioned.fill(
                         child: RawScrollbar(
-                          controller: widget.verticalController,
+                          controller: widget.horizontalController,
                           thumbVisibility: true,
                           thickness: 8,
                           radius: const Radius.circular(4),
                           thumbColor: Colors.grey.withOpacity(0.5),
                           minThumbLength: 30,
-                          child: RawScrollbar(
-                            controller: widget.horizontalController,
-                            thumbVisibility: true,
-                            thickness: 8,
-                            radius: const Radius.circular(4),
-                            thumbColor: Colors.grey.withOpacity(0.5),
-                            minThumbLength: 30,
-                            notificationPredicate: (notification) =>
-                                notification.depth == 1,
+                          notificationPredicate: (notification) =>
+                              notification.depth == 1,
+                          child: SingleChildScrollView(
+                            physics: widget.scrollManager.clampingScrollPhysics,
+                            controller: widget.verticalController,
+                            scrollDirection: Axis.vertical,
                             child: SingleChildScrollView(
                               physics:
                                   widget.scrollManager.clampingScrollPhysics,
-                              controller: widget.verticalController,
-                              scrollDirection: Axis.vertical,
-                              child: SingleChildScrollView(
-                                physics:
-                                    widget.scrollManager.clampingScrollPhysics,
-                                controller: widget.horizontalController,
-                                scrollDirection: Axis.horizontal,
-                                child: SizedBox(
-                                  width: max(
-                                    getMaxLineCount() * charWidth +
-                                        charWidth +
-                                        viewPadding,
-                                    constraints.maxWidth,
-                                  ),
-                                  height: max(
-                                    (lineHeight * rope.lineCount) +
-                                        viewPadding -
-                                        editorPadding,
-                                    constraints.maxHeight,
-                                  ),
-                                  child: Padding(
-                                    padding: EdgeInsets.fromLTRB(
-                                        editorPadding, editorPadding, 0, 0),
-                                    child: CustomPaint(
-                                      painter: EditorPainter(
-                                        lines: rope.text.split('\n'),
-                                        caretPosition: caretPosition,
-                                        caretLine: caretLine,
-                                        selectionStart: selectionStart,
-                                        selectionEnd: selectionEnd,
-                                        lineStarts: rope.lineStarts,
-                                        text: rope.text,
-                                      ),
-                                    ),
+                              controller: widget.horizontalController,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: max(
+                                  getMaxLineCount() * charWidth +
+                                      charWidth +
+                                      viewPadding,
+                                  constraints.maxWidth,
+                                ),
+                                height: contentHeight,
+                                child: CustomPaint(
+                                  key: _painterKey,
+                                  painter: EditorPainter(
+                                    viewportHeight:
+                                        MediaQuery.of(context).size.height,
+                                    viewportWidth:
+                                        MediaQuery.of(context).size.width,
+                                    verticalOffset: _verticalOffset,
+                                    horizontalOffset: _horizontalOffset,
+                                    lines: rope.text.split('\n'),
+                                    caretPosition: caretPosition,
+                                    caretLine: caretLine,
+                                    selectionStart: selectionStart,
+                                    selectionEnd: selectionEnd,
+                                    lineStarts: rope.lineStarts,
+                                    text: rope.text,
                                   ),
                                 ),
                               ),
@@ -307,6 +338,8 @@ class _EditorContentState extends State<EditorContent> {
     for (int i = 0; i < rope.lineCount; i++) {
       lineCounts.add(rope.getLineLength(i));
     }
+    _painterKey = UniqueKey(); // Force painter to update
+    _updateContentSize();
   }
 
   KeyEventResult handleInput(KeyEvent keyEvent) {
@@ -670,6 +703,10 @@ class EditorPainter extends CustomPainter {
   final String text;
   late double charWidth;
   late double lineHeight;
+  double horizontalOffset;
+  double verticalOffset;
+  double viewportHeight;
+  double viewportWidth;
 
   EditorPainter({
     required this.lines,
@@ -679,6 +716,10 @@ class EditorPainter extends CustomPainter {
     required this.selectionEnd,
     required this.lineStarts,
     required this.text,
+    required this.verticalOffset,
+    required this.horizontalOffset,
+    required this.viewportHeight,
+    required this.viewportWidth,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -689,39 +730,48 @@ class EditorPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    for (int i = 0; i < lines.length; i++) {
-      TextSpan span = TextSpan(
-        text: lines[i],
-        style: const TextStyle(
-          fontFamily: "Spot Mono",
-          height: 1.5,
-          color: Colors.black,
-          fontSize: 16,
-        ),
-      );
-      TextPainter tp = TextPainter(
-        text: span,
-        textAlign: TextAlign.left,
-        textDirection: TextDirection.ltr,
-      );
-      tp.layout(maxWidth: size.width);
+    int firstVisibleLine = max((verticalOffset / lineHeight).floor(), 0);
+    int lastVisibleLine = min(
+        firstVisibleLine + (viewportHeight / lineHeight).ceil(), lines.length);
 
-      tp.paint(canvas, Offset(0, lineHeight * i));
+    if (lines.isNotEmpty) {
+      for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
+        TextSpan span = TextSpan(
+          text: lines[i],
+          style: const TextStyle(
+            fontFamily: "Spot Mono",
+            height: 1.5,
+            color: Colors.black,
+            fontSize: 16,
+          ),
+        );
+        TextPainter tp = TextPainter(
+          text: span,
+          textAlign: TextAlign.left,
+          textDirection: TextDirection.ltr,
+        );
+        tp.layout(maxWidth: size.width);
+
+        tp.paint(canvas, Offset(0, lineHeight * i));
+      }
     }
 
-    drawSelection(canvas);
+    drawSelection(canvas, firstVisibleLine, lastVisibleLine);
 
-    canvas.drawRect(
-      Rect.fromLTWH(
-        caretPosition.toDouble() * charWidth,
-        lineHeight * (caretLine + 1) - lineHeight,
-        2,
-        lineHeight,
-      ),
-      Paint()
-        ..color = Colors.blue
-        ..style = PaintingStyle.fill,
-    );
+    // Draw caret
+    if (caretLine >= firstVisibleLine && caretLine < lastVisibleLine) {
+      canvas.drawRect(
+        Rect.fromLTWH(
+          caretPosition * charWidth,
+          lineHeight * caretLine,
+          2,
+          lineHeight,
+        ),
+        Paint()
+          ..color = Colors.blue
+          ..style = PaintingStyle.fill,
+      );
+    }
   }
 
   @override
@@ -730,7 +780,10 @@ class EditorPainter extends CustomPainter {
         oldDelegate.caretPosition != caretPosition ||
         oldDelegate.selectionStart != selectionStart ||
         oldDelegate.selectionEnd != selectionEnd ||
-        oldDelegate.caretLine != caretLine;
+        oldDelegate.caretLine != caretLine ||
+        oldDelegate.verticalOffset != verticalOffset ||
+        oldDelegate.horizontalOffset != horizontalOffset ||
+        oldDelegate.lineHeight != lineHeight;
   }
 
   double _measureCharWidth(String s) {
@@ -762,9 +815,9 @@ class EditorPainter extends CustomPainter {
     return tp.height;
   }
 
-  void drawSelection(Canvas canvas) {
+  void drawSelection(Canvas canvas, int firstVisibleLine, int lastVisibleLine) {
     if (selectionStart != selectionEnd && lines.isNotEmpty) {
-      for (int i = 0; i < lines.length; i++) {
+      for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
         if (i >= lineStarts.length) {
           int lineStart =
               (i > 0 ? lineStarts[i - 1] + lines[i - 1].length : 0).toInt();

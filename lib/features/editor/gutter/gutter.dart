@@ -1,80 +1,102 @@
 import 'package:flutter/material.dart';
 
 class EditorGutter extends StatefulWidget {
-  double height = 0;
-  int lineCount = 0;
-  ScrollController gutterScrollController = ScrollController();
-  ScrollController editorVerticalScrollController;
-  double editorPadding = 0;
-  Color? lineNumberColor;
+  final double height;
+  final double lineHeight;
+  final ScrollController editorVerticalScrollController;
+  final int lineCount;
+  final double editorPadding;
+  final double viewPadding;
 
-  static double get width => 40;
+  static const double width = 70;
 
-  EditorGutter(
-      {super.key,
-      required this.height,
-      required this.editorPadding,
-      required this.editorVerticalScrollController,
-      required this.lineCount,
-      this.lineNumberColor = Colors.grey}) {
-    gutterScrollController.addListener(
-      () {
-        if (editorVerticalScrollController.offset !=
-            gutterScrollController.offset) {
-          editorVerticalScrollController.jumpTo(gutterScrollController.offset);
-        }
-      },
-    );
-  }
+  const EditorGutter({
+    Key? key,
+    required this.height,
+    required this.lineHeight,
+    required this.editorVerticalScrollController,
+    required this.lineCount,
+    required this.editorPadding,
+    required this.viewPadding,
+  }) : super(key: key);
 
   @override
-  State<StatefulWidget> createState() => _EditorGutterState();
+  State<EditorGutter> createState() => _EditorGutterState();
 }
 
 class _EditorGutterState extends State<EditorGutter> {
+  late ScrollController _gutterScrollController;
+
   @override
   void initState() {
     super.initState();
+    _gutterScrollController = ScrollController();
+    _setupScrollListeners();
+  }
 
-    widget.editorVerticalScrollController.addListener(() {
-      if (widget.editorVerticalScrollController.hasClients &&
-          widget.editorVerticalScrollController.offset !=
-              widget.gutterScrollController.offset) {
-        widget.gutterScrollController
-            .jumpTo(widget.editorVerticalScrollController.offset);
-      }
-    });
+  void _setupScrollListeners() {
+    widget.editorVerticalScrollController.addListener(_syncGutterScroll);
+    _gutterScrollController.addListener(_syncEditorScroll);
+  }
+
+  void _syncGutterScroll() {
+    if (_gutterScrollController.position.maxScrollExtent > 0 &&
+        _gutterScrollController.offset !=
+            widget.editorVerticalScrollController.offset) {
+      _gutterScrollController
+          .jumpTo(widget.editorVerticalScrollController.offset);
+    }
+  }
+
+  void _syncEditorScroll() {
+    if (widget.editorVerticalScrollController.position.maxScrollExtent > 0 &&
+        widget.editorVerticalScrollController.offset !=
+            _gutterScrollController.offset) {
+      widget.editorVerticalScrollController
+          .jumpTo(_gutterScrollController.offset);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.editorVerticalScrollController.removeListener(_syncGutterScroll);
+    _gutterScrollController.removeListener(_syncEditorScroll);
+    _gutterScrollController.dispose();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Align(
-        alignment: Alignment.topCenter,
+    return SizedBox(
+        width: EditorGutter.width,
+        height: widget.height,
         child: ScrollConfiguration(
-            behavior:
-                ScrollConfiguration.of(context).copyWith(scrollbars: false),
-            child: SingleChildScrollView(
-                controller: widget.gutterScrollController,
-                child: SizedBox(
-                    width: EditorGutter.width,
-                    height: widget.height,
-                    child: Padding(
-                        padding: EdgeInsets.fromLTRB(
-                            widget.editorPadding, widget.editorPadding, 0, 0),
-                        child: ListView.builder(
-                            itemCount: widget.lineCount,
-                            itemBuilder: (buildContext, index) {
-                              if (index < widget.lineCount) {
-                                return Center(
-                                    child: Text(
-                                        style: TextStyle(
-                                            fontFamily: "Spot Mono",
-                                            fontSize: 16,
-                                            height: 1.5,
-                                            color: widget.lineNumberColor),
-                                        (index + 1).toString()));
-                              }
-                              return null;
-                            }))))));
+          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+          child: ListView.builder(
+            controller: _gutterScrollController,
+            itemCount: widget.lineCount,
+            itemExtent: widget.lineHeight,
+            padding: EdgeInsets.only(
+              bottom: widget.viewPadding,
+            ),
+            itemBuilder: (context, index) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: Align(
+                  alignment: Alignment.center,
+                  child: Text(
+                    (index + 1).toString(),
+                    style: const TextStyle(
+                      fontFamily: "Spot Mono",
+                      fontSize: 16,
+                      height: 1.5,
+                      color: Colors.grey,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ));
   }
 }
