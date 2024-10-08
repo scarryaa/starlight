@@ -364,7 +364,8 @@ class _EditorContentState extends State<EditorContent> {
     if ((isKeyDownEvent || isKeyRepeatEvent) &&
         keyEvent.character != null &&
         keyEvent.logicalKey != LogicalKeyboardKey.backspace &&
-        keyEvent.logicalKey != LogicalKeyboardKey.enter) {
+        keyEvent.logicalKey != LogicalKeyboardKey.enter &&
+        keyEvent.logicalKey != LogicalKeyboardKey.tab) {
       setState(() {
         if (selectionStart != selectionEnd) {
           deleteSelection();
@@ -385,6 +386,9 @@ class _EditorContentState extends State<EditorContent> {
       if ((isKeyDownEvent || isKeyRepeatEvent)) {
         setState(() {
           switch (keyEvent.logicalKey) {
+            case LogicalKeyboardKey.tab:
+              rope.insert("    ", absoluteCaretPosition);
+              break;
             case LogicalKeyboardKey.backspace:
               handleBackspaceKey();
               horizontalDirection = HorizontalDirection.left;
