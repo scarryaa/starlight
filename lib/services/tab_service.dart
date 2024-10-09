@@ -19,7 +19,8 @@ class TabService extends ChangeNotifier {
       // Update isSelected for all tabs
       for (int i = 0; i < _tabs.length; i++) {
         _tabs[i] = Tab(
-          fullPath: _tabs[i].path,
+          fullAbsolutePath: _tabs[i].fullAbsolutePath,
+          fullPath: _tabs[i].fullPath,
           isModified: _tabs[i].isModified,
           path: _tabs[i].path,
           content: _tabs[i].content,
@@ -30,10 +31,11 @@ class TabService extends ChangeNotifier {
     }
   }
 
-  void addTab(String path) {
+  void addTab(String path, String fullAbsolutePath) {
     if (!_tabs.any((tab) => tab.path == path)) {
       final fileContent = fileService.readFile(path);
       _tabs.add(Tab(
+        fullAbsolutePath: fullAbsolutePath,
         fullPath: path,
         path: path,
         content: fileContent,
@@ -49,13 +51,11 @@ class TabService extends ChangeNotifier {
     int index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs.removeAt(index);
-
       if (_tabs.isNotEmpty) {
         currentTabIndex = index < _tabs.length ? index : _tabs.length - 1;
       } else {
         currentTabIndex = null;
       }
-
       notifyListeners();
     }
   }
@@ -65,6 +65,7 @@ class TabService extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
+        fullAbsolutePath: _tabs[index].fullAbsolutePath,
         fullPath: _tabs[index].fullPath,
         path: path,
         content: content,
@@ -81,7 +82,6 @@ class TabService extends ChangeNotifier {
     }
     final Tab tab = _tabs.removeAt(oldIndex);
     _tabs.insert(newIndex, tab);
-
     if (currentTabIndex == oldIndex) {
       currentTabIndex = newIndex;
     } else if (currentTabIndex! > oldIndex && currentTabIndex! <= newIndex) {
@@ -89,7 +89,6 @@ class TabService extends ChangeNotifier {
     } else if (currentTabIndex! < oldIndex && currentTabIndex! >= newIndex) {
       currentTabIndex = currentTabIndex! + 1;
     }
-
     notifyListeners();
   }
 
@@ -97,6 +96,7 @@ class TabService extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
+        fullAbsolutePath: _tabs[index].fullAbsolutePath,
         fullPath: _tabs[index].fullPath,
         isModified: isModified,
         path: _tabs[index].path,
@@ -107,3 +107,4 @@ class TabService extends ChangeNotifier {
     }
   }
 }
+

@@ -1,12 +1,10 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:starlight/services/tab_service.dart';
 
 class FileExplorer extends StatefulWidget {
   final String initialDirectory;
   final TabService tabService;
-
   const FileExplorer(
       {super.key, required this.initialDirectory, required this.tabService});
 
@@ -18,7 +16,6 @@ class FileSystemNode {
   final FileSystemEntity entity;
   bool isExpanded;
   List<FileSystemNode> children;
-
   FileSystemNode(
     this.entity, {
     this.isExpanded = false,
@@ -56,7 +53,6 @@ class _FileExplorerState extends State<FileExplorer> {
   Widget _buildFileItem(FileSystemNode node, int depth) {
     final isDirectory = node.entity is Directory;
     final fileName = node.entity.path.split("/").last;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -65,7 +61,7 @@ class _FileExplorerState extends State<FileExplorer> {
           onTap: isDirectory
               ? () => _toggleDirectory(node)
               : () {
-                  widget.tabService.addTab(node.entity.path);
+                  _addTab(node.entity.path);
                 },
           child: Container(
             height: fileHeight,
@@ -127,4 +123,10 @@ class _FileExplorerState extends State<FileExplorer> {
       }
     });
   }
+
+  void _addTab(String path) {
+    final fullAbsolutePath = File(path).absolute.path;
+    widget.tabService.addTab(path, fullAbsolutePath);
+  }
 }
+

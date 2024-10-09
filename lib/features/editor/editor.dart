@@ -62,41 +62,6 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     );
   }
 
-  void _handleTabsChanged() {
-    setState(() {
-      int oldLength = tabController.length;
-      int newLength = widget.tabService.tabs.length;
-
-      if (oldLength != newLength) {
-        // Only recreate controllers if the number of tabs has changed
-        _disposeScrollControllers();
-        _initScrollControllers();
-        tabController.dispose();
-        tabController = TabController(
-          length: newLength,
-          vsync: this,
-          animationDuration: Duration.zero,
-        );
-      }
-
-      _updateEditorInstances();
-
-      if (widget.tabService.tabs.isNotEmpty) {
-        int newIndex = widget.tabService.currentTabIndex ?? (newLength - 1);
-        if (newIndex != tabController.index) {
-          tabController.animateTo(newIndex);
-        }
-      }
-    });
-  }
-
-  void _updateEditorInstances() {
-    _editorInstances = List.generate(
-      widget.tabService.tabs.length,
-      (index) => _buildEditor(index),
-    );
-  }
-
   void _disposeScrollControllers() {
     for (var controller in _verticalControllers) {
       controller.dispose();
@@ -114,8 +79,47 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     super.dispose();
   }
 
+
+  void _handleTabsChanged() {
+    setState(() {
+      int oldLength = tabController.length;
+      int newLength = widget.tabService.tabs.length;
+
+
+      if (oldLength != newLength) {
+        _disposeScrollControllers();
+        _initScrollControllers();
+        tabController.dispose();
+        tabController = TabController(
+          length: newLength,
+          vsync: this,
+          animationDuration: Duration.zero,
+        );
+      }
+
+      _updateEditorInstances();
+
+      if (widget.tabService.tabs.isNotEmpty) {
+        int newIndex = widget.tabService.currentTabIndex ?? 0;
+        if (newIndex != tabController.index) {
+          tabController.animateTo(newIndex);
+        }
+      } else {
+      }
+    });
+  }
+
+  void _updateEditorInstances() {
+    _editorInstances = List.generate(
+      widget.tabService.tabs.length,
+      (index) => _buildEditor(index),
+    );
+  }
+
+  
   Widget _buildEditor(int index) {
     return EditorContent(
+      key: ValueKey(widget.tabService.tabs[index].path),
       editorSelectionManager: widget.editorSelectionManager,
       hotkeyService: widget.hotkeyService,
       verticalController: _verticalControllers[index],
@@ -154,25 +158,18 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
                   key: ValueKey(tab.path),
                   index: index,
                   child: CustomTab.Tab(
-                    fullPath: tab.path,
-                    path: tab.path.split('/').last,
+                    fullAbsolutePath: tab.fullAbsolutePath,
+                    fullPath: tab.fullPath,
+                    path: tab.path,
                     content: tab.content,
                     isSelected: tab == widget.tabService.currentTab,
                     onTap: () {
-                      setState(() {
-                        widget.tabService.setCurrentTab(index);
-                        tabController.index = index;
-                      });
+                      widget.tabService.setCurrentTab(index);
                     },
-                    isModified:
-                        tab.isModified, // Use the actual isModified value
+                    isModified: tab.isModified,
                     onSecondaryTap: () {},
                     onCloseTap: () {
                       widget.tabService.removeTab(tab.path);
-                      if (widget.tabService.currentTabIndex != null) {
-                        tabController.index =
-                            widget.tabService.currentTabIndex!;
-                      }
                     },
                   ),
                 );

@@ -21,6 +21,10 @@ class FileService extends ChangeNotifier {
     File(path).writeAsStringSync(content);
   }
 
+  String getAbsolutePath(String path) {
+    return File.fromUri(Uri(path: path)).absolute.path;
+  }
+
   void selectFile(String path) {
     currentFile = File(path);
   }

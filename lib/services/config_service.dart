@@ -51,7 +51,7 @@ class ConfigService {
   }
 
   void openConfig() {
-    tabService.addTab(configPath);
+    tabService.addTab(configPath, configPath);
   }
 
   void updateConfig(String key, dynamic value) {

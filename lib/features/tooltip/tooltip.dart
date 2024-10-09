@@ -1,24 +1,33 @@
 import 'package:flutter/material.dart';
 
+enum TooltipTheme {
+  light,
+  dark,
+}
+
 class CustomTooltip extends StatelessWidget {
   final Widget child;
   final String message;
   final Duration waitDuration;
+  final TooltipTheme theme;
 
   const CustomTooltip({
     Key? key,
     required this.child,
     required this.message,
     this.waitDuration = const Duration(milliseconds: 500),
+    this.theme = TooltipTheme.dark,
   }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
+    final isDarkTheme = theme == TooltipTheme.dark;
+
     return Tooltip(
       message: message,
       waitDuration: waitDuration,
       decoration: BoxDecoration(
-        color: Colors.grey[850],
+        color: isDarkTheme ? Colors.grey[850] : Colors.white,
         borderRadius: BorderRadius.circular(4),
         boxShadow: [
           BoxShadow(
@@ -28,8 +37,8 @@ class CustomTooltip extends StatelessWidget {
           ),
         ],
       ),
-      textStyle: const TextStyle(
-        color: Colors.white,
+      textStyle: TextStyle(
+        color: isDarkTheme ? Colors.white : Colors.black87,
         fontSize: 12,
         fontWeight: FontWeight.w400,
       ),

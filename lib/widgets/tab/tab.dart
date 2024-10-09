@@ -1,9 +1,10 @@
 import 'package:flutter/gestures.dart';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart' hide TooltipTheme;
 import 'package:starlight/features/tooltip/tooltip.dart';
 
 class Tab extends StatefulWidget {
   final String fullPath;
+  final String fullAbsolutePath;
   final String path;
   String content;
   final bool isSelected;
@@ -15,6 +16,7 @@ class Tab extends StatefulWidget {
   Tab({
     super.key,
     required this.fullPath,
+    required this.fullAbsolutePath,
     required this.path,
     required this.content,
     required this.isSelected,
@@ -46,9 +48,9 @@ class _TabState extends State<Tab> {
             }
           },
           child: CustomTooltip(
+            theme: TooltipTheme.light,
             waitDuration: const Duration(milliseconds: 500),
-            message:
-                widget.fullPath, // Changed from widget.path to widget.fullPath
+            message: widget.fullAbsolutePath,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               decoration: BoxDecoration(
