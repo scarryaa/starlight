@@ -6,13 +6,13 @@ import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/features/editor/editor_content.dart';
+import 'package:starlight/features/editor/models/rope.dart';
 
 class Editor extends StatefulWidget {
   final TabService tabService;
   final FileService fileService;
   final HotkeyService hotkeyService;
-  final EditorSelectionManager editorSelectionManager =
-      EditorSelectionManager();
+  final EditorSelectionManager editorSelectionManager;
   final double lineHeight;
   final String fontFamily;
   final double fontSize;
@@ -27,7 +27,7 @@ class Editor extends StatefulWidget {
     this.fontFamily = "ZedMono Nerd Font",
     this.fontSize = 16,
     this.tabSize = 4,
-  });
+  }) : editorSelectionManager = EditorSelectionManager(Rope(''));
 
   @override
   State<Editor> createState() => _EditorState();

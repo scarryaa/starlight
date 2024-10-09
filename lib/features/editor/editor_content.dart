@@ -77,6 +77,8 @@ class _EditorContentState extends State<EditorContent> {
     super.initState();
     rope = Rope(widget.tab.content);
     updateLineCounts();
+
+    widget.editorSelectionManager.updateRope(rope);
     widget.scrollManager.preventOverscroll(widget.horizontalController,
         widget.verticalController, editorPadding, viewPadding);
     widget.verticalController.addListener(_handleVerticalScroll);
@@ -176,17 +178,29 @@ class _EditorContentState extends State<EditorContent> {
                 f.requestFocus();
                 _handleTap(details);
               },
+              onLongPressStart: (LongPressStartDetails details) {
+                f.requestFocus();
+                handleDragStart(details.localPosition);
+              },
+              onLongPressMoveUpdate: (LongPressMoveUpdateDetails details) {
+                f.requestFocus();
+                handleDragUpdate(details.localPosition);
+              },
+              onLongPressEnd: (LongPressEndDetails details) {
+                f.requestFocus();
+                handleDragEnd();
+              },
               onPanStart: (DragStartDetails details) {
                 f.requestFocus();
-                handleDragStart(details);
+                handleDragStart(details.localPosition);
               },
               onPanUpdate: (DragUpdateDetails details) {
                 f.requestFocus();
-                handleDragUpdate(details);
+                handleDragUpdate(details.localPosition);
               },
               onPanEnd: (DragEndDetails details) {
                 f.requestFocus();
-                handleDragEnd(details);
+                handleDragEnd();
               },
               behavior: HitTestBehavior.translucent,
               child: Focus(
@@ -286,129 +300,111 @@ class _EditorContentState extends State<EditorContent> {
     }
     _lastClickTime = currentTime;
 
+    final tapPosition = getPositionFromOffset(details.localPosition);
+
     setState(() {
       if (_clickCount == 1) {
-        handleClick(details);
         widget.editorSelectionManager.setSelectionMode(SelectionMode.normal);
+        handleClick(tapPosition);
       } else if (_clickCount == 2) {
-        handleDoubleClick(details);
         widget.editorSelectionManager.setSelectionMode(SelectionMode.word);
+        handleDoubleClick(tapPosition);
       } else if (_clickCount == 3) {
-        handleTripleClick(details);
         widget.editorSelectionManager.setSelectionMode(SelectionMode.line);
+        handleTripleClick(tapPosition);
         _clickCount = 0; // Reset after triple click
       }
     });
   }
 
-  void handleClick(TapDownDetails details) {
-    final tapPosition = getPositionFromOffset(details.localPosition);
-    keyboardHandler.absoluteCaretPosition = tapPosition;
+  void handleClick(int position) {
+    keyboardHandler.absoluteCaretPosition = position;
     keyboardHandler.updateCaretPosition();
     widget.editorSelectionManager.clearSelection();
   }
 
-  void handleDoubleClick(TapDownDetails details) {
-    final tapPosition = getPositionFromOffset(details.localPosition);
-    int selectionStart, selectionEnd;
+  void handleDoubleClick(int position) {
+    int selectionStart = findWordBoundary(position, true);
+    int selectionEnd = findWordBoundary(position, false);
 
-    int line = getLineFromOffset(details.localPosition);
-    int lineStart = rope.findClosestLineStart(line);
-    int lineEnd = (line < rope.lineCount - 1)
-        ? rope.findClosestLineStart(line + 1) - 1
-        : rope.length;
+    widget.editorSelectionManager.selectionAnchor = selectionStart;
+    widget.editorSelectionManager.selectionFocus = selectionEnd;
+    widget.editorSelectionManager.updateSelection();
 
-    // Check if the line is empty
-    bool isEmptyLine = lineStart == lineEnd;
-
-    if (isEmptyLine) {
-      // If the line is empty, don't select anything
-      selectionStart = selectionEnd = lineStart;
-    } else if (tapPosition >= lineEnd) {
-      // Clicked beyond the line's end, select the last word
-      selectionEnd = lineEnd;
-      selectionStart = findWordBoundary(lineEnd - 1, true);
-    } else if (tapPosition >= rope.length) {
-      selectionStart = selectionEnd = rope.length;
-    } else if (isWhitespace(rope.charAt(tapPosition))) {
-      selectionStart = findWhitespaceBoundary(tapPosition, true);
-      selectionEnd = findWhitespaceBoundary(tapPosition, false);
-    } else {
-      selectionStart = findWordBoundary(tapPosition, true);
-      selectionEnd = findWordBoundary(tapPosition, false);
-    }
-
-    setState(() {
-      widget.editorSelectionManager.selectionAnchor = selectionStart;
-      widget.editorSelectionManager.selectionFocus = selectionEnd;
-      widget.editorSelectionManager.selectionStart = selectionStart;
-      widget.editorSelectionManager.selectionEnd = selectionEnd;
-
-      keyboardHandler.absoluteCaretPosition = selectionEnd;
-      keyboardHandler.updateCaretPosition();
-    });
+    keyboardHandler.absoluteCaretPosition = selectionEnd;
+    keyboardHandler.updateCaretPosition();
   }
 
-  void handleTripleClick(TapDownDetails details) {
-    int lineNumber = getLineFromOffset(details.localPosition);
+  void handleTripleClick(int position) {
+    int lineNumber = rope.findLineForPosition(position);
     int lineStart = rope.findClosestLineStart(lineNumber);
     int lineEnd = lineNumber < rope.lineCount - 1
         ? rope.findClosestLineStart(lineNumber + 1)
         : rope.length;
 
+    widget.editorSelectionManager.selectionAnchor = lineStart;
+    widget.editorSelectionManager.selectionFocus = lineEnd;
+    widget.editorSelectionManager.updateSelection();
+
+    keyboardHandler.absoluteCaretPosition = lineEnd;
+    keyboardHandler.updateCaretPosition();
+  }
+
+  void handleDragStart(Offset localPosition) {
     setState(() {
-      widget.editorSelectionManager.selectionAnchor = lineStart;
-      widget.editorSelectionManager.selectionFocus = lineEnd;
-      widget.editorSelectionManager.selectionStart = lineStart;
-      widget.editorSelectionManager.selectionEnd = lineEnd;
-      keyboardHandler.absoluteCaretPosition = lineEnd;
+      _isDragging = true;
+      int dragStartPosition = getPositionFromOffset(localPosition);
+
+      widget.editorSelectionManager.selectionAnchor = dragStartPosition;
+      widget.editorSelectionManager.selectionFocus = dragStartPosition;
+      widget.editorSelectionManager.updateSelection();
+
+      keyboardHandler.absoluteCaretPosition = dragStartPosition;
       keyboardHandler.updateCaretPosition();
     });
   }
 
-  void handleDragUpdate(DragUpdateDetails details) {
+  void handleDragUpdate(Offset localPosition) {
     if (_isDragging) {
       setState(() {
-        Offset constrainedOffset = constrainOffset(details.localPosition);
+        Offset constrainedOffset = constrainOffset(localPosition);
         int currentPosition = getPositionFromOffset(constrainedOffset);
         currentPosition = currentPosition.clamp(0, rope.length);
 
-        if (widget.editorSelectionManager.selectionMode == SelectionMode.word) {
-          if (currentPosition > widget.editorSelectionManager.selectionAnchor) {
-            // Moving right/down
-            widget.editorSelectionManager.selectionFocus =
-                findWordBoundary(currentPosition, false);
-          } else {
-            // Moving left/up
-            widget.editorSelectionManager.selectionFocus =
-                findWordBoundary(currentPosition, true);
-          }
-        } else if (widget.editorSelectionManager.selectionMode ==
-            SelectionMode.line) {
-          int anchorLine = getLineFromPosition(
-              widget.editorSelectionManager.selectionAnchor);
-          int currentLine = getLineFromPosition(currentPosition);
+        switch (widget.editorSelectionManager.selectionMode) {
+          case SelectionMode.word:
+            if (currentPosition >
+                widget.editorSelectionManager.selectionAnchor) {
+              widget.editorSelectionManager.selectionFocus =
+                  findWordBoundary(currentPosition, false);
+            } else {
+              widget.editorSelectionManager.selectionFocus =
+                  findWordBoundary(currentPosition, true);
+            }
+            break;
+          case SelectionMode.line:
+            int anchorLine = rope.findLineForPosition(
+                widget.editorSelectionManager.selectionAnchor);
+            int currentLine = rope.findLineForPosition(currentPosition);
 
-          if (currentLine < anchorLine) {
-            widget.editorSelectionManager.selectionFocus =
-                rope.findClosestLineStart(currentLine);
-          } else {
-            widget.editorSelectionManager.selectionFocus =
-                currentLine < rope.lineCount - 1
-                    ? rope.findClosestLineStart(currentLine + 1)
-                    : rope.length;
-          }
-        } else {
-          widget.editorSelectionManager.selectionFocus = currentPosition;
+            if (currentLine < anchorLine) {
+              widget.editorSelectionManager.selectionFocus =
+                  rope.findClosestLineStart(currentLine);
+            } else {
+              widget.editorSelectionManager.selectionFocus =
+                  currentLine < rope.lineCount - 1
+                      ? rope.findClosestLineStart(currentLine + 1)
+                      : rope.length;
+            }
+            break;
+          default:
+            widget.editorSelectionManager.selectionFocus = currentPosition;
         }
 
-        widget.editorSelectionManager.selectionFocus =
-            widget.editorSelectionManager.selectionFocus.clamp(0, rope.length);
-
+        widget.editorSelectionManager.updateSelection();
         keyboardHandler.absoluteCaretPosition =
             widget.editorSelectionManager.selectionFocus;
         keyboardHandler.updateCaretPosition();
-        widget.editorSelectionManager.updateSelection();
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _ensureCursorVisible();
@@ -417,32 +413,12 @@ class _EditorContentState extends State<EditorContent> {
     }
   }
 
-  void handleDragStart(DragStartDetails details) {
+  void handleDragEnd() {
     setState(() {
-      _isDragging = true;
-      _dragStartPosition = getPositionFromOffset(details.localPosition);
-      if (widget.editorSelectionManager.selectionMode == SelectionMode.word) {
-        widget.editorSelectionManager.selectionAnchor =
-            findWordBoundary(_dragStartPosition, true);
-        widget.editorSelectionManager.selectionFocus =
-            findWordBoundary(_dragStartPosition, false);
-      } else if (widget.editorSelectionManager.selectionMode ==
-          SelectionMode.line) {
-        int lineNumber = getLineFromOffset(details.localPosition);
-        widget.editorSelectionManager.selectionAnchor =
-            rope.findClosestLineStart(lineNumber);
-        widget.editorSelectionManager.selectionFocus =
-            lineNumber < rope.lineCount - 1
-                ? rope.findClosestLineStart(lineNumber + 1) - 1
-                : rope.length;
-      } else {
-        widget.editorSelectionManager.selectionAnchor = _dragStartPosition;
-        widget.editorSelectionManager.selectionFocus = _dragStartPosition;
-      }
+      _isDragging = false;
       keyboardHandler.absoluteCaretPosition =
-          widget.editorSelectionManager.selectionFocus;
+          widget.editorSelectionManager.selectionEnd;
       keyboardHandler.updateCaretPosition();
-      widget.editorSelectionManager.updateSelection();
     });
   }
 
@@ -456,15 +432,6 @@ class _EditorContentState extends State<EditorContent> {
 
   int getLineFromPosition(int position) {
     return rope.findLineForPosition(position);
-  }
-
-  void handleDragEnd(DragEndDetails details) {
-    setState(() {
-      _isDragging = false;
-      keyboardHandler.absoluteCaretPosition =
-          widget.editorSelectionManager.selectionEnd;
-      keyboardHandler.updateCaretPosition();
-    });
   }
 
   bool isWhitespace(String char) {
