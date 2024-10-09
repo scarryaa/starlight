@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
@@ -182,6 +183,8 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   }
 }
 
+enum SelectionMode { normal, word, line }
+
 class EditorContent extends StatefulWidget {
   final ScrollController verticalController;
   final ScrollController horizontalController;
@@ -238,6 +241,10 @@ class _EditorContentState extends State<EditorContent> {
   bool _isDragging = false;
   int _dragStartPosition = -1;
   late Size _editorSize;
+  int _clickCount = 0;
+  int _lastClickTime = 0;
+  static const int _doubleClickTime = 300; // milliseconds
+  SelectionMode _selectionMode = SelectionMode.normal;
 
   @override
   void initState() {
@@ -314,7 +321,7 @@ class _EditorContentState extends State<EditorContent> {
             child: GestureDetector(
               onTapDown: (TapDownDetails details) {
                 f.requestFocus();
-                handleClick(details);
+                _handleTap(details);
               },
               onPanStart: (DragStartDetails details) {
                 f.requestFocus();
@@ -405,23 +412,84 @@ class _EditorContentState extends State<EditorContent> {
     );
   }
 
+  void _handleTap(TapDownDetails details) {
+    int currentTime = DateTime.now().millisecondsSinceEpoch;
+    if (currentTime - _lastClickTime < _doubleClickTime) {
+      _clickCount++;
+    } else {
+      _clickCount = 1;
+    }
+    _lastClickTime = currentTime;
+
+    setState(() {
+      if (_clickCount == 1) {
+        handleClick(details);
+        _selectionMode = SelectionMode.normal;
+      } else if (_clickCount == 2) {
+        handleDoubleClick(details);
+        _selectionMode = SelectionMode.word;
+      } else if (_clickCount == 3) {
+        handleTripleClick(details);
+        _selectionMode = SelectionMode.line;
+        _clickCount = 0; // Reset after triple click
+      }
+    });
+  }
+
   void handleClick(TapDownDetails details) {
     final tapPosition = getPositionFromOffset(details.localPosition);
-    setState(() {
-      f.requestFocus();
-      absoluteCaretPosition = tapPosition;
-      updateCaretPosition();
-      clearSelection();
-    });
+    absoluteCaretPosition = tapPosition;
+    updateCaretPosition();
+    clearSelection();
+  }
+
+  void handleDoubleClick(TapDownDetails details) {
+    final tapPosition = getPositionFromOffset(details.localPosition);
+    int wordStart = findWordBoundary(tapPosition, true);
+    int wordEnd = findWordBoundary(tapPosition, false);
+
+    selectionAnchor = wordStart;
+    selectionFocus = wordEnd;
+    selectionStart = wordStart;
+    selectionEnd = wordEnd;
+    absoluteCaretPosition = wordEnd;
+    updateCaretPosition();
+  }
+
+  void handleTripleClick(TapDownDetails details) {
+    final tapPosition = getPositionFromOffset(details.localPosition);
+    int lineNumber = getLineFromOffset(details.localPosition);
+    int lineStart = rope.findClosestLineStart(lineNumber);
+    int lineEnd = lineNumber < rope.lineCount - 1
+        ? rope.findClosestLineStart(lineNumber + 1) - 1
+        : rope.length;
+
+    selectionAnchor = lineStart;
+    selectionFocus = lineEnd;
+    selectionStart = lineStart;
+    selectionEnd = lineEnd;
+    absoluteCaretPosition = lineEnd;
+    updateCaretPosition();
   }
 
   void handleDragStart(DragStartDetails details) {
     setState(() {
       _isDragging = true;
       _dragStartPosition = getPositionFromOffset(details.localPosition);
-      selectionAnchor = _dragStartPosition;
-      selectionFocus = _dragStartPosition;
-      absoluteCaretPosition = _dragStartPosition;
+      if (_selectionMode == SelectionMode.word) {
+        selectionAnchor = findWordBoundary(_dragStartPosition, true);
+        selectionFocus = findWordBoundary(_dragStartPosition, false);
+      } else if (_selectionMode == SelectionMode.line) {
+        int lineNumber = getLineFromOffset(details.localPosition);
+        selectionAnchor = rope.findClosestLineStart(lineNumber);
+        selectionFocus = lineNumber < rope.lineCount - 1
+            ? rope.findClosestLineStart(lineNumber + 1) - 1
+            : rope.length;
+      } else {
+        selectionAnchor = _dragStartPosition;
+        selectionFocus = _dragStartPosition;
+      }
+      absoluteCaretPosition = selectionFocus;
       updateCaretPosition();
       updateSelection();
     });
@@ -432,12 +500,30 @@ class _EditorContentState extends State<EditorContent> {
       setState(() {
         Offset constrainedOffset = constrainOffset(details.localPosition);
         int currentPosition = getPositionFromOffset(constrainedOffset);
-        selectionFocus = currentPosition;
-        absoluteCaretPosition = currentPosition;
+        if (_selectionMode == SelectionMode.word) {
+          selectionFocus = findWordBoundary(
+              currentPosition, currentPosition > selectionAnchor);
+        } else if (_selectionMode == SelectionMode.line) {
+          int lineNumber = getLineFromOffset(constrainedOffset);
+          if (lineNumber > getLineFromPosition(selectionAnchor)) {
+            selectionFocus = lineNumber < rope.lineCount - 1
+                ? rope.findClosestLineStart(lineNumber + 1) - 1
+                : rope.length;
+          } else {
+            selectionFocus = rope.findClosestLineStart(lineNumber);
+          }
+        } else {
+          selectionFocus = currentPosition;
+        }
+        absoluteCaretPosition = selectionFocus;
         updateCaretPosition();
         updateSelection();
       });
     }
+  }
+
+  int getLineFromPosition(int position) {
+    return rope.findLineForPosition(position);
   }
 
   void handleDragEnd(DragEndDetails details) {
@@ -448,11 +534,39 @@ class _EditorContentState extends State<EditorContent> {
     });
   }
 
+  int findWordBoundary(int position, bool isStart) {
+    if (position < 0 || position >= rope.length) {
+      return position;
+    }
+
+    bool isWordChar(String char) {
+      return RegExp(r'[a-zA-Z0-9_]').hasMatch(char);
+    }
+
+    if (isStart) {
+      while (position > 0 && isWordChar(rope.charAt(position - 1))) {
+        position--;
+      }
+    } else {
+      while (position < rope.length && isWordChar(rope.charAt(position))) {
+        position++;
+      }
+    }
+
+    return position;
+  }
+
   Offset constrainOffset(Offset offset) {
     double x = offset.dx.clamp(0, _editorSize.width);
     double y = (offset.dy + widget.verticalController.offset)
         .clamp(0, lineHeight * rope.lineCount);
     return Offset(x, y - widget.verticalController.offset);
+  }
+
+  int getLineFromOffset(Offset offset) {
+    return min(
+        (((offset.dy + widget.verticalController.offset) / lineHeight)).floor(),
+        rope.lineCount - 1);
   }
 
   int getPositionFromOffset(Offset offset) {
