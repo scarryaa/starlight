@@ -8,6 +8,7 @@ class Tab extends StatefulWidget {
   final VoidCallback? onTap;
   final VoidCallback? onCloseTap;
   final VoidCallback? onSecondaryTap;
+  bool isModified;
 
   Tab({
     super.key,
@@ -17,6 +18,7 @@ class Tab extends StatefulWidget {
     this.onTap,
     this.onSecondaryTap,
     this.onCloseTap,
+    required this.isModified,
   });
 
   @override
@@ -52,6 +54,16 @@ class _TabState extends State<Tab> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                if (widget.isModified)
+                  Container(
+                    width: 6,
+                    height: 6,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: ShapeDecoration(
+                      shape: const CircleBorder(),
+                      color: Colors.blue[700],
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: Text(
@@ -102,3 +114,4 @@ class _TabState extends State<Tab> {
     );
   }
 }
+

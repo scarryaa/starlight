@@ -10,6 +10,8 @@ class TabService extends ChangeNotifier {
   TabService({required this.fileService});
 
   List<Tab> get tabs => List.unmodifiable(_tabs);
+  Tab? get currentTab =>
+      currentTabIndex != null ? _tabs[currentTabIndex!] : null;
 
   void setCurrentTab(int index) {
     if (index >= 0 && index < _tabs.length) {
@@ -17,6 +19,7 @@ class TabService extends ChangeNotifier {
       // Update isSelected for all tabs
       for (int i = 0; i < _tabs.length; i++) {
         _tabs[i] = Tab(
+          isModified: _tabs[i].isModified,
           path: _tabs[i].path,
           content: _tabs[i].content,
           isSelected: i == index,
@@ -29,7 +32,12 @@ class TabService extends ChangeNotifier {
   void addTab(String path) {
     if (!_tabs.any((tab) => tab.path == path)) {
       final fileContent = fileService.readFile(path);
-      _tabs.add(Tab(path: path, content: fileContent, isSelected: true));
+      _tabs.add(Tab(
+        path: path,
+        content: fileContent,
+        isSelected: true,
+        isModified: false,
+      ));
       setCurrentTab(_tabs.length - 1);
       notifyListeners();
     }
@@ -39,13 +47,13 @@ class TabService extends ChangeNotifier {
     int index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs.removeAt(index);
-      if (currentTabIndex != null) {
-        if (currentTabIndex! >= _tabs.length) {
-          currentTabIndex = _tabs.isEmpty ? null : _tabs.length - 1;
-        } else if (currentTabIndex! > index) {
-          currentTabIndex = currentTabIndex! - 1;
-        }
+
+      if (_tabs.isNotEmpty) {
+        currentTabIndex = index < _tabs.length ? index : _tabs.length - 1;
+      } else {
+        currentTabIndex = null;
       }
+
       notifyListeners();
     }
   }
@@ -54,6 +62,7 @@ class TabService extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
+        isModified: false,
         path: path,
         content: content,
         isSelected: _tabs[index].isSelected,

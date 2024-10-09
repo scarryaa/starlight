@@ -157,6 +157,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
                             tabController.index = index;
                           });
                         },
+                        isModified: false,
                         onSecondaryTap: () {},
                         onCloseTap: () {
                           widget.tabService.removeTab(tab.path);
@@ -405,22 +406,13 @@ class _EditorContentState extends State<EditorContent> {
   }
 
   void handleClick(TapDownDetails details) {
-    double horizOffset =
-        ((details.localPosition.dx + widget.horizontalController.offset) /
-            charWidth);
-    caretLine = min(
-        (((details.localPosition.dy + widget.verticalController.offset) /
-                lineHeight))
-            .floor(),
-        rope.lineCount - 1);
-    caretPosition = min(horizOffset.floor(), rope.getLineLength(caretLine));
-    absoluteCaretPosition =
-        min(horizOffset.floor(), rope.getLineLength(caretLine));
-
-    selectionAnchor =
-        selectionFocus = selectionStart = selectionEnd = _dragStartPosition;
-
-    setState(() {});
+    final tapPosition = getPositionFromOffset(details.localPosition);
+    setState(() {
+      f.requestFocus();
+      absoluteCaretPosition = tapPosition;
+      updateCaretPosition();
+      clearSelection();
+    });
   }
 
   void handleDragStart(DragStartDetails details) {
@@ -429,6 +421,8 @@ class _EditorContentState extends State<EditorContent> {
       _dragStartPosition = getPositionFromOffset(details.localPosition);
       selectionAnchor = _dragStartPosition;
       selectionFocus = _dragStartPosition;
+      absoluteCaretPosition = _dragStartPosition;
+      updateCaretPosition();
       updateSelection();
     });
   }
@@ -439,6 +433,8 @@ class _EditorContentState extends State<EditorContent> {
         Offset constrainedOffset = constrainOffset(details.localPosition);
         int currentPosition = getPositionFromOffset(constrainedOffset);
         selectionFocus = currentPosition;
+        absoluteCaretPosition = currentPosition;
+        updateCaretPosition();
         updateSelection();
       });
     }
@@ -542,6 +538,7 @@ class _EditorContentState extends State<EditorContent> {
 
         updateLineCounts();
         widget.tab.content = rope.text;
+        widget.tabService.currentTab!.isModified = true;
         WidgetsBinding.instance.addPostFrameCallback((_) async {
           await _ensureCursorVisible();
         });
@@ -590,6 +587,7 @@ class _EditorContentState extends State<EditorContent> {
             });
           }
         });
+        widget.tabService.currentTab!.isModified = true;
         return KeyEventResult.handled;
       }
 
@@ -612,15 +610,19 @@ class _EditorContentState extends State<EditorContent> {
         break;
       case 'v':
         pasteText();
+        widget.tabService.currentTab!.isModified = true;
         break;
       case 'c':
         copyText();
+        widget.tabService.currentTab!.isModified = true;
         break;
       case 'x':
         cutText();
+        widget.tabService.currentTab!.isModified = true;
         break;
       case 's':
         saveFile();
+        widget.tabService.currentTab!.isModified = false;
         break;
     }
   }
