@@ -7,6 +7,7 @@ class Tab extends StatefulWidget {
   final bool isSelected;
   final VoidCallback? onTap;
   final VoidCallback? onCloseTap;
+  final VoidCallback? onSecondaryTap;
 
   Tab({
     super.key,
@@ -14,6 +15,7 @@ class Tab extends StatefulWidget {
     required this.content,
     required this.isSelected,
     this.onTap,
+    this.onSecondaryTap,
     this.onCloseTap,
   });
 
@@ -31,6 +33,7 @@ class _TabState extends State<Tab> {
       onExit: (_) => setState(() => _isHovering = false),
       child: GestureDetector(
         onTap: widget.onTap,
+        onSecondaryTap: widget.onSecondaryTap,
         child: Listener(
           onPointerDown: (PointerDownEvent event) {
             if (event.buttons == kMiddleMouseButton) {
@@ -61,18 +64,18 @@ class _TabState extends State<Tab> {
                   child: _isHovering
                       ? TextButton(
                           style: ButtonStyle(
-                            shape: MaterialStateProperty.all<
-                                RoundedRectangleBorder>(
+                            shape:
+                                WidgetStateProperty.all<RoundedRectangleBorder>(
                               RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(4.0),
                               ),
                             ),
                             padding:
-                                const MaterialStatePropertyAll(EdgeInsets.zero),
+                                const WidgetStatePropertyAll(EdgeInsets.zero),
                             overlayColor:
-                                MaterialStateProperty.resolveWith<Color?>(
-                              (Set<MaterialState> states) {
-                                if (states.contains(MaterialState.hovered)) {
+                                WidgetStateProperty.resolveWith<Color?>(
+                              (Set<WidgetState> states) {
+                                if (states.contains(WidgetState.hovered)) {
                                   return Colors.black.withOpacity(0.2);
                                 }
                                 return null;
@@ -99,4 +102,3 @@ class _TabState extends State<Tab> {
     );
   }
 }
-

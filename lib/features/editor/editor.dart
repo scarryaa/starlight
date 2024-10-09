@@ -145,21 +145,26 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
                 final index = entry.key;
                 final tab = entry.value;
                 return ReorderableDragStartListener(
-                  key: ValueKey(tab.path),
-                  index: index,
-                  child: CustomTab.Tab(
-                    path: tab.path.split('/').last,
-                    content: tab.content,
-                    isSelected: tab.isSelected,
-                    onTap: () {
-                      setState(() {
-                        widget.tabService.setCurrentTab(index);
-                        tabController.index = index;
-                      });
-                    },
-                    onCloseTap: () => widget.tabService.removeTab(tab.path),
-                  ),
-                );
+                    key: ValueKey(tab.path),
+                    index: index,
+                    child: CustomTab.Tab(
+                        path: tab.path.split('/').last,
+                        content: tab.content,
+                        isSelected: tab.isSelected,
+                        onTap: () {
+                          setState(() {
+                            widget.tabService.setCurrentTab(index);
+                            tabController.index = index;
+                          });
+                        },
+                        onSecondaryTap: () {},
+                        onCloseTap: () {
+                          widget.tabService.removeTab(tab.path);
+                          if (widget.tabService.currentTabIndex != null) {
+                            tabController.index =
+                                widget.tabService.currentTabIndex!;
+                          }
+                        }));
               }).toList(),
             ),
           ),
@@ -295,7 +300,10 @@ class _EditorContentState extends State<EditorContent> {
         ),
         Expanded(
           child: GestureDetector(
-            onTapDown: (TapDownDetails details) => f.requestFocus(),
+            onTapDown: (TapDownDetails details) {
+              f.requestFocus();
+              handleClick(details);
+            },
             behavior: HitTestBehavior.translucent,
             child: Focus(
               focusNode: f,
@@ -366,6 +374,22 @@ class _EditorContentState extends State<EditorContent> {
         ),
       ],
     );
+  }
+
+  void handleClick(TapDownDetails details) {
+    double horizOffset =
+        ((details.localPosition.dx + widget.horizontalController.offset) /
+            charWidth);
+    caretLine = min(
+        (((details.localPosition.dy + widget.verticalController.offset) /
+                lineHeight))
+            .floor(),
+        rope.lineCount - 1);
+    caretPosition = min(horizOffset.floor(), rope.getLineLength(caretLine));
+    absoluteCaretPosition =
+        min(horizOffset.floor(), rope.getLineLength(caretLine));
+
+    setState(() {});
   }
 
   int getMaxLineCount() {
