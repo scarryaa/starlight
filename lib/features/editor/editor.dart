@@ -233,6 +233,9 @@ class _EditorContentState extends State<EditorContent> {
   double _verticalOffset = 0;
   double _horizontalOffset = 0;
   Key _painterKey = UniqueKey();
+  bool _isDragging = false;
+  int _dragStartPosition = -1;
+  late Size _editorSize;
 
   @override
   void initState() {
@@ -304,12 +307,26 @@ class _EditorContentState extends State<EditorContent> {
               f.requestFocus();
               handleClick(details);
             },
+            onPanStart: (DragStartDetails details) {
+              f.requestFocus();
+              handleDragStart(details);
+            },
+            onPanUpdate: (DragUpdateDetails details) {
+              f.requestFocus();
+              handleDragUpdate(details);
+            },
+            onPanEnd: (DragEndDetails details) {
+              f.requestFocus();
+              handleDragEnd(details);
+            },
             behavior: HitTestBehavior.translucent,
             child: Focus(
               focusNode: f,
               onKeyEvent: (node, event) => handleInput(event),
               child: LayoutBuilder(
                 builder: (context, constraints) {
+                  _editorSize = Size(constraints.maxWidth, contentHeight);
+
                   return Stack(
                     children: [
                       Positioned.fill(
@@ -389,7 +406,56 @@ class _EditorContentState extends State<EditorContent> {
     absoluteCaretPosition =
         min(horizOffset.floor(), rope.getLineLength(caretLine));
 
+    selectionAnchor =
+        selectionFocus = selectionStart = selectionEnd = _dragStartPosition;
+
     setState(() {});
+  }
+
+  void handleDragStart(DragStartDetails details) {
+    setState(() {
+      _isDragging = true;
+      _dragStartPosition = getPositionFromOffset(details.localPosition);
+      selectionAnchor = _dragStartPosition;
+      selectionFocus = _dragStartPosition;
+      updateSelection();
+    });
+  }
+
+  void handleDragUpdate(DragUpdateDetails details) {
+    if (_isDragging) {
+      setState(() {
+        Offset constrainedOffset = constrainOffset(details.localPosition);
+        int currentPosition = getPositionFromOffset(constrainedOffset);
+        selectionFocus = currentPosition;
+        updateSelection();
+      });
+    }
+  }
+
+  void handleDragEnd(DragEndDetails details) {
+    setState(() {
+      _isDragging = false;
+      absoluteCaretPosition = selectionEnd;
+      updateCaretPosition();
+    });
+  }
+
+  Offset constrainOffset(Offset offset) {
+    double x = offset.dx.clamp(0, _editorSize.width);
+    double y = (offset.dy + widget.verticalController.offset)
+        .clamp(0, lineHeight * rope.lineCount);
+    return Offset(x, y - widget.verticalController.offset);
+  }
+
+  int getPositionFromOffset(Offset offset) {
+    int line = min(
+        (((offset.dy + widget.verticalController.offset) / lineHeight)).floor(),
+        rope.lineCount - 1);
+    int column =
+        ((offset.dx + widget.horizontalController.offset) / charWidth).floor();
+    return rope.findClosestLineStart(line) +
+        min(column, rope.getLineLength(line));
   }
 
   int getMaxLineCount() {
@@ -648,23 +714,53 @@ class _EditorContentState extends State<EditorContent> {
   }
 
   void handleBackspaceKey() {
-    if (hasSelection()) {
-      deleteSelection();
-    } else if (absoluteCaretPosition > 0) {
-      if (caretPosition == 0 && caretLine > 0) {
-        caretLine--;
-        caretPosition = rope.getLineLength(caretLine);
-        rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
-        absoluteCaretPosition--;
-      } else if (caretPosition > 0) {
-        rope.delete(absoluteCaretPosition - 1, 1);
-        caretPosition--;
-        absoluteCaretPosition--;
+    setState(() {
+      if (hasSelection()) {
+        deleteSelection();
+      } else if (absoluteCaretPosition > 0) {
+        if (caretPosition == 0 && caretLine > 0) {
+          caretLine--;
+          caretPosition = rope.getLineLength(caretLine);
+          rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
+          absoluteCaretPosition--;
+        } else if (caretPosition > 0) {
+          rope.delete(absoluteCaretPosition - 1, 1);
+          caretPosition--;
+          absoluteCaretPosition--;
+        }
+        caretLine = max(0, caretLine);
+        caretPosition =
+            max(0, min(caretPosition, rope.getLineLength(caretLine)));
+        absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
       }
-      caretLine = max(0, caretLine);
-      caretPosition = max(0, min(caretPosition, rope.getLineLength(caretLine)));
-      absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
+
+      updateAfterEdit();
+    });
+  }
+
+  void deleteSelection() {
+    if (hasSelection()) {
+      int start = min(selectionStart, selectionEnd);
+      int end = max(selectionStart, selectionEnd);
+      int length = end - start;
+
+      rope.delete(start, length);
+      absoluteCaretPosition = start;
+      updateCaretPosition();
+      clearSelection();
+
+      updateAfterEdit();
     }
+  }
+
+  void updateAfterEdit() {
+    rope = Rope(rope.text);
+    updateLineCounts();
+    _painterKey = UniqueKey();
+    widget.tab.content = rope.text;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _ensureCursorVisible();
+    });
   }
 
   void handleEnterKey() {
@@ -748,19 +844,6 @@ class _EditorContentState extends State<EditorContent> {
     return selectionStart != -1 &&
         selectionEnd != -1 &&
         selectionStart != selectionEnd;
-  }
-
-  void deleteSelection() {
-    if (hasSelection()) {
-      int start = min(selectionStart, selectionEnd);
-      int end = max(selectionStart, selectionEnd);
-      int length = end - start;
-
-      rope.delete(start, length);
-      absoluteCaretPosition = start;
-      updateCaretPosition();
-      clearSelection();
-    }
   }
 
   void updateCaretPosition() {
