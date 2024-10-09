@@ -1,7 +1,9 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:starlight/features/tooltip/tooltip.dart';
 
 class Tab extends StatefulWidget {
+  final String fullPath;
   final String path;
   String content;
   final bool isSelected;
@@ -12,6 +14,7 @@ class Tab extends StatefulWidget {
 
   Tab({
     super.key,
+    required this.fullPath,
     required this.path,
     required this.content,
     required this.isSelected,
@@ -42,72 +45,79 @@ class _TabState extends State<Tab> {
               widget.onCloseTap?.call();
             }
           },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-            decoration: BoxDecoration(
-              border:
-                  Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
-              color: widget.isSelected
-                  ? Colors.blue[200]
-                  : (_isHovering ? Colors.blue[200] : Colors.blue[50]),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 6,
-                  height: 6,
-                  margin: const EdgeInsets.only(right: 4),
-                  decoration: ShapeDecoration(
-                    shape: const CircleBorder(),
-                    color: widget.isModified
-                        ? Colors.blue[700]
-                        : Colors.transparent,
-                  ),
+          child: CustomTooltip(
+            waitDuration: const Duration(milliseconds: 500),
+            message:
+                widget.fullPath, // Changed from widget.path to widget.fullPath
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+              decoration: BoxDecoration(
+                border: Border(
+                  right: BorderSide(width: 1, color: Colors.blue[200]!),
                 ),
-                Padding(
-                  padding: const EdgeInsets.only(right: 4),
-                  child: Text(
-                    widget.path,
-                    style: const TextStyle(color: Colors.black),
+                color: widget.isSelected
+                    ? Colors.blue[200]
+                    : (_isHovering ? Colors.blue[200] : Colors.blue[50]),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 8,
+                    height: 8,
+                    margin: const EdgeInsets.only(right: 4),
+                    decoration: ShapeDecoration(
+                      shape: const CircleBorder(),
+                      color: widget.isModified
+                          ? Colors.blue[700]
+                          : Colors.transparent,
+                    ),
                   ),
-                ),
-                SizedBox(
-                  width: 20,
-                  child: _isHovering
-                      ? TextButton(
-                          style: ButtonStyle(
-                            shape:
-                                WidgetStateProperty.all<RoundedRectangleBorder>(
-                              RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4.0),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: Text(
+                      widget.path,
+                      style: const TextStyle(color: Colors.black),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 20,
+                    child: _isHovering
+                        ? TextButton(
+                            style: ButtonStyle(
+                              shape: WidgetStateProperty.all<
+                                  RoundedRectangleBorder>(
+                                RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(4.0),
+                                ),
+                              ),
+                              padding: const WidgetStatePropertyAll(
+                                EdgeInsets.zero,
+                              ),
+                              overlayColor:
+                                  WidgetStateProperty.resolveWith<Color?>(
+                                (Set<WidgetState> states) {
+                                  if (states.contains(WidgetState.hovered)) {
+                                    return Colors.black.withOpacity(0.2);
+                                  }
+                                  return null;
+                                },
                               ),
                             ),
-                            padding:
-                                const WidgetStatePropertyAll(EdgeInsets.zero),
-                            overlayColor:
-                                WidgetStateProperty.resolveWith<Color?>(
-                              (Set<WidgetState> states) {
-                                if (states.contains(WidgetState.hovered)) {
-                                  return Colors.black.withOpacity(0.2);
-                                }
-                                return null;
-                              },
+                            onPressed: widget.onCloseTap,
+                            child: Text(
+                              "×",
+                              style: TextStyle(
+                                color: widget.isSelected
+                                    ? Colors.white
+                                    : Colors.black,
+                              ),
                             ),
-                          ),
-                          onPressed: widget.onCloseTap,
-                          child: Text(
-                            "×",
-                            style: TextStyle(
-                              color: widget.isSelected
-                                  ? Colors.white
-                                  : Colors.black,
-                            ),
-                          ),
-                        )
-                      : const SizedBox.shrink(),
-                )
-              ],
+                          )
+                        : const SizedBox.shrink(),
+                  )
+                ],
+              ),
             ),
           ),
         ),

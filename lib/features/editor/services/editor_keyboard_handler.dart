@@ -65,6 +65,7 @@ class EditorKeyboardHandler {
         keyEvent.character != null &&
         !_isSpecialKey(keyEvent.logicalKey)) {
       _handleRegularInput(keyEvent.character!);
+      updateModifiedState();
       result = KeyEventResult.handled;
     } else if (isKeyDownEvent || isKeyRepeatEvent) {
       result = _handleSpecialKeys(keyEvent.logicalKey, isShiftPressed);
@@ -72,13 +73,7 @@ class EditorKeyboardHandler {
 
     if (result == KeyEventResult.handled) {
       updateLineCounts();
-      if (tabService.currentTab != null) {
-        tabService.updateTabContent(
-          tabService.currentTab!.path,
-          rope.text,
-          isModified: true,
-        );
-      }
+      tabService.currentTab!.content = rope.text;
       notifyListeners();
       ensureCursorVisible();
     }
@@ -105,17 +100,28 @@ class EditorKeyboardHandler {
     absoluteCaretPosition++;
   }
 
+  bool _isContentModifyingKey(LogicalKeyboardKey key) {
+    return key == LogicalKeyboardKey.tab ||
+        key == LogicalKeyboardKey.backspace ||
+        key == LogicalKeyboardKey.enter;
+  }
+
   KeyEventResult _handleSpecialKeys(
       LogicalKeyboardKey key, bool isShiftPressed) {
+    bool contentModified = false;
+
     switch (key) {
       case LogicalKeyboardKey.tab:
         handleTabKey();
+        contentModified = true;
         break;
       case LogicalKeyboardKey.backspace:
         handleBackspaceKey();
+        contentModified = true;
         break;
       case LogicalKeyboardKey.enter:
         handleEnterKey();
+        contentModified = true;
         break;
       case LogicalKeyboardKey.arrowLeft:
       case LogicalKeyboardKey.arrowRight:
@@ -126,7 +132,16 @@ class EditorKeyboardHandler {
       default:
         return KeyEventResult.ignored;
     }
+
+    if (contentModified) {
+      updateModifiedState();
+    }
+
     return KeyEventResult.handled;
+  }
+
+  void updateModifiedState() {
+    tabService.setTabModified(tabService.currentTab!.path, true);
   }
 
   void handleBackspaceKey() {

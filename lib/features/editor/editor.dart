@@ -154,6 +154,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
                   key: ValueKey(tab.path),
                   index: index,
                   child: CustomTab.Tab(
+                    fullPath: tab.path,
                     path: tab.path.split('/').last,
                     content: tab.content,
                     isSelected: tab == widget.tabService.currentTab,

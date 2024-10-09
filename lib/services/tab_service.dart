@@ -19,6 +19,7 @@ class TabService extends ChangeNotifier {
       // Update isSelected for all tabs
       for (int i = 0; i < _tabs.length; i++) {
         _tabs[i] = Tab(
+          fullPath: _tabs[i].path,
           isModified: _tabs[i].isModified,
           path: _tabs[i].path,
           content: _tabs[i].content,
@@ -33,6 +34,7 @@ class TabService extends ChangeNotifier {
     if (!_tabs.any((tab) => tab.path == path)) {
       final fileContent = fileService.readFile(path);
       _tabs.add(Tab(
+        fullPath: path,
         path: path,
         content: fileContent,
         isSelected: true,
@@ -63,6 +65,7 @@ class TabService extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
+        fullPath: _tabs[index].fullPath,
         path: path,
         content: content,
         isSelected: _tabs[index].isSelected,
@@ -94,6 +97,7 @@ class TabService extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
+        fullPath: _tabs[index].fullPath,
         isModified: isModified,
         path: _tabs[index].path,
         content: _tabs[index].content,
