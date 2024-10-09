@@ -816,10 +816,15 @@ class _EditorContentState extends State<EditorContent> {
     updateLineCountsPartial(startLine);
     _painterKey = UniqueKey();
     widget.tab.content = rope.text;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _ensureCursorVisible();
+
+    // Update the vertical offset to ensure newly visible lines are drawn
+    double newVerticalOffset = max(0,
+        widget.verticalController.offset - (endLine - startLine) * lineHeight);
+    widget.verticalController.jumpTo(newVerticalOffset);
+
+    setState(() {
+      _verticalOffset = newVerticalOffset;
     });
-    setState(() {});
   }
 
   void handleEnterKey() {

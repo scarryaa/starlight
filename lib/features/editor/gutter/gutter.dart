@@ -29,49 +29,7 @@ class EditorGutter extends StatefulWidget {
 
 class _EditorGutterState extends State<EditorGutter> {
   late ScrollController _gutterScrollController;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-        width: EditorGutter.width,
-        height: widget.height + widget.viewPadding * 2,
-        child: ScrollConfiguration(
-          behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
-          child: ListView.builder(
-            controller: _gutterScrollController,
-            itemCount: widget.lineCount,
-            itemExtent: widget.lineHeight,
-            padding: EdgeInsets.only(
-              bottom: widget.viewPadding,
-            ),
-            itemBuilder: (context, index) {
-              return Padding(
-                padding: const EdgeInsets.only(right: 8.0),
-                child: Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    (index + 1).toString(),
-                    style: TextStyle(
-                      fontFamily: widget.fontFamily,
-                      fontSize: widget.fontSize,
-                      height: 1.5,
-                      color: Colors.grey,
-                    ),
-                  ),
-                ),
-              );
-            },
-          ),
-        ));
-  }
-
-  @override
-  void dispose() {
-    widget.editorVerticalScrollController.removeListener(_syncGutterScroll);
-    _gutterScrollController.removeListener(_syncEditorScroll);
-    _gutterScrollController.dispose();
-    super.dispose();
-  }
+  bool _isScrolling = false;
 
   @override
   void initState() {
@@ -86,20 +44,81 @@ class _EditorGutterState extends State<EditorGutter> {
   }
 
   void _syncEditorScroll() {
-    if (widget.editorVerticalScrollController.position.maxScrollExtent > 0 &&
+    if (!_isScrolling &&
+        widget.editorVerticalScrollController.position.maxScrollExtent > 0 &&
         widget.editorVerticalScrollController.offset !=
             _gutterScrollController.offset) {
+      _isScrolling = true;
       widget.editorVerticalScrollController
           .jumpTo(_gutterScrollController.offset);
+      _isScrolling = false;
     }
   }
 
   void _syncGutterScroll() {
-    if (_gutterScrollController.position.maxScrollExtent > 0 &&
+    if (!_isScrolling &&
+        _gutterScrollController.position.maxScrollExtent > 0 &&
         _gutterScrollController.offset !=
             widget.editorVerticalScrollController.offset) {
+      _isScrolling = true;
       _gutterScrollController
           .jumpTo(widget.editorVerticalScrollController.offset);
+      _isScrolling = false;
     }
   }
+
+  @override
+  void didUpdateWidget(EditorGutter oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lineCount != widget.lineCount) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _syncGutterScroll();
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: EditorGutter.width,
+      height: widget.height + widget.viewPadding * 2,
+      child: ScrollConfiguration(
+        behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+        child: ListView.builder(
+          controller: _gutterScrollController,
+          itemCount: widget.lineCount,
+          itemExtent: widget.lineHeight,
+          padding: EdgeInsets.only(
+            bottom: widget.viewPadding,
+          ),
+          itemBuilder: (context, index) {
+            return Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: Align(
+                alignment: Alignment.center,
+                child: Text(
+                  (index + 1).toString(),
+                  style: TextStyle(
+                    fontFamily: widget.fontFamily,
+                    fontSize: widget.fontSize,
+                    height: 1.5,
+                    color: Colors.grey,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    widget.editorVerticalScrollController.removeListener(_syncGutterScroll);
+    _gutterScrollController.removeListener(_syncEditorScroll);
+    _gutterScrollController.dispose();
+    super.dispose();
+  }
 }
+
