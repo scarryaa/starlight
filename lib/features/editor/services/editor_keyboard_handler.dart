@@ -26,6 +26,7 @@ class EditorKeyboardHandler {
   int absoluteCaretPosition = 0;
   int caretLine = 0;
   int caretPosition = 0;
+  int preferredCaretColumn = 0;
   HorizontalDirection horizontalDirection = HorizontalDirection.right;
   VerticalDirection verticalDirection = VerticalDirection.down;
 
@@ -41,7 +42,6 @@ class EditorKeyboardHandler {
     required this.updateAfterEdit,
     required this.notifyListeners,
   });
-
   KeyEventResult handleInput(KeyEvent keyEvent) {
     bool isKeyDownEvent = keyEvent is KeyDownEvent;
     bool isKeyRepeatEvent = keyEvent is KeyRepeatEvent;
@@ -72,8 +72,13 @@ class EditorKeyboardHandler {
 
     if (result == KeyEventResult.handled) {
       updateLineCounts();
-      tabService.currentTab!.content = rope.text;
-      tabService.currentTab!.isModified = true;
+      if (tabService.currentTab != null) {
+        tabService.updateTabContent(
+          tabService.currentTab!.path,
+          rope.text,
+          isModified: true,
+        );
+      }
       notifyListeners();
       ensureCursorVisible();
     }
@@ -194,8 +199,13 @@ class EditorKeyboardHandler {
         break;
       case 's':
         saveFile();
-        tabService.currentTab!.isModified = false;
-        break;
+        if (tabService.currentTab != null) {
+          tabService.updateTabContent(
+            tabService.currentTab!.path,
+            rope.text,
+            isModified: false,
+          );
+        }
     }
   }
 
@@ -339,6 +349,7 @@ class EditorKeyboardHandler {
     }
 
     absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
+    preferredCaretColumn = caretPosition;
     selectionManager.moveSelectionHorizontally(absoluteCaretPosition);
   }
 
@@ -348,7 +359,7 @@ class EditorKeyboardHandler {
       int targetLineStart = rope.findClosestLineStart(targetLine);
       int targetLineLength = rope.getLineLength(targetLine);
 
-      caretPosition = min(caretPosition, targetLineLength);
+      caretPosition = min(preferredCaretColumn, targetLineLength);
       caretLine = targetLine;
       absoluteCaretPosition = targetLineStart + caretPosition;
     } else if (targetLine == rope.lineCount) {
@@ -356,11 +367,13 @@ class EditorKeyboardHandler {
       caretLine = rope.lineCount - 1;
       caretPosition = rope.getLineLength(caretLine);
       absoluteCaretPosition = rope.length;
+      preferredCaretColumn = caretPosition;
     } else if (targetLine < 0) {
       // Move to the beginning of the first line
       caretLine = 0;
       caretPosition = 0;
       absoluteCaretPosition = 0;
+      preferredCaretColumn = 0;
     }
 
     selectionManager.moveSelectionVertically(absoluteCaretPosition);
@@ -370,6 +383,6 @@ class EditorKeyboardHandler {
     caretLine = rope.findLineForPosition(absoluteCaretPosition);
     int lineStart = rope.findClosestLineStart(caretLine);
     caretPosition = absoluteCaretPosition - lineStart;
+    preferredCaretColumn = caretPosition; // Update preferred column
   }
 }
-

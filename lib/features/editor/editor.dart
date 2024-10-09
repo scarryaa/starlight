@@ -39,7 +39,6 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   late List<ScrollController> _horizontalControllers;
   List<Widget> _editorInstances = [];
   late TabController tabController;
-
   @override
   void initState() {
     super.initState();
@@ -65,18 +64,28 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
 
   void _handleTabsChanged() {
     setState(() {
-      _disposeScrollControllers();
-      _initScrollControllers();
-      tabController.dispose();
-      tabController = TabController(
-          length: widget.tabService.tabs.length,
+      int oldLength = tabController.length;
+      int newLength = widget.tabService.tabs.length;
+
+      if (oldLength != newLength) {
+        // Only recreate controllers if the number of tabs has changed
+        _disposeScrollControllers();
+        _initScrollControllers();
+        tabController.dispose();
+        tabController = TabController(
+          length: newLength,
           vsync: this,
-          animationDuration: Duration.zero);
+          animationDuration: Duration.zero,
+        );
+      }
+
       _updateEditorInstances();
 
       if (widget.tabService.tabs.isNotEmpty) {
-        tabController.animateTo(
-            widget.tabService.tabs.lastIndexOf(widget.tabService.tabs.last));
+        int newIndex = widget.tabService.currentTabIndex ?? (newLength - 1);
+        if (newIndex != tabController.index) {
+          tabController.animateTo(newIndex);
+        }
       }
     });
   }
@@ -135,7 +144,6 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
               onReorder: (oldIndex, newIndex) {
                 setState(() {
                   widget.tabService.reorderTabs(oldIndex, newIndex);
-                  // Update tabController to reflect the new order
                   tabController.index = widget.tabService.currentTabIndex ?? 0;
                 });
               },
@@ -143,27 +151,30 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
                 final index = entry.key;
                 final tab = entry.value;
                 return ReorderableDragStartListener(
-                    key: ValueKey(tab.path),
-                    index: index,
-                    child: CustomTab.Tab(
-                        path: tab.path.split('/').last,
-                        content: tab.content,
-                        isSelected: tab.isSelected,
-                        onTap: () {
-                          setState(() {
-                            widget.tabService.setCurrentTab(index);
-                            tabController.index = index;
-                          });
-                        },
-                        isModified: false,
-                        onSecondaryTap: () {},
-                        onCloseTap: () {
-                          widget.tabService.removeTab(tab.path);
-                          if (widget.tabService.currentTabIndex != null) {
-                            tabController.index =
-                                widget.tabService.currentTabIndex!;
-                          }
-                        }));
+                  key: ValueKey(tab.path),
+                  index: index,
+                  child: CustomTab.Tab(
+                    path: tab.path.split('/').last,
+                    content: tab.content,
+                    isSelected: tab == widget.tabService.currentTab,
+                    onTap: () {
+                      setState(() {
+                        widget.tabService.setCurrentTab(index);
+                        tabController.index = index;
+                      });
+                    },
+                    isModified:
+                        tab.isModified, // Use the actual isModified value
+                    onSecondaryTap: () {},
+                    onCloseTap: () {
+                      widget.tabService.removeTab(tab.path);
+                      if (widget.tabService.currentTabIndex != null) {
+                        tabController.index =
+                            widget.tabService.currentTabIndex!;
+                      }
+                    },
+                  ),
+                );
               }).toList(),
             ),
           ),

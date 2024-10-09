@@ -590,6 +590,8 @@ class _EditorContentState extends State<EditorContent> {
         widget.tabService.tabs[widget.tabService.currentTabIndex!];
     try {
       File(currentTab.path).writeAsStringSync(rope.text);
+      widget.tabService
+          .updateTabContent(currentTab.path, rope.text, isModified: false);
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Error saving file: $e')),

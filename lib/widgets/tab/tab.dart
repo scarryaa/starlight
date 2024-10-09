@@ -54,16 +54,17 @@ class _TabState extends State<Tab> {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (widget.isModified)
-                  Container(
-                    width: 6,
-                    height: 6,
-                    margin: const EdgeInsets.only(right: 4),
-                    decoration: ShapeDecoration(
-                      shape: const CircleBorder(),
-                      color: Colors.blue[700],
-                    ),
+                Container(
+                  width: 6,
+                  height: 6,
+                  margin: const EdgeInsets.only(right: 4),
+                  decoration: ShapeDecoration(
+                    shape: const CircleBorder(),
+                    color: widget.isModified
+                        ? Colors.blue[700]
+                        : Colors.transparent,
                   ),
+                ),
                 Padding(
                   padding: const EdgeInsets.only(right: 4),
                   child: Text(
@@ -114,4 +115,3 @@ class _TabState extends State<Tab> {
     );
   }
 }
-

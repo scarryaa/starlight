@@ -58,16 +58,16 @@ class TabService extends ChangeNotifier {
     }
   }
 
-  void updateTabContent(String path, String content) {
+  void updateTabContent(String path, String content,
+      {required bool isModified}) {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
-        isModified: false,
         path: path,
         content: content,
         isSelected: _tabs[index].isSelected,
+        isModified: isModified,
       );
-      fileService.writeFile(path, content);
       notifyListeners();
     }
   }
@@ -88,5 +88,18 @@ class TabService extends ChangeNotifier {
     }
 
     notifyListeners();
+  }
+
+  void setTabModified(String path, bool isModified) {
+    final index = _tabs.indexWhere((tab) => tab.path == path);
+    if (index != -1) {
+      _tabs[index] = Tab(
+        isModified: isModified,
+        path: _tabs[index].path,
+        content: _tabs[index].content,
+        isSelected: _tabs[index].isSelected,
+      );
+      notifyListeners();
+    }
   }
 }

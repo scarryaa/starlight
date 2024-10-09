@@ -74,6 +74,11 @@ class _MyHomePageState extends State<MyHomePage> {
           meta: isMacOS, control: !isMacOS),
       () {
         if (widget.tabService.currentTabIndex != null) {
+          widget.tabService.updateTabContent(
+              widget.tabService.currentTab!.path,
+              widget
+                  .tabService.tabs[widget.tabService.currentTabIndex!].content,
+              isModified: false);
           widget.fileService.writeFile(
               widget.tabService.tabs[widget.tabService.currentTabIndex!].path,
               widget
