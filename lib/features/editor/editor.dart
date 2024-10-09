@@ -214,6 +214,7 @@ class EditorContent extends StatefulWidget {
 }
 
 class _EditorContentState extends State<EditorContent> {
+  int _lastUpdatedLine = 0;
   final FocusNode f = FocusNode();
   late Rope rope;
   int absoluteCaretPosition = 0;
@@ -302,93 +303,103 @@ class _EditorContentState extends State<EditorContent> {
           viewPadding: viewPadding,
         ),
         Expanded(
-          child: GestureDetector(
-            onTapDown: (TapDownDetails details) {
-              f.requestFocus();
-              handleClick(details);
+          child: NotificationListener<ScrollNotification>(
+            onNotification: (ScrollNotification scrollInfo) {
+              if (scrollInfo is ScrollUpdateNotification) {
+                _handleScroll();
+              }
+              return true;
             },
-            onPanStart: (DragStartDetails details) {
-              f.requestFocus();
-              handleDragStart(details);
-            },
-            onPanUpdate: (DragUpdateDetails details) {
-              f.requestFocus();
-              handleDragUpdate(details);
-            },
-            onPanEnd: (DragEndDetails details) {
-              f.requestFocus();
-              handleDragEnd(details);
-            },
-            behavior: HitTestBehavior.translucent,
-            child: Focus(
-              focusNode: f,
-              onKeyEvent: (node, event) => handleInput(event),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  _editorSize = Size(constraints.maxWidth, contentHeight);
+            child: GestureDetector(
+              onTapDown: (TapDownDetails details) {
+                f.requestFocus();
+                handleClick(details);
+              },
+              onPanStart: (DragStartDetails details) {
+                f.requestFocus();
+                handleDragStart(details);
+              },
+              onPanUpdate: (DragUpdateDetails details) {
+                f.requestFocus();
+                handleDragUpdate(details);
+              },
+              onPanEnd: (DragEndDetails details) {
+                f.requestFocus();
+                handleDragEnd(details);
+              },
+              behavior: HitTestBehavior.translucent,
+              child: Focus(
+                focusNode: f,
+                onKeyEvent: (node, event) => handleInput(event),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    _editorSize = Size(constraints.maxWidth, contentHeight);
 
-                  return Stack(
-                    children: [
-                      Positioned.fill(
-                        child: RawScrollbar(
-                          controller: widget.horizontalController,
-                          thumbVisibility: true,
-                          thickness: 8,
-                          radius: const Radius.circular(4),
-                          thumbColor: Colors.grey.withOpacity(0.5),
-                          minThumbLength: 30,
-                          notificationPredicate: (notification) =>
-                              notification.depth == 1,
-                          child: SingleChildScrollView(
-                            physics: widget.scrollManager.clampingScrollPhysics,
-                            controller: widget.verticalController,
-                            scrollDirection: Axis.vertical,
+                    return Stack(
+                      children: [
+                        Positioned.fill(
+                          child: RawScrollbar(
+                            controller: widget.horizontalController,
+                            thumbVisibility: true,
+                            thickness: 8,
+                            radius: const Radius.circular(4),
+                            thumbColor: Colors.grey.withOpacity(0.5),
+                            minThumbLength: 30,
+                            notificationPredicate: (notification) =>
+                                notification.depth == 1,
                             child: SingleChildScrollView(
                               physics:
                                   widget.scrollManager.clampingScrollPhysics,
-                              controller: widget.horizontalController,
-                              scrollDirection: Axis.horizontal,
-                              child: SizedBox(
-                                width: max(
-                                  getMaxLineCount() * charWidth +
-                                      charWidth +
-                                      viewPadding,
-                                  constraints.maxWidth,
-                                ),
-                                height: contentHeight,
-                                child: CustomPaint(
-                                  key: _painterKey,
-                                  painter: EditorPainter(
-                                    fontSize: widget.fontSize,
-                                    fontFamily: widget.fontFamily,
-                                    lineHeight: widget.lineHeight,
-                                    viewportHeight:
-                                        MediaQuery.of(context).size.height,
-                                    viewportWidth:
-                                        MediaQuery.of(context).size.width,
-                                    verticalOffset: _verticalOffset,
-                                    horizontalOffset: _horizontalOffset,
-                                    lines: rope.text.split('\n'),
-                                    caretPosition: caretPosition,
-                                    caretLine: caretLine,
-                                    selectionStart: selectionStart,
-                                    selectionEnd: selectionEnd,
-                                    lineStarts: rope.lineStarts,
-                                    text: rope.text,
+                              controller: widget.verticalController,
+                              scrollDirection: Axis.vertical,
+                              child: SingleChildScrollView(
+                                physics:
+                                    widget.scrollManager.clampingScrollPhysics,
+                                controller: widget.horizontalController,
+                                scrollDirection: Axis.horizontal,
+                                child: SizedBox(
+                                  width: max(
+                                    getMaxLineCount() * charWidth +
+                                        charWidth +
+                                        viewPadding,
+                                    constraints.maxWidth,
+                                  ),
+                                  height: contentHeight,
+                                  child: CustomPaint(
+                                    key: _painterKey,
+                                    painter: EditorPainter(
+                                      fontSize: widget.fontSize,
+                                      fontFamily: widget.fontFamily,
+                                      lineHeight: widget.lineHeight,
+                                      viewportHeight:
+                                          MediaQuery.of(context).size.height,
+                                      viewportWidth:
+                                          MediaQuery.of(context).size.width,
+                                      verticalOffset: _verticalOffset,
+                                      horizontalOffset: _horizontalOffset,
+                                      lines: rope.text.split('\n'),
+                                      caretPosition: caretPosition,
+                                      caretLine: caretLine,
+                                      selectionStart: selectionStart,
+                                      selectionEnd: selectionEnd,
+                                      lineStarts: rope.lineStarts,
+                                      text: rope.text,
+                                      lastUpdatedLine: _lastUpdatedLine,
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
-                  );
-                },
+                      ],
+                    );
+                  },
+                ),
               ),
             ),
           ),
-        ),
+        )
       ],
     );
   }
@@ -463,6 +474,22 @@ class _EditorContentState extends State<EditorContent> {
     return 0;
   }
 
+  void updateLineCountsPartial(int startLine) {
+    // Remove line counts for deleted lines
+    if (startLine < lineCounts.length) {
+      lineCounts = lineCounts.sublist(0, startLine);
+    }
+
+    // Update line counts from the start line to the end
+    for (int i = startLine; i < rope.lineCount; i++) {
+      if (i < lineCounts.length) {
+        lineCounts[i] = rope.getLineLength(i);
+      } else {
+        lineCounts.add(rope.getLineLength(i));
+      }
+    }
+  }
+
   void updateLineCounts() {
     lineCounts.clear();
     for (int i = 0; i < rope.lineCount; i++) {
@@ -470,6 +497,16 @@ class _EditorContentState extends State<EditorContent> {
     }
     _painterKey = UniqueKey(); // Force painter to update
     _updateContentSize();
+  }
+
+  void _handleScroll() {
+    int firstVisibleLine = (_verticalOffset / lineHeight).floor();
+    if (firstVisibleLine < _lastUpdatedLine) {
+      setState(() {
+        updateLineCountsPartial(firstVisibleLine);
+        _lastUpdatedLine = firstVisibleLine;
+      });
+    }
   }
 
   KeyEventResult handleInput(KeyEvent keyEvent) {
@@ -718,23 +755,36 @@ class _EditorContentState extends State<EditorContent> {
       if (hasSelection()) {
         deleteSelection();
       } else if (absoluteCaretPosition > 0) {
+        int startLine = rope.findLineForPosition(absoluteCaretPosition);
+        int endLine = startLine;
+
         if (caretPosition == 0 && caretLine > 0) {
+          // Deleting a newline character
           caretLine--;
-          caretPosition = rope.getLineLength(caretLine);
-          rope.delete(absoluteCaretPosition - 1, 1); // Delete the newline
+          int previousLineLength = rope.getLineLength(caretLine);
+          rope.delete(absoluteCaretPosition - 1, 1);
           absoluteCaretPosition--;
+          caretPosition = previousLineLength;
+          endLine = startLine;
+          startLine = caretLine;
         } else if (caretPosition > 0) {
+          // Deleting a regular character
           rope.delete(absoluteCaretPosition - 1, 1);
           caretPosition--;
           absoluteCaretPosition--;
         }
+
+        // Update caret position bounds
         caretLine = max(0, caretLine);
         caretPosition =
             max(0, min(caretPosition, rope.getLineLength(caretLine)));
         absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
-      }
 
-      updateAfterEdit();
+        // Mark lines for update
+        _lastUpdatedLine = max(0, startLine - 1);
+
+        updateAfterEdit(startLine, endLine);
+      }
     });
   }
 
@@ -744,23 +794,30 @@ class _EditorContentState extends State<EditorContent> {
       int end = max(selectionStart, selectionEnd);
       int length = end - start;
 
+      int startLine = rope.findLineForPosition(start);
+      int endLine = rope.findLineForPosition(end);
+
       rope.delete(start, length);
       absoluteCaretPosition = start;
       updateCaretPosition();
       clearSelection();
 
-      updateAfterEdit();
+      // Mark lines for update
+      _lastUpdatedLine = max(0, startLine - 1);
+
+      updateAfterEdit(startLine, endLine);
     }
   }
 
-  void updateAfterEdit() {
+  void updateAfterEdit(int startLine, int endLine) {
     rope = Rope(rope.text);
-    updateLineCounts();
+    updateLineCountsPartial(startLine);
     _painterKey = UniqueKey();
     widget.tab.content = rope.text;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _ensureCursorVisible();
     });
+    setState(() {});
   }
 
   void handleEnterKey() {
@@ -898,6 +955,7 @@ class EditorPainter extends CustomPainter {
   double viewportWidth;
   final String fontFamily;
   final double fontSize;
+  final int lastUpdatedLine;
 
   EditorPainter({
     required this.lines,
@@ -914,6 +972,7 @@ class EditorPainter extends CustomPainter {
     required this.lineHeight,
     required this.fontFamily,
     required this.fontSize,
+    required this.lastUpdatedLine,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -930,31 +989,34 @@ class EditorPainter extends CustomPainter {
 
     if (lines.isNotEmpty) {
       for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
-        TextSpan span = TextSpan(
-          text: lines[i],
-          style: TextStyle(
-            fontFamily: fontFamily,
-            color: Colors.black,
-            fontSize: fontSize,
-            height: 1, // Set height to 1 to prevent additional line spacing
-          ),
-        );
-        TextPainter tp = TextPainter(
-          text: span,
-          textAlign: TextAlign.left,
-          textDirection: TextDirection.ltr,
-        );
-        tp.layout(maxWidth: size.width);
+        if (i < lines.length) {
+          TextSpan span = TextSpan(
+            text: lines[i],
+            style: TextStyle(
+              fontFamily: fontFamily,
+              color: Colors.black,
+              fontSize: fontSize,
+              height: 1,
+            ),
+          );
+          TextPainter tp = TextPainter(
+            text: span,
+            textAlign: TextAlign.left,
+            textDirection: TextDirection.ltr,
+          );
+          tp.layout(maxWidth: size.width);
 
-        // Calculate the vertical position to center the text within the line
-        double yPosition = (lineHeight * i) + ((lineHeight - tp.height) / 2);
-        tp.paint(canvas, Offset(0, yPosition));
+          double yPosition = (lineHeight * i) + ((lineHeight - tp.height) / 2);
+          tp.paint(canvas, Offset(0, yPosition));
+        }
       }
     }
     drawSelection(canvas, firstVisibleLine, lastVisibleLine);
 
     // Draw caret
-    if (caretLine >= firstVisibleLine && caretLine < lastVisibleLine) {
+    if (caretLine >= firstVisibleLine &&
+        caretLine < lastVisibleLine &&
+        caretLine < lines.length) {
       canvas.drawRect(
         Rect.fromLTWH(
           caretPosition * charWidth,
@@ -978,7 +1040,15 @@ class EditorPainter extends CustomPainter {
         oldDelegate.caretLine != caretLine ||
         oldDelegate.verticalOffset != verticalOffset ||
         oldDelegate.horizontalOffset != horizontalOffset ||
-        oldDelegate.lineHeight != lineHeight;
+        oldDelegate.viewportHeight != viewportHeight ||
+        oldDelegate.viewportWidth != viewportWidth ||
+        oldDelegate.lineHeight != lineHeight ||
+        oldDelegate.charWidth != charWidth ||
+        oldDelegate.fontFamily != fontFamily ||
+        oldDelegate.fontSize != fontSize ||
+        oldDelegate.lastUpdatedLine != lastUpdatedLine ||
+        oldDelegate.lineStarts != lineStarts ||
+        oldDelegate.text != text;
   }
 
   double _measureCharWidth(String s) {
