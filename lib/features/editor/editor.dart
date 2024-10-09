@@ -301,6 +301,7 @@ class _EditorContentState extends State<EditorContent> {
     return Row(
       children: [
         EditorGutter(
+          currentLine: caretLine,
           fontSize: widget.fontSize,
           fontFamily: widget.fontFamily,
           height: contentHeight,
@@ -376,6 +377,7 @@ class _EditorContentState extends State<EditorContent> {
                                   child: CustomPaint(
                                     key: _painterKey,
                                     painter: EditorPainter(
+                                      currentLineIndex: caretLine,
                                       fontSize: widget.fontSize,
                                       fontFamily: widget.fontFamily,
                                       lineHeight: widget.lineHeight,
@@ -1168,6 +1170,7 @@ class EditorPainter extends CustomPainter {
   final String fontFamily;
   final double fontSize;
   final int lastUpdatedLine;
+  final int currentLineIndex;
 
   EditorPainter({
     required this.lines,
@@ -1185,6 +1188,7 @@ class EditorPainter extends CustomPainter {
     required this.fontFamily,
     required this.fontSize,
     required this.lastUpdatedLine,
+    required this.currentLineIndex,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -1223,6 +1227,8 @@ class EditorPainter extends CustomPainter {
         }
       }
     }
+
+    highlightCurrentLine(canvas, currentLineIndex, size);
     drawSelection(canvas, firstVisibleLine, lastVisibleLine);
 
     // Draw caret
@@ -1315,6 +1321,14 @@ class EditorPainter extends CustomPainter {
         drawSelectionForLine(canvas, i, lineStart, lineEnd);
       }
     }
+  }
+
+  void highlightCurrentLine(Canvas canvas, int currentLineIndex, Size size) {
+    canvas.drawRect(
+        Rect.fromLTWH(0, lineHeight * currentLineIndex, size.width, lineHeight),
+        Paint()
+          ..color = Colors.grey.withOpacity(0.1)
+          ..style = PaintingStyle.fill);
   }
 
   void drawSelectionForLine(

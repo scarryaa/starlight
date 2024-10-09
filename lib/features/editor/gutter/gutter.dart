@@ -10,6 +10,7 @@ class EditorGutter extends StatefulWidget {
   final double fontSize;
   final String fontFamily;
   final double viewPadding;
+  final int currentLine;
 
   const EditorGutter({
     super.key,
@@ -21,7 +22,8 @@ class EditorGutter extends StatefulWidget {
     required this.viewPadding,
     required this.fontSize,
     required this.fontFamily,
-  });
+    required this.currentLine,   
+    });
 
   @override
   State<EditorGutter> createState() => _EditorGutterState();
@@ -92,17 +94,20 @@ class _EditorGutterState extends State<EditorGutter> {
             bottom: widget.viewPadding,
           ),
           itemBuilder: (context, index) {
-            return Padding(
+            final isCurrentLine = index == widget.currentLine;
+            return Container(
+              color: isCurrentLine ? Colors.grey.withOpacity(0.1) : Colors.transparent,
               padding: const EdgeInsets.only(right: 8.0),
               child: Align(
-                alignment: Alignment.center,
+                alignment: Alignment.centerRight,
                 child: Text(
                   (index + 1).toString(),
                   style: TextStyle(
                     fontFamily: widget.fontFamily,
                     fontSize: widget.fontSize,
                     height: 1.5,
-                    color: Colors.grey,
+                    color: isCurrentLine ? Colors.black : Colors.grey,
+                    fontWeight: isCurrentLine ? FontWeight.bold : FontWeight.normal,
                   ),
                 ),
               ),
@@ -121,4 +126,3 @@ class _EditorGutterState extends State<EditorGutter> {
     super.dispose();
   }
 }
-
