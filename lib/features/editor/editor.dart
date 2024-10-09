@@ -447,7 +447,23 @@ class _EditorContentState extends State<EditorContent> {
     final tapPosition = getPositionFromOffset(details.localPosition);
     int selectionStart, selectionEnd;
 
-    if (tapPosition >= rope.length) {
+    int line = getLineFromOffset(details.localPosition);
+    int lineStart = rope.findClosestLineStart(line);
+    int lineEnd = (line < rope.lineCount - 1)
+        ? rope.findClosestLineStart(line + 1) - 1
+        : rope.length;
+
+    // Check if the line is empty
+    bool isEmptyLine = lineStart == lineEnd;
+
+    if (isEmptyLine) {
+      // If the line is empty, don't select anything
+      selectionStart = selectionEnd = lineStart;
+    } else if (tapPosition >= lineEnd) {
+      // Clicked beyond the line's end, select the last word
+      selectionEnd = lineEnd;
+      selectionStart = findWordBoundary(lineEnd - 1, true);
+    } else if (tapPosition >= rope.length) {
       selectionStart = selectionEnd = rope.length;
     } else if (isWhitespace(rope.charAt(tapPosition))) {
       selectionStart = findWhitespaceBoundary(tapPosition, true);
@@ -492,8 +508,40 @@ class _EditorContentState extends State<EditorContent> {
         currentPosition = currentPosition.clamp(0, rope.length);
 
         if (_selectionMode == SelectionMode.word) {
-          // ... (word selection logic remains the same)
+          int currentLine = getLineFromPosition(currentPosition);
+          int anchorLine = getLineFromPosition(selectionAnchor);
+
+          if (currentLine == anchorLine) {
+            // On the same line, expand to word boundaries
+            if (currentPosition > selectionAnchor) {
+              selectionFocus = findWordBoundary(currentPosition, false);
+            } else {
+              selectionFocus = findWordBoundary(currentPosition, true);
+            }
+          } else {
+            // Different lines
+            if (currentLine > anchorLine) {
+              // Moving down
+              if (isBlankLine(currentLine)) {
+                // On a blank line, stay at the start of the line
+                selectionFocus = rope.findClosestLineStart(currentLine);
+              } else {
+                // Non-blank line, expand to the end of the word
+                selectionFocus = findWordBoundary(currentPosition, false);
+              }
+            } else {
+              // Moving up
+              if (isBlankLine(currentLine)) {
+                // On a blank line, stay at the end of the line
+                selectionFocus = rope.findClosestLineStart(currentLine + 1) - 1;
+              } else {
+                // Non-blank line, expand to the start of the word
+                selectionFocus = findWordBoundary(currentPosition, true);
+              }
+            }
+          }
         } else if (_selectionMode == SelectionMode.line) {
+          // Line selection logic remains the same
           int anchorLine = getLineFromPosition(selectionAnchor);
           int currentLine = getLineFromPosition(currentPosition);
 
@@ -542,6 +590,14 @@ class _EditorContentState extends State<EditorContent> {
       updateCaretPosition();
       updateSelection();
     });
+  }
+
+  bool isBlankLine(int lineNumber) {
+    int lineStart = rope.findClosestLineStart(lineNumber);
+    int lineEnd = lineNumber < rope.lineCount - 1
+        ? rope.findClosestLineStart(lineNumber + 1) - 1
+        : rope.length;
+    return lineStart == lineEnd;
   }
 
   int getLineFromPosition(int position) {
@@ -711,6 +767,10 @@ class _EditorContentState extends State<EditorContent> {
         setState(() {
           switch (keyEvent.logicalKey) {
             case LogicalKeyboardKey.tab:
+              if (selectionStart != selectionEnd) {
+                deleteSelection();
+              }
+
               rope.insert("    ", absoluteCaretPosition);
               break;
             case LogicalKeyboardKey.backspace:
@@ -990,6 +1050,10 @@ class _EditorContentState extends State<EditorContent> {
   }
 
   void handleEnterKey() {
+    if (selectionStart != selectionEnd) {
+      deleteSelection();
+    }
+
     rope.insert('\n', absoluteCaretPosition);
     caretLine++;
     caretPosition = 0;
