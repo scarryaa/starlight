@@ -508,40 +508,14 @@ class _EditorContentState extends State<EditorContent> {
         currentPosition = currentPosition.clamp(0, rope.length);
 
         if (_selectionMode == SelectionMode.word) {
-          int currentLine = getLineFromPosition(currentPosition);
-          int anchorLine = getLineFromPosition(selectionAnchor);
-
-          if (currentLine == anchorLine) {
-            // On the same line, expand to word boundaries
-            if (currentPosition > selectionAnchor) {
-              selectionFocus = findWordBoundary(currentPosition, false);
-            } else {
-              selectionFocus = findWordBoundary(currentPosition, true);
-            }
+          if (currentPosition > selectionAnchor) {
+            // Moving right/down
+            selectionFocus = findWordBoundary(currentPosition, false);
           } else {
-            // Different lines
-            if (currentLine > anchorLine) {
-              // Moving down
-              if (isBlankLine(currentLine)) {
-                // On a blank line, stay at the start of the line
-                selectionFocus = rope.findClosestLineStart(currentLine);
-              } else {
-                // Non-blank line, expand to the end of the word
-                selectionFocus = findWordBoundary(currentPosition, false);
-              }
-            } else {
-              // Moving up
-              if (isBlankLine(currentLine)) {
-                // On a blank line, stay at the end of the line
-                selectionFocus = rope.findClosestLineStart(currentLine + 1) - 1;
-              } else {
-                // Non-blank line, expand to the start of the word
-                selectionFocus = findWordBoundary(currentPosition, true);
-              }
-            }
+            // Moving left/up
+            selectionFocus = findWordBoundary(currentPosition, true);
           }
         } else if (_selectionMode == SelectionMode.line) {
-          // Line selection logic remains the same
           int anchorLine = getLineFromPosition(selectionAnchor);
           int currentLine = getLineFromPosition(currentPosition);
 
@@ -641,18 +615,23 @@ class _EditorContentState extends State<EditorContent> {
       return RegExp(r'[a-zA-Z0-9_]').hasMatch(char);
     }
 
+    int lineStart =
+        rope.findClosestLineStart(rope.findLineForPosition(position));
+    int lineEnd =
+        rope.findClosestLineStart(rope.findLineForPosition(position) + 1) - 1;
+
     if (isStart) {
-      while (position > 0 && !isWordChar(rope.charAt(position - 1))) {
+      while (position > lineStart && !isWordChar(rope.charAt(position - 1))) {
         position--;
       }
-      while (position > 0 && isWordChar(rope.charAt(position - 1))) {
+      while (position > lineStart && isWordChar(rope.charAt(position - 1))) {
         position--;
       }
     } else {
-      while (position < rope.length && !isWordChar(rope.charAt(position))) {
+      while (position < lineEnd && !isWordChar(rope.charAt(position))) {
         position++;
       }
-      while (position < rope.length && isWordChar(rope.charAt(position))) {
+      while (position < lineEnd && isWordChar(rope.charAt(position))) {
         position++;
       }
     }
