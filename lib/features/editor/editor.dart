@@ -457,7 +457,6 @@ class _EditorContentState extends State<EditorContent> {
   }
 
   void handleTripleClick(TapDownDetails details) {
-    final tapPosition = getPositionFromOffset(details.localPosition);
     int lineNumber = getLineFromOffset(details.localPosition);
     int lineStart = rope.findClosestLineStart(lineNumber);
     int lineEnd = lineNumber < rope.lineCount - 1
@@ -535,19 +534,24 @@ class _EditorContentState extends State<EditorContent> {
   }
 
   int findWordBoundary(int position, bool isStart) {
-    if (position < 0 || position >= rope.length) {
-      return position;
-    }
+    if (position <= 0) return 0;
+    if (position >= rope.length) return rope.length;
 
     bool isWordChar(String char) {
       return RegExp(r'[a-zA-Z0-9_]').hasMatch(char);
     }
 
     if (isStart) {
+      while (position > 0 && !isWordChar(rope.charAt(position - 1))) {
+        position--;
+      }
       while (position > 0 && isWordChar(rope.charAt(position - 1))) {
         position--;
       }
     } else {
+      while (position < rope.length && !isWordChar(rope.charAt(position))) {
+        position++;
+      }
       while (position < rope.length && isWordChar(rope.charAt(position))) {
         position++;
       }
