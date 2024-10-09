@@ -8,6 +8,7 @@ import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 import 'package:starlight/features/editor/models/selection_mode.dart';
+import 'package:starlight/features/editor/services/editor_keyboard_handler.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
 import 'package:starlight/services/hotkey_service.dart';
@@ -53,9 +54,6 @@ class _EditorContentState extends State<EditorContent> {
   int _lastUpdatedLine = 0;
   final FocusNode f = FocusNode();
   late Rope rope;
-  int absoluteCaretPosition = 0;
-  int caretPosition = 0;
-  int caretLine = 0;
   static double lineHeight = 0;
   static double charWidth = 0;
   List<int> lineCounts = [0];
@@ -72,6 +70,7 @@ class _EditorContentState extends State<EditorContent> {
   int _clickCount = 0;
   int _lastClickTime = 0;
   static const int _doubleClickTime = 300; // milliseconds
+  late EditorKeyboardHandler keyboardHandler;
 
   @override
   void initState() {
@@ -83,6 +82,32 @@ class _EditorContentState extends State<EditorContent> {
     widget.verticalController.addListener(_handleVerticalScroll);
     widget.horizontalController.addListener(_handleHorizontalScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateContentSize());
+
+    keyboardHandler = EditorKeyboardHandler(
+      rope: rope,
+      tabService: widget.tabService,
+      hotkeyService: widget.hotkeyService,
+      selectionManager: widget.editorSelectionManager,
+      updateSelection: (start, end) {
+        setState(() {
+          widget.editorSelectionManager.selectionStart = start;
+          widget.editorSelectionManager.selectionEnd = end;
+        });
+      },
+      updateLineCounts: () {
+        setState(() {
+          updateLineCounts();
+        });
+      },
+      saveFile: saveFile,
+      ensureCursorVisible: () {
+        WidgetsBinding.instance.addPostFrameCallback((_) async {
+          await _ensureCursorVisible();
+        });
+      },
+      updateAfterEdit: updateAfterEdit,
+      notifyListeners: () => setState(() {}),
+    );
   }
 
   @override
@@ -128,7 +153,7 @@ class _EditorContentState extends State<EditorContent> {
     return Row(
       children: [
         EditorGutter(
-          currentLine: caretLine,
+          currentLine: keyboardHandler.caretLine,
           fontSize: widget.fontSize,
           fontFamily: widget.fontFamily,
           height: contentHeight,
@@ -166,7 +191,13 @@ class _EditorContentState extends State<EditorContent> {
               behavior: HitTestBehavior.translucent,
               child: Focus(
                 focusNode: f,
-                onKeyEvent: (node, event) => handleInput(event),
+                onKeyEvent: (node, event) {
+                  var result = keyboardHandler.handleInput(event);
+                  setState(() {
+                    _lastUpdatedLine = keyboardHandler.lastUpdatedLine;
+                  });
+                  return result;
+                },
                 child: LayoutBuilder(
                   builder: (context, constraints) {
                     _editorSize = Size(constraints.maxWidth, contentHeight);
@@ -204,7 +235,8 @@ class _EditorContentState extends State<EditorContent> {
                                   child: CustomPaint(
                                     key: _painterKey,
                                     painter: EditorPainter(
-                                      currentLineIndex: caretLine,
+                                      currentLineIndex:
+                                          keyboardHandler.caretLine,
                                       fontSize: widget.fontSize,
                                       fontFamily: widget.fontFamily,
                                       lineHeight: widget.lineHeight,
@@ -215,8 +247,9 @@ class _EditorContentState extends State<EditorContent> {
                                       verticalOffset: _verticalOffset,
                                       horizontalOffset: _horizontalOffset,
                                       lines: rope.text.split('\n'),
-                                      caretPosition: caretPosition,
-                                      caretLine: caretLine,
+                                      caretPosition:
+                                          keyboardHandler.caretPosition,
+                                      caretLine: keyboardHandler.caretLine,
                                       selectionStart: widget
                                           .editorSelectionManager
                                           .selectionStart,
@@ -270,8 +303,8 @@ class _EditorContentState extends State<EditorContent> {
 
   void handleClick(TapDownDetails details) {
     final tapPosition = getPositionFromOffset(details.localPosition);
-    absoluteCaretPosition = tapPosition;
-    updateCaretPosition();
+    keyboardHandler.absoluteCaretPosition = tapPosition;
+    keyboardHandler.updateCaretPosition();
     widget.editorSelectionManager.clearSelection();
   }
 
@@ -311,8 +344,8 @@ class _EditorContentState extends State<EditorContent> {
       widget.editorSelectionManager.selectionStart = selectionStart;
       widget.editorSelectionManager.selectionEnd = selectionEnd;
 
-      absoluteCaretPosition = selectionEnd;
-      updateCaretPosition();
+      keyboardHandler.absoluteCaretPosition = selectionEnd;
+      keyboardHandler.updateCaretPosition();
     });
   }
 
@@ -328,8 +361,8 @@ class _EditorContentState extends State<EditorContent> {
       widget.editorSelectionManager.selectionFocus = lineEnd;
       widget.editorSelectionManager.selectionStart = lineStart;
       widget.editorSelectionManager.selectionEnd = lineEnd;
-      absoluteCaretPosition = lineEnd;
-      updateCaretPosition();
+      keyboardHandler.absoluteCaretPosition = lineEnd;
+      keyboardHandler.updateCaretPosition();
     });
   }
 
@@ -372,8 +405,9 @@ class _EditorContentState extends State<EditorContent> {
         widget.editorSelectionManager.selectionFocus =
             widget.editorSelectionManager.selectionFocus.clamp(0, rope.length);
 
-        absoluteCaretPosition = widget.editorSelectionManager.selectionFocus;
-        updateCaretPosition();
+        keyboardHandler.absoluteCaretPosition =
+            widget.editorSelectionManager.selectionFocus;
+        keyboardHandler.updateCaretPosition();
         widget.editorSelectionManager.updateSelection();
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -405,8 +439,9 @@ class _EditorContentState extends State<EditorContent> {
         widget.editorSelectionManager.selectionAnchor = _dragStartPosition;
         widget.editorSelectionManager.selectionFocus = _dragStartPosition;
       }
-      absoluteCaretPosition = widget.editorSelectionManager.selectionFocus;
-      updateCaretPosition();
+      keyboardHandler.absoluteCaretPosition =
+          widget.editorSelectionManager.selectionFocus;
+      keyboardHandler.updateCaretPosition();
       widget.editorSelectionManager.updateSelection();
     });
   }
@@ -426,8 +461,9 @@ class _EditorContentState extends State<EditorContent> {
   void handleDragEnd(DragEndDetails details) {
     setState(() {
       _isDragging = false;
-      absoluteCaretPosition = widget.editorSelectionManager.selectionEnd;
-      updateCaretPosition();
+      keyboardHandler.absoluteCaretPosition =
+          widget.editorSelectionManager.selectionEnd;
+      keyboardHandler.updateCaretPosition();
     });
   }
 
@@ -547,134 +583,6 @@ class _EditorContentState extends State<EditorContent> {
     }
   }
 
-  KeyEventResult handleInput(KeyEvent keyEvent) {
-    bool isKeyDownEvent = keyEvent is KeyDownEvent;
-    bool isKeyRepeatEvent = keyEvent is KeyRepeatEvent;
-    bool isCtrlPressed = HardwareKeyboard.instance.isControlPressed;
-    bool isMetaPressed = HardwareKeyboard.instance.isMetaPressed;
-    bool isShiftPressed = HardwareKeyboard.instance.isShiftPressed;
-
-    if (widget.hotkeyService.isGlobalHotkey(keyEvent)) {
-      return KeyEventResult.ignored; // Let the global handler take care of it
-    }
-
-    if ((isCtrlPressed && !Platform.isMacOS) ||
-        (Platform.isMacOS && isMetaPressed) && keyEvent.character != null) {
-      _handleCtrlKeys(keyEvent.character!);
-      return KeyEventResult.handled;
-    }
-
-    if ((isKeyDownEvent || isKeyRepeatEvent) &&
-        keyEvent.character != null &&
-        keyEvent.logicalKey != LogicalKeyboardKey.backspace &&
-        keyEvent.logicalKey != LogicalKeyboardKey.enter &&
-        keyEvent.logicalKey != LogicalKeyboardKey.tab) {
-      setState(() {
-        if (widget.editorSelectionManager.selectionStart !=
-            widget.editorSelectionManager.selectionEnd) {
-          deleteSelection();
-        }
-
-        rope.insert(keyEvent.character!, absoluteCaretPosition);
-        caretPosition++;
-        absoluteCaretPosition++;
-
-        updateLineCounts();
-        widget.tab.content = rope.text;
-        widget.tabService.currentTab!.isModified = true;
-        WidgetsBinding.instance.addPostFrameCallback((_) async {
-          await _ensureCursorVisible();
-        });
-      });
-      return KeyEventResult.handled;
-    } else {
-      if ((isKeyDownEvent || isKeyRepeatEvent)) {
-        setState(() {
-          switch (keyEvent.logicalKey) {
-            case LogicalKeyboardKey.tab:
-              if (widget.editorSelectionManager.selectionStart !=
-                  widget.editorSelectionManager.selectionEnd) {
-                deleteSelection();
-              }
-
-              rope.insert("    ", absoluteCaretPosition);
-              break;
-            case LogicalKeyboardKey.backspace:
-              handleBackspaceKey();
-              horizontalDirection = HorizontalDirection.left;
-              verticalDirection = VerticalDirection.up;
-              break;
-            case LogicalKeyboardKey.enter:
-              handleEnterKey();
-              verticalDirection = VerticalDirection.down;
-              break;
-            case LogicalKeyboardKey.arrowLeft:
-              handleArrowKeys(LogicalKeyboardKey.arrowLeft, isShiftPressed);
-              horizontalDirection = HorizontalDirection.left;
-              break;
-            case LogicalKeyboardKey.arrowRight:
-              handleArrowKeys(LogicalKeyboardKey.arrowRight, isShiftPressed);
-              horizontalDirection = HorizontalDirection.right;
-              break;
-            case LogicalKeyboardKey.arrowUp:
-              handleArrowKeys(LogicalKeyboardKey.arrowUp, isShiftPressed);
-              verticalDirection = VerticalDirection.up;
-              break;
-            case LogicalKeyboardKey.arrowDown:
-              handleArrowKeys(LogicalKeyboardKey.arrowDown, isShiftPressed);
-              verticalDirection = VerticalDirection.down;
-              break;
-          }
-
-          updateLineCounts();
-          widget.tab.content = rope.text;
-
-          if (!isShiftPressed && !isCtrlPressed && !isMetaPressed) {
-            WidgetsBinding.instance.addPostFrameCallback((_) async {
-              await _ensureCursorVisible();
-            });
-          }
-        });
-        widget.tabService.currentTab!.isModified = true;
-        return KeyEventResult.handled;
-      }
-
-      return KeyEventResult.ignored;
-    }
-  }
-
-  void _handleCtrlKeys(String key) {
-    switch (key) {
-      case 'a':
-        setState(() {
-          widget.editorSelectionManager.selectionAnchor = 0;
-          widget.editorSelectionManager.selectionFocus = rope.length;
-          widget.editorSelectionManager.updateSelection();
-          int lastLineLength = rope.getLineLength(rope.lineCount - 1);
-          caretPosition = lastLineLength;
-          absoluteCaretPosition = rope.length;
-          caretLine = rope.lineCount - 1;
-        });
-        break;
-      case 'v':
-        pasteText();
-        widget.tabService.currentTab!.isModified = true;
-        break;
-      case 'c':
-        copyText();
-        widget.tabService.currentTab!.isModified = true;
-        break;
-      case 'x':
-        cutText();
-        widget.tabService.currentTab!.isModified = true;
-        break;
-      case 's':
-        saveFile();
-        widget.tabService.currentTab!.isModified = false;
-        break;
-    }
-  }
-
   void saveFile() {
     if (widget.tabService.currentTabIndex == null) return;
 
@@ -689,166 +597,21 @@ class _EditorContentState extends State<EditorContent> {
     }
   }
 
-  Future<void> pasteText() async {
-    final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
-    final textToBePasted = clipboardData?.text;
-
-    if (textToBePasted == null || textToBePasted.isEmpty) {
-      return;
-    }
-
-    setState(() {
-      if (widget.editorSelectionManager.hasSelection()) {
-        deleteSelection();
-      }
-
-      rope.insert(textToBePasted, absoluteCaretPosition);
-      absoluteCaretPosition += textToBePasted.length;
-      int line = rope.findLineForPosition(absoluteCaretPosition);
-      int caretAdjustment =
-          absoluteCaretPosition - rope.findClosestLineStart(line);
-
-      caretLine = line;
-      caretPosition = caretAdjustment;
-
-      widget.editorSelectionManager.selectionStart =
-          widget.editorSelectionManager.selectionEnd = absoluteCaretPosition;
-
-      updateLineCounts();
-    });
-
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await _ensureCursorVisible();
-    });
-  }
-
   Future<void> _ensureCursorVisible() async {
     await widget.scrollManager.ensureCursorVisible(
       widget.horizontalController,
       widget.verticalController,
       charWidth,
-      caretPosition,
+      keyboardHandler.caretPosition,
       lineHeight,
-      caretLine,
+      keyboardHandler.caretLine,
       editorPadding,
       viewPadding,
       context,
     );
   }
 
-  void copyText() {
-    if (widget.editorSelectionManager.hasSelection()) {
-      Clipboard.setData(ClipboardData(
-        text: rope.text.substring(widget.editorSelectionManager.selectionStart,
-            widget.editorSelectionManager.selectionEnd),
-      ));
-    } else {
-      int closestLineStart = rope.findClosestLineStart(caretLine);
-      int lineEnd = rope.getLineLength(caretLine) + closestLineStart;
-      Clipboard.setData(ClipboardData(
-        text: rope.text.substring(closestLineStart, lineEnd),
-      ));
-    }
-  }
-
-  void cutText() {
-    copyText();
-    deleteSelection();
-  }
-
-  void handleArrowKeys(LogicalKeyboardKey key, bool isShiftPressed) {
-    int oldCaretPosition = absoluteCaretPosition;
-
-    switch (key) {
-      case LogicalKeyboardKey.arrowDown:
-        moveCaretVertically(1);
-        break;
-      case LogicalKeyboardKey.arrowUp:
-        moveCaretVertically(-1);
-        break;
-      case LogicalKeyboardKey.arrowLeft:
-        moveCaretHorizontally(-1);
-        break;
-      case LogicalKeyboardKey.arrowRight:
-        moveCaretHorizontally(1);
-        break;
-    }
-
-    if (isShiftPressed) {
-      if (widget.editorSelectionManager.selectionAnchor == -1) {
-        widget.editorSelectionManager.selectionAnchor = oldCaretPosition;
-      }
-      widget.editorSelectionManager.selectionFocus = absoluteCaretPosition;
-    } else {
-      widget.editorSelectionManager.clearSelection();
-    }
-
-    widget.editorSelectionManager.updateSelection();
-  }
-
-  void handleBackspaceKey() {
-    setState(() {
-      if (widget.editorSelectionManager.hasSelection()) {
-        deleteSelection();
-      } else if (absoluteCaretPosition > 0) {
-        int startLine = rope.findLineForPosition(absoluteCaretPosition);
-        int endLine = startLine;
-
-        if (caretPosition == 0 && caretLine > 0) {
-          // Deleting a newline character
-          caretLine--;
-          int previousLineLength = rope.getLineLength(caretLine);
-          rope.delete(absoluteCaretPosition - 1, 1);
-          absoluteCaretPosition--;
-          caretPosition = previousLineLength;
-          endLine = startLine;
-          startLine = caretLine;
-        } else if (caretPosition > 0) {
-          // Deleting a regular character
-          rope.delete(absoluteCaretPosition - 1, 1);
-          caretPosition--;
-          absoluteCaretPosition--;
-        }
-
-        // Update caret position bounds
-        caretLine = max(0, caretLine);
-        caretPosition =
-            max(0, min(caretPosition, rope.getLineLength(caretLine)));
-        absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
-
-        // Mark lines for update
-        _lastUpdatedLine = max(0, startLine - 1);
-
-        updateAfterEdit(startLine, endLine);
-      }
-    });
-  }
-
-  void deleteSelection() {
-    if (widget.editorSelectionManager.hasSelection()) {
-      int start = min(widget.editorSelectionManager.selectionStart,
-          widget.editorSelectionManager.selectionEnd);
-      int end = max(widget.editorSelectionManager.selectionStart,
-          widget.editorSelectionManager.selectionEnd);
-      int length = end - start;
-
-      int startLine = rope.findLineForPosition(start);
-      int endLine = rope.findLineForPosition(end);
-
-      rope.delete(start, length);
-      absoluteCaretPosition = start;
-      updateCaretPosition();
-      widget.editorSelectionManager.clearSelection();
-
-      // Mark lines for update
-      _lastUpdatedLine = max(0, startLine - 1);
-
-      updateAfterEdit(startLine, endLine);
-    }
-  }
-
   void updateAfterEdit(int startLine, int endLine) {
-    rope = Rope(rope.text);
     updateLineCountsPartial(startLine);
     _painterKey = UniqueKey();
     widget.tab.content = rope.text;
@@ -861,96 +624,6 @@ class _EditorContentState extends State<EditorContent> {
     setState(() {
       _verticalOffset = newVerticalOffset;
     });
-  }
-
-  void handleEnterKey() {
-    if (widget.editorSelectionManager.selectionStart !=
-        widget.editorSelectionManager.selectionEnd) {
-      deleteSelection();
-    }
-
-    rope.insert('\n', absoluteCaretPosition);
-    caretLine++;
-    caretPosition = 0;
-    absoluteCaretPosition++;
-
-    // Auto-indentation
-    int previousLineStart = rope.findClosestLineStart(caretLine - 1);
-    int indentationCount = 0;
-    while (rope.text[previousLineStart + indentationCount] == ' ' &&
-        indentationCount < rope.getLineLength(caretLine - 1)) {
-      indentationCount++;
-    }
-    if (indentationCount > 0) {
-      String indentation = ' ' * indentationCount;
-      rope.insert(indentation, absoluteCaretPosition);
-      caretPosition += indentationCount;
-      absoluteCaretPosition += indentationCount;
-    }
-  }
-
-  void moveCaretHorizontally(int amount) {
-    int newCaretPosition = caretPosition + amount;
-    int currentLineLength = rope.getLineLength(caretLine);
-
-    if (newCaretPosition >= 0 && newCaretPosition <= currentLineLength) {
-      caretPosition = newCaretPosition;
-      absoluteCaretPosition += amount;
-    } else if (newCaretPosition < 0 && caretLine > 0) {
-      caretLine--;
-      caretPosition = rope.getLineLength(caretLine);
-      absoluteCaretPosition =
-          rope.findClosestLineStart(caretLine) + caretPosition;
-    } else if (newCaretPosition > currentLineLength &&
-        caretLine < rope.lineCount - 1) {
-      caretLine++;
-      caretPosition = 0;
-      absoluteCaretPosition = rope.findClosestLineStart(caretLine);
-    }
-
-    if (caretLine == rope.lineCount - 1) {
-      absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
-    } else {
-      absoluteCaretPosition =
-          max(0, min(absoluteCaretPosition, rope.length - 1));
-    }
-    widget.editorSelectionManager
-        .moveSelectionHorizontally(absoluteCaretPosition);
-  }
-
-  void moveCaretVertically(int amount) {
-    int targetLine = caretLine + amount;
-    if (targetLine >= 0 && targetLine < rope.lineCount) {
-      int targetLineStart = rope.findClosestLineStart(targetLine);
-      int targetLineLength = rope.getLineLength(targetLine);
-
-      if (targetLineLength <= 1) {
-        caretPosition = 0;
-      } else if (targetLine == rope.lineCount - 1) {
-        caretPosition = min(caretPosition, targetLineLength);
-      } else {
-        // Skip the newline
-        caretPosition = min(caretPosition, targetLineLength - 1);
-      }
-
-      caretLine = targetLine;
-      absoluteCaretPosition = targetLineStart + caretPosition;
-      widget.editorSelectionManager
-          .moveSelectionVertically(absoluteCaretPosition);
-    } else if (targetLine == rope.lineCount) {
-      // Move to the end of the last line
-      int targetLineLength = rope.getLineLength(targetLine - 1);
-      caretPosition = targetLineLength;
-    } else if (targetLine < 0) {
-      // Move to the beginning of the first line
-      caretPosition = 0;
-    }
-  }
-
-  void updateCaretPosition() {
-    caretLine = rope.findLineForPosition(absoluteCaretPosition);
-    int lineStart = rope.findClosestLineStart(caretLine);
-    caretPosition = absoluteCaretPosition - lineStart;
   }
 }
 
