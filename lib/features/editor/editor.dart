@@ -445,15 +445,26 @@ class _EditorContentState extends State<EditorContent> {
 
   void handleDoubleClick(TapDownDetails details) {
     final tapPosition = getPositionFromOffset(details.localPosition);
-    int wordStart = findWordBoundary(tapPosition, true);
-    int wordEnd = findWordBoundary(tapPosition, false);
+    int selectionStart, selectionEnd;
 
-    selectionAnchor = wordStart;
-    selectionFocus = wordEnd;
-    selectionStart = wordStart;
-    selectionEnd = wordEnd;
-    absoluteCaretPosition = wordEnd;
-    updateCaretPosition();
+    if (tapPosition >= rope.length) {
+      selectionStart = selectionEnd = rope.length;
+    } else if (isWhitespace(rope.charAt(tapPosition))) {
+      selectionStart = findWhitespaceBoundary(tapPosition, true);
+      selectionEnd = findWhitespaceBoundary(tapPosition, false);
+    } else {
+      selectionStart = findWordBoundary(tapPosition, true);
+      selectionEnd = findWordBoundary(tapPosition, false);
+    }
+
+    setState(() {
+      selectionAnchor = selectionStart;
+      selectionFocus = selectionEnd;
+      this.selectionStart = selectionStart;
+      this.selectionEnd = selectionEnd;
+      absoluteCaretPosition = selectionEnd;
+      updateCaretPosition();
+    });
   }
 
   void handleTripleClick(TapDownDetails details) {
@@ -499,24 +510,52 @@ class _EditorContentState extends State<EditorContent> {
       setState(() {
         Offset constrainedOffset = constrainOffset(details.localPosition);
         int currentPosition = getPositionFromOffset(constrainedOffset);
+        currentPosition = currentPosition.clamp(0, rope.length);
+
         if (_selectionMode == SelectionMode.word) {
-          selectionFocus = findWordBoundary(
-              currentPosition, currentPosition > selectionAnchor);
-        } else if (_selectionMode == SelectionMode.line) {
-          int lineNumber = getLineFromOffset(constrainedOffset);
-          if (lineNumber > getLineFromPosition(selectionAnchor)) {
-            selectionFocus = lineNumber < rope.lineCount - 1
-                ? rope.findClosestLineStart(lineNumber + 1) - 1
-                : rope.length;
+          if (selectionAnchor >= rope.length) {
+            selectionFocus = rope.length;
+          } else if (isWhitespace(rope.charAt(selectionAnchor))) {
+            if (currentPosition < selectionAnchor) {
+              selectionFocus = findWhitespaceBoundary(currentPosition, true);
+            } else {
+              selectionFocus = findWhitespaceBoundary(currentPosition, false);
+            }
           } else {
-            selectionFocus = rope.findClosestLineStart(lineNumber);
+            if (currentPosition < selectionAnchor) {
+              selectionFocus = findWordBoundary(currentPosition, true);
+            } else {
+              selectionFocus = findWordBoundary(currentPosition, false);
+            }
+          }
+        } else if (_selectionMode == SelectionMode.line) {
+          int anchorLine = getLineFromPosition(selectionAnchor);
+          int currentLine = getLineFromPosition(currentPosition);
+
+          if (currentLine < anchorLine) {
+            selectionFocus = rope.findClosestLineStart(currentLine);
+          } else {
+            selectionFocus = currentLine < rope.lineCount - 1
+                ? rope.findClosestLineStart(currentLine + 1) - 1
+                : rope.length;
           }
         } else {
+          // Normal character-based selection
           selectionFocus = currentPosition;
         }
+
+        // Ensure selectionFocus is within bounds
+        selectionFocus = selectionFocus.clamp(0, rope.length);
+
+        // Update caret position and selection
         absoluteCaretPosition = selectionFocus;
         updateCaretPosition();
         updateSelection();
+
+        // Ensure the caret is visible
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _ensureCursorVisible();
+        });
       });
     }
   }
@@ -533,9 +572,30 @@ class _EditorContentState extends State<EditorContent> {
     });
   }
 
+  bool isWhitespace(String char) {
+    return char == ' ' || char == '\t' || char == '\n';
+  }
+
+  int findWhitespaceBoundary(int position, bool isStart) {
+    position = position.clamp(0, rope.length);
+    if (position == rope.length) return position;
+
+    if (isStart) {
+      while (position > 0 && isWhitespace(rope.charAt(position - 1))) {
+        position--;
+      }
+    } else {
+      while (position < rope.length && isWhitespace(rope.charAt(position))) {
+        position++;
+      }
+    }
+
+    return position;
+  }
+
   int findWordBoundary(int position, bool isStart) {
-    if (position <= 0) return 0;
-    if (position >= rope.length) return rope.length;
+    position = position.clamp(0, rope.length);
+    if (position == rope.length) return position;
 
     bool isWordChar(String char) {
       return RegExp(r'[a-zA-Z0-9_]').hasMatch(char);
