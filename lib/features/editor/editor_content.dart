@@ -279,24 +279,27 @@ class _EditorContentState extends State<EditorContent> {
                     return Stack(
                       children: [
                         Positioned.fill(
+                            child: RawScrollbar(
+                          controller: widget.verticalController,
+                          thumbVisibility: false,
+                          thickness: 8,
+                          radius: Radius.zero,
+                          thumbColor: Colors.grey.withOpacity(0.5),
+                          fadeDuration: const Duration(milliseconds: 300),
+                          timeToFade: const Duration(milliseconds: 1000),
                           child: RawScrollbar(
-                            controller: widget.verticalController,
+                            controller: widget.horizontalController,
                             thumbVisibility: false,
                             thickness: 8,
                             radius: Radius.zero,
                             thumbColor: Colors.grey.withOpacity(0.5),
                             fadeDuration: const Duration(milliseconds: 300),
                             timeToFade: const Duration(milliseconds: 1000),
-                            child: RawScrollbar(
-                              controller: widget.horizontalController,
-                              thumbVisibility: false,
-                              thickness: 8,
-                              radius: Radius.zero,
-                              thumbColor: Colors.grey.withOpacity(0.5),
-                              fadeDuration: const Duration(milliseconds: 300),
-                              timeToFade: const Duration(milliseconds: 1000),
-                              notificationPredicate: (notification) =>
-                                  notification.depth == 1,
+                            notificationPredicate: (notification) =>
+                                notification.depth == 1,
+                            child: ScrollConfiguration(
+                              behavior:
+                                  ScrollBehavior().copyWith(scrollbars: false),
                               child: SingleChildScrollView(
                                 physics:
                                     widget.scrollManager.clampingScrollPhysics,
@@ -350,7 +353,7 @@ class _EditorContentState extends State<EditorContent> {
                               ),
                             ),
                           ),
-                        )
+                        ))
                       ],
                     );
                   },
