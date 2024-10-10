@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart' hide Tab;
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/services/file_service.dart';
@@ -19,6 +19,133 @@ class TabService extends ChangeNotifier {
       ? _tabs[currentTabIndexNotifier.value!]
       : null;
 
+  Future<bool> onCloseRequest(BuildContext context, String path) async {
+    final index = _tabs.indexWhere((tab) => tab.path == path);
+    if (index != -1 && _tabs[index].isModified) {
+      final result = await showDialog<String>(
+        context: context,
+        builder: (BuildContext context) {
+          return AlertDialog(
+            title: const Text('Unsaved Changes'),
+            content: Text(
+                'The file "${_tabs[index].path}" has unsaved changes. What would you like to do?'),
+            actions: <Widget>[
+              TextButton(
+                child: const Text('Cancel'),
+                onPressed: () => Navigator.of(context).pop('cancel'),
+              ),
+              TextButton(
+                child: const Text('Close without Saving'),
+                onPressed: () => Navigator.of(context).pop('close'),
+              ),
+              TextButton(
+                child: const Text('Save and Close'),
+                onPressed: () => Navigator.of(context).pop('save'),
+              ),
+            ],
+          );
+        },
+      );
+
+      switch (result) {
+        case 'close':
+          return true;
+        case 'save':
+          await _saveAndClose(index);
+          return true;
+        case 'cancel':
+        default:
+          return false;
+      }
+    }
+    return true;
+  }
+
+  Future<void> _saveAndClose(int index) async {
+    final tab = _tabs[index];
+    fileService.writeFile(tab.fullPath, tab.content);
+    _tabs[index] = tab.copyWith(isModified: false);
+    notifyListeners();
+  }
+
+  void removeTab(String path) async {
+    int index = _tabs.indexWhere((tab) => tab.path == path);
+    if (index != -1) {
+      _tabs.removeAt(index);
+      if (_tabs.isNotEmpty) {
+        currentTabIndexNotifier.value =
+            index < _tabs.length ? index : _tabs.length - 1;
+      } else {
+        currentTabIndexNotifier.value = null;
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> closeLeft(BuildContext context, int index) async {
+    if (index > 0) {
+      for (int i = 0; i < index; i++) {
+        if (!_tabs[i].isPinned &&
+            !await onCloseRequest(context, _tabs[i].path)) {
+          return;
+        }
+      }
+      _tabs.removeWhere((tab) => _tabs.indexOf(tab) < index && !tab.isPinned);
+      if (currentTabIndexNotifier.value! >= index) {
+        currentTabIndexNotifier.value = currentTabIndexNotifier.value! - index;
+      } else {
+        currentTabIndexNotifier.value = 0;
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> closeRight(BuildContext context, int index) async {
+    if (index < _tabs.length - 1) {
+      for (int i = index + 1; i < _tabs.length; i++) {
+        if (!_tabs[i].isPinned &&
+            !await onCloseRequest(context, _tabs[i].path)) {
+          return;
+        }
+      }
+      _tabs.removeWhere((tab) => _tabs.indexOf(tab) > index && !tab.isPinned);
+      if (currentTabIndexNotifier.value! > index) {
+        currentTabIndexNotifier.value = index;
+      }
+      notifyListeners();
+    }
+  }
+
+  Future<void> closeOtherTabs(BuildContext context, int index) async {
+    for (int i = 0; i < _tabs.length; i++) {
+      if (i != index &&
+          !_tabs[i].isPinned &&
+          !await onCloseRequest(context, _tabs[i].path)) {
+        return;
+      }
+    }
+    _tabs.removeWhere((tab) => _tabs.indexOf(tab) != index && !tab.isPinned);
+    if (_tabs.isNotEmpty) {
+      currentTabIndexNotifier.value = 0;
+      cursorPositionNotifier.value = _tabs[0].cursorPosition;
+    } else {
+      currentTabIndexNotifier.value = null;
+    }
+    notifyListeners();
+  }
+
+  Future<void> closeAllTabs(BuildContext context) async {
+    for (var tab in _tabs) {
+      if (!tab.isPinned && !await onCloseRequest(context, tab.path)) {
+        return;
+      }
+    }
+    _tabs.removeWhere((tab) => !tab.isPinned);
+    currentTabIndexNotifier.value = null;
+    cursorPositionNotifier.value = const CursorPosition(line: 0, column: 0);
+    notifyListeners();
+  }
+
   void setCurrentTab(int index) {
     if (index >= 0 && index < _tabs.length) {
       currentTabIndexNotifier.value = index;
@@ -35,6 +162,7 @@ class TabService extends ChangeNotifier {
     if (!_tabs.any((tab) => tab.fullPath == path)) {
       final fileContent = fileService.readFile(path);
       _tabs.add(Tab(
+        onCloseRequest: onCloseRequest,
         fullAbsolutePath: fullAbsolutePath,
         fullPath: path,
         path: fileName,
@@ -49,60 +177,6 @@ class TabService extends ChangeNotifier {
       int existingIndex = _tabs.indexWhere((tab) => tab.fullPath == path);
       setCurrentTab(existingIndex);
     }
-  }
-
-  void removeTab(String path) {
-    int index = _tabs.indexWhere((tab) => tab.path == path);
-    if (index != -1) {
-      _tabs.removeAt(index);
-      if (_tabs.isNotEmpty) {
-        currentTabIndexNotifier.value =
-            index < _tabs.length ? index : _tabs.length - 1;
-      } else {
-        currentTabIndexNotifier.value = null;
-      }
-      notifyListeners();
-    }
-  }
-
-  void closeLeft(int index) {
-    if (index > 0) {
-      _tabs.removeWhere((tab) => _tabs.indexOf(tab) < index && !tab.isPinned);
-      if (currentTabIndexNotifier.value! >= index) {
-        currentTabIndexNotifier.value = currentTabIndexNotifier.value! - index;
-      } else {
-        currentTabIndexNotifier.value = 0;
-      }
-      notifyListeners();
-    }
-  }
-
-  void closeRight(int index) {
-    if (index < _tabs.length - 1) {
-      _tabs.removeWhere((tab) => _tabs.indexOf(tab) > index && !tab.isPinned);
-      if (currentTabIndexNotifier.value! > index) {
-        currentTabIndexNotifier.value = index;
-      }
-      notifyListeners();
-    }
-  }
-
-  void closeOtherTabs(int index) {
-    _tabs.removeWhere((tab) => _tabs.indexOf(tab) != index && !tab.isPinned);
-    if (_tabs.isNotEmpty) {
-      currentTabIndexNotifier.value = 0;
-      cursorPositionNotifier.value = _tabs[0].cursorPosition;
-    } else {
-      currentTabIndexNotifier.value = null;
-    }
-    notifyListeners();
-  }
-
-  void closeAllTabs() {
-    _tabs.removeWhere((tab) => !tab.isPinned);
-    currentTabIndexNotifier.value = null;
-    cursorPositionNotifier.value = const CursorPosition(line: 0, column: 0);
-    notifyListeners();
   }
 
   void pinTab(int index) {
@@ -150,6 +224,7 @@ class TabService extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
+        onCloseRequest: _tabs[index].onCloseRequest,
         fullAbsolutePath: _tabs[index].fullAbsolutePath,
         fullPath: _tabs[index].fullPath,
         path: path,
@@ -184,6 +259,7 @@ class TabService extends ChangeNotifier {
     final index = _tabs.indexWhere((tab) => tab.path == path);
     if (index != -1) {
       _tabs[index] = Tab(
+        onCloseRequest: _tabs[index].onCloseRequest,
         fullAbsolutePath: _tabs[index].fullAbsolutePath,
         fullPath: _tabs[index].fullPath,
         isModified: isModified,

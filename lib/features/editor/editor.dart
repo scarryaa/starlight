@@ -149,28 +149,27 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
                   key: ValueKey(tab.path),
                   index: index,
                   child: CustomTab.Tab(
+                    onCloseRequest: widget.tabService.onCloseRequest,
                     fullAbsolutePath: tab.fullAbsolutePath,
                     fullPath: tab.fullPath,
                     path: tab.path,
                     content: tab.content,
                     isSelected: tab == widget.tabService.currentTab,
+                    onCloseTap: () => widget.tabService.removeTab(tab.path),
+                    onCloseOthers: () =>
+                        widget.tabService.closeOtherTabs(context, index),
+                    closeLeft: () =>
+                        widget.tabService.closeLeft(context, index),
+                    closeRight: () =>
+                        widget.tabService.closeRight(context, index),
+                    onCloseAll: () => widget.tabService.closeAllTabs(context),
                     onTap: () {
                       widget.tabService.setCurrentTab(index);
                     },
-                    onCloseOthers: () =>
-                        widget.tabService.closeOtherTabs(index),
-                    onCloseAll: widget.tabService.closeAllTabs,
                     onCopyPath: () => widget.tabService.copyPath(index),
                     onCopyRelativePath: () =>
                         widget.tabService.copyRelativePath(index),
                     isModified: tab.isModified,
-                    onCloseTap: tab.isPinned
-                        ? null
-                        : () {
-                            widget.tabService.removeTab(tab.path);
-                          },
-                    closeLeft: () => widget.tabService.closeLeft(index),
-                    closeRight: () => widget.tabService.closeRight(index),
                     isPinned: tab.isPinned,
                     onPinTap: () => widget.tabService.pinTab(index),
                     onUnpinTap: () => widget.tabService.unpinTab(index),

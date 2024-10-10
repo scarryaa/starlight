@@ -23,6 +23,7 @@ class Tab extends StatefulWidget {
   final VoidCallback? onUnpinTap;
   bool isModified;
   CursorPosition cursorPosition;
+  final Future<bool> Function(BuildContext, String) onCloseRequest;
 
   Tab({
     super.key,
@@ -44,6 +45,7 @@ class Tab extends StatefulWidget {
     this.onPinTap,
     this.onUnpinTap,
     this.cursorPosition = const CursorPosition(line: 0, column: 0),
+    required this.onCloseRequest,
   });
 
   @override
@@ -60,6 +62,7 @@ class Tab extends StatefulWidget {
     bool? isPinned,
   }) {
     return Tab(
+      onCloseRequest: onCloseRequest,
       fullPath: fullPath ?? this.fullPath,
       fullAbsolutePath: fullAbsolutePath ?? this.fullAbsolutePath,
       path: path ?? this.path,
@@ -81,6 +84,12 @@ class Tab extends StatefulWidget {
 class _TabState extends State<Tab> {
   bool _isHovering = false;
 
+  Future<void> _handleCloseTap(BuildContext context) async {
+    if (await widget.onCloseRequest(context, widget.path)) {
+      widget.onCloseTap?.call();
+    }
+  }
+
   void _showContextMenu(BuildContext context, TapDownDetails details) {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final Offset offset = renderBox.localToGlobal(details.localPosition);
@@ -93,7 +102,7 @@ class _TabState extends State<Tab> {
     );
 
     final List<ContextMenuItem> menuItems = [
-      ContextMenuItem(label: 'Close', onTap: widget.onCloseTap),
+      ContextMenuItem(label: 'Close', onTap: () => _handleCloseTap(context)),
       ContextMenuItem(label: 'Close Others', onTap: widget.onCloseOthers),
       const ContextMenuItem(isDivider: true, label: ''),
       ContextMenuItem(label: 'Close Left', onTap: widget.closeLeft),
@@ -129,7 +138,7 @@ class _TabState extends State<Tab> {
         child: Listener(
           onPointerDown: (PointerDownEvent event) {
             if (event.buttons == kMiddleMouseButton && !widget.isPinned) {
-              widget.onCloseTap?.call();
+              _handleCloseTap(context);
             }
           },
           child: CustomTooltip(
@@ -197,7 +206,7 @@ class _TabState extends State<Tab> {
                             ),
                             onPressed: widget.isPinned
                                 ? widget.onUnpinTap
-                                : widget.onCloseTap,
+                                : () => _handleCloseTap(context),
                             child: Icon(
                               widget.isPinned ? Icons.push_pin : Icons.close,
                               size: 16,
