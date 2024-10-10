@@ -24,6 +24,7 @@ class EditorKeyboardHandler {
   final Function ensureCursorVisible;
   final Function(int, int) updateAfterEdit;
   final Function() notifyListeners;
+  final Function(int, int) updateCursorPosition;
 
   final Logger _logger = Logger('EditorKeyboardHandler');
 
@@ -50,9 +51,28 @@ class EditorKeyboardHandler {
     required this.ensureCursorVisible,
     required this.updateAfterEdit,
     required this.notifyListeners,
+    required this.updateCursorPosition,
   }) {
     _logger.info('EditorKeyboardHandler initialized');
     _detectIndentation();
+  }
+
+  void updateAndNotifyCursorPosition() {
+    caretLine = rope.findLineForPosition(absoluteCaretPosition);
+    int lineStart = rope.findClosestLineStart(caretLine);
+    caretPosition = absoluteCaretPosition - lineStart;
+    stickyColumn = max(stickyColumn, caretPosition);
+
+    // Sync cursor position with TabService
+    if (tabService.currentTab != null) {
+      tabService.updateCursorPosition(
+        tabService.currentTab!.path,
+        CursorPosition(line: caretLine, column: caretPosition),
+      );
+    }
+
+    // Update the CaretPositionNotifier
+    updateCursorPosition(caretLine, caretPosition);
   }
 
   void _detectIndentation() {
@@ -589,21 +609,6 @@ class EditorKeyboardHandler {
     absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
     updateAndNotifyCursorPosition();
     selectionManager.moveSelectionHorizontally(absoluteCaretPosition);
-  }
-
-  void updateAndNotifyCursorPosition() {
-    caretLine = rope.findLineForPosition(absoluteCaretPosition);
-    int lineStart = rope.findClosestLineStart(caretLine);
-    caretPosition = absoluteCaretPosition - lineStart;
-    stickyColumn = max(stickyColumn, caretPosition);
-
-    // Sync cursor position with TabService
-    if (tabService.currentTab != null) {
-      tabService.updateCursorPosition(
-        tabService.currentTab!.path,
-        CursorPosition(line: caretLine, column: caretPosition),
-      );
-    }
   }
 
   int applyStickyColumn(int lineLength) {

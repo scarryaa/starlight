@@ -12,6 +12,7 @@ import 'package:starlight/features/editor/models/selection_mode.dart';
 import 'package:starlight/features/editor/services/editor_keyboard_handler.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
+import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/services/theme_manager.dart';
@@ -33,6 +34,7 @@ class EditorContent extends StatefulWidget {
   final String fontFamily;
   final double fontSize;
   final int tabSize;
+  final CaretPositionNotifier caretPositionNotifier;
 
   const EditorContent({
     super.key,
@@ -49,6 +51,7 @@ class EditorContent extends StatefulWidget {
     required this.fontFamily,
     required this.fontSize,
     required this.tabSize,
+    required this.caretPositionNotifier,
   });
 
   @override
@@ -82,6 +85,7 @@ class _EditorContentState extends State<EditorContent> {
     rope = Rope(widget.tab.content);
     updateLineCounts();
 
+    widget.caretPositionNotifier.addListener(_handleCaretPositionChange);
     widget.editorSelectionManager.updateRope(rope);
     widget.scrollManager.preventOverscroll(widget.horizontalController,
         widget.verticalController, editorPadding, viewPadding);
@@ -90,6 +94,9 @@ class _EditorContentState extends State<EditorContent> {
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateContentSize());
 
     keyboardHandler = EditorKeyboardHandler(
+      updateCursorPosition: (line, column) {
+        widget.caretPositionNotifier.updatePosition(line, column);
+      },
       rope: rope,
       configService: widget.configService,
       tabService: widget.tabService,
@@ -117,8 +124,21 @@ class _EditorContentState extends State<EditorContent> {
     );
   }
 
+  void _handleCaretPositionChange() {
+    final newPosition = widget.caretPositionNotifier.position;
+    setState(() {
+      keyboardHandler.caretLine = newPosition.line;
+      keyboardHandler.caretPosition = newPosition.column;
+      keyboardHandler.stickyColumn = newPosition.column;
+      keyboardHandler.absoluteCaretPosition =
+          rope.findClosestLineStart(newPosition.line) + newPosition.column;
+      _ensureCursorVisible();
+    });
+  }
+
   @override
   void dispose() {
+    widget.caretPositionNotifier.removeListener(_handleCaretPositionChange);
     widget.verticalController.removeListener(_handleVerticalScroll);
     widget.horizontalController.removeListener(_handleHorizontalScroll);
     super.dispose();
@@ -298,8 +318,8 @@ class _EditorContentState extends State<EditorContent> {
                             notificationPredicate: (notification) =>
                                 notification.depth == 1,
                             child: ScrollConfiguration(
-                              behavior:
-                                  ScrollBehavior().copyWith(scrollbars: false),
+                              behavior: const ScrollBehavior()
+                                  .copyWith(scrollbars: false),
                               child: SingleChildScrollView(
                                 physics:
                                     widget.scrollManager.clampingScrollPhysics,
@@ -395,6 +415,8 @@ class _EditorContentState extends State<EditorContent> {
   void handleClick(int position) {
     keyboardHandler.absoluteCaretPosition = position;
     keyboardHandler.updateAndNotifyCursorPosition();
+    widget.caretPositionNotifier.updatePosition(
+        keyboardHandler.caretLine, keyboardHandler.caretPosition);
     widget.editorSelectionManager.clearSelection();
   }
 
@@ -408,6 +430,8 @@ class _EditorContentState extends State<EditorContent> {
 
     keyboardHandler.absoluteCaretPosition = selectionEnd;
     keyboardHandler.updateAndNotifyCursorPosition();
+    widget.caretPositionNotifier.updatePosition(
+        keyboardHandler.caretLine, keyboardHandler.caretPosition);
   }
 
   void handleTripleClick(int position) {
@@ -423,6 +447,8 @@ class _EditorContentState extends State<EditorContent> {
 
     keyboardHandler.absoluteCaretPosition = lineEnd;
     keyboardHandler.updateAndNotifyCursorPosition();
+    widget.caretPositionNotifier.updatePosition(
+        keyboardHandler.caretLine, keyboardHandler.caretPosition);
   }
 
   void handleDragStart(Offset localPosition) {
@@ -436,6 +462,8 @@ class _EditorContentState extends State<EditorContent> {
 
       keyboardHandler.absoluteCaretPosition = dragStartPosition;
       keyboardHandler.updateAndNotifyCursorPosition();
+      widget.caretPositionNotifier.updatePosition(
+          keyboardHandler.caretLine, keyboardHandler.caretPosition);
     });
   }
 
@@ -480,6 +508,8 @@ class _EditorContentState extends State<EditorContent> {
         keyboardHandler.absoluteCaretPosition =
             widget.editorSelectionManager.selectionFocus;
         keyboardHandler.updateAndNotifyCursorPosition();
+        widget.caretPositionNotifier.updatePosition(
+            keyboardHandler.caretLine, keyboardHandler.caretPosition);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _ensureCursorVisible();
@@ -494,6 +524,8 @@ class _EditorContentState extends State<EditorContent> {
       keyboardHandler.absoluteCaretPosition =
           widget.editorSelectionManager.selectionEnd;
       keyboardHandler.updateAndNotifyCursorPosition();
+      widget.caretPositionNotifier.updatePosition(
+          keyboardHandler.caretLine, keyboardHandler.caretPosition);
     });
   }
 

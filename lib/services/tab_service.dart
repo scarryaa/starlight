@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide Tab;
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/models/cursor_position.dart';
+import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/widgets/tab/tab.dart';
 
@@ -10,8 +11,9 @@ class TabService extends ChangeNotifier {
   final ValueNotifier<int?> currentTabIndexNotifier = ValueNotifier<int?>(null);
   final ValueNotifier<CursorPosition> cursorPositionNotifier =
       ValueNotifier(const CursorPosition(line: 0, column: 0));
+  CaretPositionNotifier caretPositionNotifier;
 
-  TabService({required this.fileService});
+  TabService({required this.fileService, required this.caretPositionNotifier});
 
   List<Tab> get tabs => List.unmodifiable(_tabs);
 
@@ -194,6 +196,17 @@ class TabService extends ChangeNotifier {
       }
       notifyListeners();
     }
+  }
+
+  void jumpToCursorPosition(int line, int column) {
+    if (currentTab != null) {
+      updateCursorPosition(
+          currentTab!.path, CursorPosition(line: line, column: column));
+    }
+
+    caretPositionNotifier.updatePosition(line, column);
+
+    notifyListeners();
   }
 
   void unpinTab(int index) {

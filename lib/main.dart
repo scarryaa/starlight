@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/status_bar/status_bar.dart';
+import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
@@ -19,8 +20,10 @@ import 'package:path/path.dart' as path;
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  final caretPositionNotifier = CaretPositionNotifier();
   final fileService = FileService();
-  final tabService = TabService(fileService: fileService);
+  final tabService = TabService(
+      fileService: fileService, caretPositionNotifier: caretPositionNotifier);
   final configService =
       ConfigService(fileService: fileService, tabService: tabService);
 
@@ -64,6 +67,7 @@ void main() async {
   }
 
   runApp(MyApp(
+    caretPositionNotifier: caretPositionNotifier,
     themeManager: themeManager,
     configService: configService,
     fileService: fileService,
@@ -96,6 +100,7 @@ class MyApp extends StatelessWidget {
   final ConfigService configService;
   final FileService fileService;
   final TabService tabService;
+  final CaretPositionNotifier caretPositionNotifier;
 
   const MyApp({
     super.key,
@@ -103,12 +108,19 @@ class MyApp extends StatelessWidget {
     required this.configService,
     required this.fileService,
     required this.tabService,
+    required this.caretPositionNotifier,
   });
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider.value(
-      value: themeManager,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider.value(value: themeManager),
+        Provider.value(value: configService),
+        ChangeNotifierProvider.value(value: fileService),
+        ChangeNotifierProvider.value(value: tabService),
+        ChangeNotifierProvider.value(value: caretPositionNotifier),
+      ],
       child: Consumer<ThemeManager>(
         builder: (context, themeManager, child) {
           return MaterialApp(

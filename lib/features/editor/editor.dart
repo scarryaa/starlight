@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart' hide VerticalDirection, Tab;
+import 'package:provider/provider.dart';
+import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
+import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
@@ -43,10 +46,14 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   final Map<String, ScrollController> _horizontalControllers = {};
   List<Widget> _editorInstances = [];
   late TabController tabController;
+  late CaretPositionNotifier _caretPositionNotifier;
 
   @override
   void initState() {
     super.initState();
+    _caretPositionNotifier =
+        Provider.of<CaretPositionNotifier>(context, listen: false);
+    _caretPositionNotifier.addListener(_handleCaretPositionChange);
     _initScrollControllers();
     tabController = TabController(
       length: widget.tabService.tabs.length,
@@ -103,6 +110,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
 
   Widget _buildEditor(Tab tab) {
     return EditorContent(
+      caretPositionNotifier: _caretPositionNotifier,
       key: ValueKey(tab.path),
       editorSelectionManager: widget.editorSelectionManager,
       configService: widget.configService,
@@ -190,8 +198,21 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     );
   }
 
+  void _handleCaretPositionChange() {
+    if (widget.tabService.currentTab != null) {
+      final newPosition = _caretPositionNotifier.position;
+      widget.tabService.updateCursorPosition(
+        widget.tabService.currentTab!.path,
+        CursorPosition(line: newPosition.line, column: newPosition.column),
+      );
+      // Force a rebuild of the current editor instance
+      setState(() {});
+    }
+  }
+
   @override
   void dispose() {
+    _caretPositionNotifier.removeListener(_handleCaretPositionChange);
     for (var controller in _verticalControllers.values) {
       controller.dispose();
     }
