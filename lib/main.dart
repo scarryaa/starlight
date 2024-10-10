@@ -197,6 +197,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: <Widget>[
                     FileExplorer(
+                      fileService: widget.fileService,
                       initialDirectory:
                           widget.configService.config['initialDirectory'] ?? '',
                       tabService: widget.tabService,
