@@ -17,10 +17,10 @@ class CommonContextMenu extends StatelessWidget {
   final RelativeRect position;
 
   const CommonContextMenu({
-    Key? key,
+    super.key,
     required this.menuItems,
     required this.position,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -50,7 +50,10 @@ class CommonContextMenu extends StatelessWidget {
                       height: 8, thickness: 1, color: theme.dividerColor);
                 }
                 return InkWell(
-                  onTap: item.onTap,
+                  onTap: () {
+                    Navigator.of(context).pop(); // Close the menu
+                    item.onTap?.call(); // Call the item's onTap function
+                  },
                   hoverColor: theme.hoverColor,
                   child: Padding(
                     padding:
