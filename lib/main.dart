@@ -1,5 +1,5 @@
 import 'dart:io';
-import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/editor.dart';
@@ -9,8 +9,32 @@ import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
+import 'package:window_manager/window_manager.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  if (!kIsWeb) {
+    if (defaultTargetPlatform == TargetPlatform.windows ||
+        defaultTargetPlatform == TargetPlatform.macOS ||
+        defaultTargetPlatform == TargetPlatform.linux) {
+      await windowManager.ensureInitialized();
+
+      WindowOptions windowOptions = const WindowOptions(
+        minimumSize: Size(700, 600),
+        size: Size(700, 600),
+        center: true,
+        backgroundColor: Colors.transparent,
+        skipTaskbar: false,
+        titleBarStyle: TitleBarStyle.normal,
+      );
+      windowManager.waitUntilReadyToShow(windowOptions, () async {
+        await windowManager.show();
+        await windowManager.focus();
+      });
+    }
+  }
+
   runApp(const MyApp());
 }
 
