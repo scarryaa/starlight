@@ -3,7 +3,6 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide VerticalDirection;
-import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
@@ -65,7 +64,6 @@ class _EditorContentState extends State<EditorContent> {
   double _horizontalOffset = 0;
   Key _painterKey = UniqueKey();
   bool _isDragging = false;
-  int _dragStartPosition = -1;
   late Size _editorSize;
   int _clickCount = 0;
   int _lastClickTime = 0;

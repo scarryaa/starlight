@@ -31,13 +31,13 @@ class TabService extends ChangeNotifier {
     }
   }
 
-  void addTab(String path, String fullAbsolutePath) {
+  void addTab(String fileName, String path, String fullAbsolutePath) {
     if (!_tabs.any((tab) => tab.path == path)) {
       final fileContent = fileService.readFile(path);
       _tabs.add(Tab(
         fullAbsolutePath: fullAbsolutePath,
         fullPath: path,
-        path: path,
+        path: fileName,
         content: fileContent,
         isSelected: true,
         isModified: false,
@@ -107,4 +107,3 @@ class TabService extends ChangeNotifier {
     }
   }
 }
-

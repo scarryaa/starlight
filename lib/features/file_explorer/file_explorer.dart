@@ -126,7 +126,6 @@ class _FileExplorerState extends State<FileExplorer> {
 
   void _addTab(String path) {
     final fullAbsolutePath = File(path).absolute.path;
-    widget.tabService.addTab(path, fullAbsolutePath);
+    widget.tabService.addTab(path.split('/').last, path, fullAbsolutePath);
   }
 }
-

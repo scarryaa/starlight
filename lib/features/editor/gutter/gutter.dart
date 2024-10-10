@@ -47,9 +47,7 @@ class _EditorGutterState extends State<EditorGutter> {
 
   void _syncEditorScroll() {
     if (!_isScrolling &&
-        widget.editorVerticalScrollController.position.maxScrollExtent > 0 &&
-        widget.editorVerticalScrollController.offset !=
-            _gutterScrollController.offset) {
+        widget.editorVerticalScrollController.position.maxScrollExtent > 0) {
       _isScrolling = true;
       widget.editorVerticalScrollController
           .jumpTo(_gutterScrollController.offset);
@@ -58,10 +56,7 @@ class _EditorGutterState extends State<EditorGutter> {
   }
 
   void _syncGutterScroll() {
-    if (!_isScrolling &&
-        _gutterScrollController.position.maxScrollExtent > 0 &&
-        _gutterScrollController.offset !=
-            widget.editorVerticalScrollController.offset) {
+    if (!_isScrolling && _gutterScrollController.position.maxScrollExtent > 0) {
       _isScrolling = true;
       _gutterScrollController
           .jumpTo(widget.editorVerticalScrollController.offset);
@@ -91,7 +86,7 @@ class _EditorGutterState extends State<EditorGutter> {
           itemCount: widget.lineCount,
           itemExtent: widget.lineHeight,
           padding: EdgeInsets.only(
-            bottom: widget.viewPadding,
+            bottom: widget.viewPadding - 35,
           ),
           itemBuilder: (context, index) {
             final isCurrentLine = index == widget.currentLine;

@@ -51,7 +51,8 @@ class ConfigService {
   }
 
   void openConfig() {
-    tabService.addTab(configPath, configPath);
+    tabService.addTab(configPath.split('/').last, configPath,
+        File.fromUri(Uri(path: configPath)).absolute.path);
   }
 
   void updateConfig(String key, dynamic value) {
