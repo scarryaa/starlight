@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide VerticalDirection;
+import 'package:provider/provider.dart';
 import 'package:starlight/features/context_menu/context_menu.dart';
 import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
@@ -13,6 +14,7 @@ import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
+import 'package:starlight/services/theme_manager.dart';
 import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
@@ -307,6 +309,7 @@ class _EditorContentState extends State<EditorContent> {
                                   child: CustomPaint(
                                     key: _painterKey,
                                     painter: EditorPainter(
+                                      buildContext: context,
                                       currentLineIndex:
                                           keyboardHandler.caretLine,
                                       fontSize: widget.fontSize,
@@ -672,6 +675,7 @@ class EditorPainter extends CustomPainter {
   final double fontSize;
   final int lastUpdatedLine;
   final int currentLineIndex;
+  final BuildContext buildContext;
 
   EditorPainter({
     required this.lines,
@@ -690,6 +694,7 @@ class EditorPainter extends CustomPainter {
     required this.fontSize,
     required this.lastUpdatedLine,
     required this.currentLineIndex,
+    required this.buildContext,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -700,6 +705,17 @@ class EditorPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    final themeManager = Provider.of<ThemeManager>(buildContext, listen: false);
+    final theme = Theme.of(buildContext);
+    final isDarkMode = themeManager.themeMode == ThemeMode.dark ||
+        (themeManager.themeMode == ThemeMode.system &&
+            MediaQuery.of(buildContext).platformBrightness == Brightness.dark);
+
+    final textColor = isDarkMode ? Colors.white : Colors.black;
+    final selectionColor = theme.colorScheme.primary.withOpacity(0.3);
+    final caretColor = theme.colorScheme.primary;
+    final currentLineColor = theme.colorScheme.primary.withOpacity(0.1);
+
     int firstVisibleLine = max((verticalOffset / lineHeight).floor(), 0);
     int lastVisibleLine = min(
         firstVisibleLine + (viewportHeight / lineHeight).ceil(), lines.length);
@@ -711,7 +727,7 @@ class EditorPainter extends CustomPainter {
             text: lines[i],
             style: TextStyle(
               fontFamily: fontFamily,
-              color: Colors.black,
+              color: textColor,
               fontSize: fontSize,
               height: 1,
             ),
@@ -730,8 +746,8 @@ class EditorPainter extends CustomPainter {
       }
     }
 
-    highlightCurrentLine(canvas, currentLineIndex, size);
-    drawSelection(canvas, firstVisibleLine, lastVisibleLine);
+    highlightCurrentLine(canvas, currentLineIndex, size, currentLineColor);
+    drawSelection(canvas, firstVisibleLine, lastVisibleLine, selectionColor);
 
     // Draw caret
     if (caretLine >= firstVisibleLine &&
@@ -745,7 +761,7 @@ class EditorPainter extends CustomPainter {
           lineHeight,
         ),
         Paint()
-          ..color = Colors.blue
+          ..color = caretColor
           ..style = PaintingStyle.fill,
       );
     }
@@ -800,14 +816,15 @@ class EditorPainter extends CustomPainter {
     return tp.height;
   }
 
-  void drawSelection(Canvas canvas, int firstVisibleLine, int lastVisibleLine) {
+  void drawSelection(Canvas canvas, int firstVisibleLine, int lastVisibleLine,
+      Color selectionColor) {
     if (selectionStart != selectionEnd && lines.isNotEmpty) {
       for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
         if (i >= lineStarts.length) {
           int lineStart =
               (i > 0 ? lineStarts[i - 1] + lines[i - 1].length : 0).toInt();
           int lineEnd = text.length;
-          drawSelectionForLine(canvas, i, lineStart, lineEnd);
+          drawSelectionForLine(canvas, i, lineStart, lineEnd, selectionColor);
           continue;
         }
 
@@ -820,21 +837,22 @@ class EditorPainter extends CustomPainter {
           lineEnd++;
         }
 
-        drawSelectionForLine(canvas, i, lineStart, lineEnd);
+        drawSelectionForLine(canvas, i, lineStart, lineEnd, selectionColor);
       }
     }
   }
 
-  void highlightCurrentLine(Canvas canvas, int currentLineIndex, Size size) {
+  void highlightCurrentLine(
+      Canvas canvas, int currentLineIndex, Size size, Color highlightColor) {
     canvas.drawRect(
         Rect.fromLTWH(0, lineHeight * currentLineIndex, size.width, lineHeight),
         Paint()
-          ..color = Colors.grey.withOpacity(0.1)
+          ..color = highlightColor
           ..style = PaintingStyle.fill);
   }
 
-  void drawSelectionForLine(
-      Canvas canvas, int lineIndex, int lineStart, int lineEnd) {
+  void drawSelectionForLine(Canvas canvas, int lineIndex, int lineStart,
+      int lineEnd, Color selectionColor) {
     if (lineStart < selectionEnd && lineEnd > selectionStart) {
       double startX = (max(selectionStart, lineStart) - lineStart).toDouble();
       double endX = (min(selectionEnd, lineEnd) - lineStart).toDouble();
@@ -847,7 +865,7 @@ class EditorPainter extends CustomPainter {
           lineHeight,
         ),
         Paint()
-          ..color = Colors.blue.withOpacity(0.3)
+          ..color = selectionColor
           ..style = PaintingStyle.fill,
       );
     }

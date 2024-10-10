@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:starlight/services/theme_manager.dart';
 
 class EditorGutter extends StatefulWidget {
   final double height;
@@ -84,7 +86,7 @@ class _EditorGutterState extends State<EditorGutter> {
       _gutterWidth = textPainter.width + 35;
     });
   }
-  
+
   @override
   void didUpdateWidget(EditorGutter oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -102,6 +104,17 @@ class _EditorGutterState extends State<EditorGutter> {
 
   @override
   Widget build(BuildContext context) {
+    final themeManager = Provider.of<ThemeManager>(context);
+    final theme = Theme.of(context);
+    final isDarkMode = themeManager.themeMode == ThemeMode.dark ||
+        (themeManager.themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
+
+    final regularTextColor = isDarkMode ? Colors.grey[400] : Colors.grey[600];
+    final currentLineTextColor = theme.colorScheme.primary;
+    final currentLineBackgroundColor =
+        theme.colorScheme.primary.withOpacity(0.1);
+
     return SizedBox(
       width: _gutterWidth,
       height: widget.height + widget.viewPadding * 2,
@@ -118,7 +131,7 @@ class _EditorGutterState extends State<EditorGutter> {
             final isCurrentLine = index == widget.currentLine;
             return Container(
               color: isCurrentLine
-                  ? Colors.grey.withOpacity(0.1)
+                  ? currentLineBackgroundColor
                   : Colors.transparent,
               padding: const EdgeInsets.only(right: 8.0),
               child: Align(
@@ -129,7 +142,8 @@ class _EditorGutterState extends State<EditorGutter> {
                     fontFamily: widget.fontFamily,
                     fontSize: widget.fontSize,
                     height: 1.5,
-                    color: isCurrentLine ? Colors.black : Colors.grey,
+                    color:
+                        isCurrentLine ? currentLineTextColor : regularTextColor,
                     fontWeight:
                         isCurrentLine ? FontWeight.bold : FontWeight.normal,
                   ),

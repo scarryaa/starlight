@@ -15,7 +15,20 @@ import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  ThemeManager themeManager = ThemeManager();
+
+  final fileService = FileService();
+  final tabService = TabService(fileService: fileService);
+  final configService =
+      ConfigService(fileService: fileService, tabService: tabService);
+
+  if (!File(configService.configPath).existsSync()) {
+    configService.createDefaultConfig();
+  }
+  configService.loadConfig();
+
+  final themeManager = ThemeManager(
+    initialThemeMode: configService.config['theme'] ?? 'system',
+  );
 
   if (!kIsWeb) {
     if (defaultTargetPlatform == TargetPlatform.windows ||
@@ -40,13 +53,25 @@ void main() async {
 
   runApp(MyApp(
     themeManager: themeManager,
+    configService: configService,
+    fileService: fileService,
+    tabService: tabService,
   ));
 }
 
 class MyApp extends StatelessWidget {
   final ThemeManager themeManager;
+  final ConfigService configService;
+  final FileService fileService;
+  final TabService tabService;
 
-  const MyApp({super.key, required this.themeManager});
+  const MyApp({
+    super.key,
+    required this.themeManager,
+    required this.configService,
+    required this.fileService,
+    required this.tabService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -60,7 +85,12 @@ class MyApp extends StatelessWidget {
             theme: themeManager.lightTheme,
             darkTheme: themeManager.darkTheme,
             themeMode: themeManager.themeMode,
-            home: MyHomePage(title: 'starlight'),
+            home: MyHomePage(
+              title: 'starlight',
+              configService: configService,
+              fileService: fileService,
+              tabService: tabService,
+            ),
           );
         },
       ),
@@ -69,37 +99,32 @@ class MyApp extends StatelessWidget {
 }
 
 class MyHomePage extends StatefulWidget {
-  MyHomePage({super.key, required this.title}) {
-    tabService = TabService(fileService: fileService);
-    hotkeyService = HotkeyService();
-    configService =
-        ConfigService(fileService: fileService, tabService: tabService);
-    themeManager = ThemeManager();
-    _initializeConfig();
-  }
-
-  final FileService fileService = FileService();
-  late TabService tabService;
-  late HotkeyService hotkeyService;
-  late ConfigService configService;
-  late ThemeManager themeManager;
   final String title;
+  final ConfigService configService;
+  final FileService fileService;
+  final TabService tabService;
 
-  void _initializeConfig() {
-    if (!File(configService.configPath).existsSync()) {
-      configService.createDefaultConfig();
-    }
-    configService.loadConfig();
-    themeManager
-        .setThemeMode(configService.config['themeMode'] ?? ThemeMode.system);
-  }
+  MyHomePage({
+    super.key,
+    required this.title,
+    required this.configService,
+    required this.fileService,
+    required this.tabService,
+  });
 
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
 
 class _MyHomePageState extends State<MyHomePage> {
+  late HotkeyService hotkeyService;
   bool _hotkeysRegistered = false;
+
+  @override
+  void initState() {
+    super.initState();
+    hotkeyService = HotkeyService();
+  }
 
   @override
   void didChangeDependencies() {
@@ -112,7 +137,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _registerHotkeys() {
     final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
-    widget.hotkeyService.registerGlobalHotkey(
+    hotkeyService.registerGlobalHotkey(
       SingleActivator(LogicalKeyboardKey.keyS,
           meta: isMacOS, control: !isMacOS),
       () {
@@ -136,11 +161,11 @@ class _MyHomePageState extends State<MyHomePage> {
         }
       },
     );
-    widget.hotkeyService.registerGlobalHotkey(
+    hotkeyService.registerGlobalHotkey(
         SingleActivator(LogicalKeyboardKey.keyN,
             meta: isMacOS, control: !isMacOS),
         () {});
-    widget.hotkeyService.registerGlobalHotkey(
+    hotkeyService.registerGlobalHotkey(
       SingleActivator(LogicalKeyboardKey.comma,
           meta: isMacOS, control: !isMacOS),
       () {
@@ -151,13 +176,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final themeManager = Provider.of<ThemeManager>(context);
+
     return FocusableActionDetector(
       actions: const <Type, Action<Intent>>{},
       shortcuts: const {},
       child: Focus(
         autofocus: true,
         onKeyEvent: (FocusNode node, KeyEvent event) {
-          final result = widget.hotkeyService.handleKeyEvent(event);
+          final result = hotkeyService.handleKeyEvent(event);
           return result == KeyEventResult.handled
               ? KeyEventResult.handled
               : KeyEventResult.ignored;
@@ -176,7 +203,7 @@ class _MyHomePageState extends State<MyHomePage> {
                     ),
                     Editor(
                       configService: widget.configService,
-                      hotkeyService: widget.hotkeyService,
+                      hotkeyService: hotkeyService,
                       tabService: widget.tabService,
                       fileService: widget.fileService,
                       lineHeight:

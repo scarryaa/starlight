@@ -8,8 +8,11 @@ class ThemeManager extends ChangeNotifier {
   ThemeManager({
     ThemeData? lightTheme,
     ThemeData? darkTheme,
+    dynamic initialThemeMode,
   })  : _lightTheme = lightTheme ?? _defaultLightTheme,
-        _darkTheme = darkTheme ?? _defaultDarkTheme;
+        _darkTheme = darkTheme ?? _defaultDarkTheme {
+    setThemeMode(initialThemeMode ?? ThemeMode.system);
+  }
 
   ThemeMode get themeMode => _themeMode;
   ThemeData get lightTheme => _lightTheme;
@@ -17,22 +20,39 @@ class ThemeManager extends ChangeNotifier {
 
   static final ThemeData _defaultLightTheme = ThemeData(
     brightness: Brightness.light,
-    colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
+    colorScheme: ColorScheme.fromSeed(seedColor: Colors.lightBlue[200]!),
     useMaterial3: true,
   );
 
   static final ThemeData _defaultDarkTheme = ThemeData(
     brightness: Brightness.dark,
     colorScheme: ColorScheme.fromSeed(
-      seedColor: Colors.deepPurple,
+      seedColor: Colors.lightBlue[200]!,
       brightness: Brightness.dark,
     ),
     useMaterial3: true,
   );
 
-  void setThemeMode(ThemeMode mode) {
-    _themeMode = mode;
+  void setThemeMode(dynamic mode) {
+    if (mode is String) {
+      _themeMode = _parseThemeMode(mode);
+    } else if (mode is ThemeMode) {
+      _themeMode = mode;
+    } else {
+      _themeMode = ThemeMode.system;
+    }
     notifyListeners();
+  }
+
+  ThemeMode _parseThemeMode(String mode) {
+    switch (mode.toLowerCase()) {
+      case 'light':
+        return ThemeMode.light;
+      case 'dark':
+        return ThemeMode.dark;
+      default:
+        return ThemeMode.system;
+    }
   }
 
   void setLightTheme(ThemeData theme) {
@@ -42,6 +62,12 @@ class ThemeManager extends ChangeNotifier {
 
   void setDarkTheme(ThemeData theme) {
     _darkTheme = theme;
+    notifyListeners();
+  }
+
+  void toggleTheme() {
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
 
@@ -59,3 +85,4 @@ class ThemeManager extends ChangeNotifier {
     }
   }
 }
+
