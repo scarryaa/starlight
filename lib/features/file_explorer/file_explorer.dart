@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/context_menu/context_menu.dart';
+import 'package:starlight/features/file_explorer/quick_access_bar.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:path/path.dart' as p;
@@ -40,62 +41,225 @@ class _FileExplorerState extends State<FileExplorer> {
   final ScrollController _scrollController = ScrollController();
   Set<String> selectedPaths = {};
   String? lastSelectedPath;
-  String? _draggedItemPath;
   Timer? _expandTimer;
   String? _hoveredFolderPath;
+  Set<String> expandedDirectories = {};
+  String? lastClickedDirectory;
+  bool _isSearchVisible = false;
+  final TextEditingController _searchController = TextEditingController();
+  List<FileSystemNode> _filteredNodes = [];
+  Timer? _debounce;
+  final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _explorerFocusNode = FocusNode();
+  final FocusNode _explorerChildFocusNode = FocusNode();
+  bool _isShiftPressed = false;
 
   @override
   void initState() {
     super.initState();
     _initializeRootNodes();
+    _filteredNodes = List.from(rootNodes);
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
+    _debounce?.cancel();
     _scrollController.dispose();
     _expandTimer?.cancel();
+    _explorerFocusNode.dispose();
+    _explorerChildFocusNode.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _handleEmptySpaceClick,
-      onSecondaryTapDown: (details) =>
-          _showEmptySpaceContextMenu(context, details),
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
+    return FocusableActionDetector(
+      focusNode: _explorerFocusNode,
+      autofocus: true,
+      actions: {
+        DeleteIntent: CallbackAction<DeleteIntent>(
+          onInvoke: (DeleteIntent intent) => _handleDelete(),
         ),
-        width: 250,
-        child: DragTarget<String>(
-          onWillAccept: (data) => true,
-          onAccept: (data) {
-            _handleFileDrop(data, widget.initialDirectory);
+      },
+      shortcuts: {
+        LogicalKeySet(LogicalKeyboardKey.delete): DeleteIntent(),
+      },
+      child: Focus(
+        focusNode: _explorerChildFocusNode,
+        onKeyEvent: (node, event) {
+          if (event is KeyDownEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.shiftLeft ||
+                event.logicalKey == LogicalKeyboardKey.shiftRight) {
+              setState(() => _isShiftPressed = true);
+            }
+          } else if (event is KeyUpEvent) {
+            if (event.logicalKey == LogicalKeyboardKey.shiftLeft ||
+                event.logicalKey == LogicalKeyboardKey.shiftRight) {
+              setState(() => _isShiftPressed = false);
+            }
+          }
+          return KeyEventResult.ignored;
+        },
+        child: GestureDetector(
+          onTap: () {
+            _explorerChildFocusNode.requestFocus();
+            _handleEmptySpaceClick();
           },
-          builder: (context, candidateData, rejectedData) {
-            return CustomScrollView(
-              controller: _scrollController,
-              slivers: [
-                SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (BuildContext context, int index) {
-                      if (index < rootNodes.length) {
-                        return _buildFileItem(rootNodes[index], 0);
-                      } else if (index == rootNodes.length) {
-                        return SizedBox(height: bottomPadding);
-                      }
-                      return null;
+          onSecondaryTapDown: (details) =>
+              _showEmptySpaceContextMenu(context, details),
+          child: Container(
+            decoration: BoxDecoration(
+              border:
+                  Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
+            ),
+            width: 250,
+            child: Column(
+              children: [
+                QuickAccessBar(
+                  onNewFile: () => _createNew(
+                      lastClickedDirectory ?? widget.initialDirectory,
+                      isFile: true),
+                  onNewFolder: () => _createNew(
+                      lastClickedDirectory ?? widget.initialDirectory,
+                      isFile: false),
+                  onRefresh: _refreshDirectory,
+                  onCollapseAll: _collapseAll,
+                  onExpandAll: _expandAll,
+                  onSearch: _toggleSearch,
+                  isSearchVisible: _isSearchVisible,
+                ),
+                if (_isSearchVisible) _buildSearchBar(),
+                Expanded(
+                  child: DragTarget<String>(
+                    onWillAccept: (data) => true,
+                    onAccept: (data) {
+                      _handleFileDrop(data, widget.initialDirectory);
                     },
-                    childCount: rootNodes.length + 1,
+                    builder: (context, candidateData, rejectedData) {
+                      return CustomScrollView(
+                        controller: _scrollController,
+                        slivers: [
+                          SliverList(
+                            delegate: SliverChildBuilderDelegate(
+                              (BuildContext context, int index) {
+                                if (index < _filteredNodes.length) {
+                                  return _buildFileItem(
+                                      _filteredNodes[index], 0);
+                                } else if (index == _filteredNodes.length) {
+                                  return SizedBox(height: bottomPadding);
+                                }
+                                return null;
+                              },
+                              childCount: _filteredNodes.length + 1,
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
                 ),
               ],
-            );
-          },
+            ),
+          ),
         ),
       ),
     );
+  }
+
+  Widget _buildSearchBar() {
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      child: TextField(
+        controller: _searchController,
+        focusNode: _searchFocusNode,
+        decoration: InputDecoration(
+          hintText: 'Search files and folders',
+          border: InputBorder.none,
+          enabledBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.lightBlue[200]!),
+          ),
+          focusedBorder: UnderlineInputBorder(
+            borderSide: BorderSide(color: Colors.lightBlue[400]!),
+          ),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          suffixIcon: IconButton(
+            icon: const Icon(Icons.clear, size: 16),
+            onPressed: _clearSearch,
+            splashRadius: 12,
+          ),
+        ),
+        style: const TextStyle(fontSize: 14),
+        onChanged: _onSearchChanged,
+      ),
+    );
+  }
+
+  void _deleteFile(String path) {
+    if (_isShiftPressed) {
+      _performDelete([path]);
+    } else {
+      _showDeleteConfirmation([path]);
+    }
+  }
+
+  void _deleteMultipleFiles(List<String> paths) {
+    if (_isShiftPressed) {
+      _performDelete(paths);
+    } else {
+      _showDeleteConfirmation(paths);
+    }
+  }
+
+  void _showDeleteConfirmation(List<String> paths) {
+    final int itemCount = paths.length;
+    final String itemType = itemCount == 1
+        ? (FileSystemEntity.isDirectorySync(paths.first) ? 'folder' : 'file')
+        : 'items';
+    final String itemName =
+        itemCount == 1 ? p.basename(paths.first) : '$itemCount $itemType';
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete'),
+        content: Text(
+            'Are you sure you want to delete ${itemCount == 1 ? 'the $itemType' : ''} "$itemName"?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _performDelete(paths);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _performDelete(List<String> paths) {
+    for (var path in paths) {
+      widget.fileService.deleteFile(path);
+    }
+    _refreshDirectory();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      _isSearchVisible = !_isSearchVisible;
+      if (_isSearchVisible) {
+        _searchFocusNode.requestFocus();
+      } else {
+        _clearSearch();
+      }
+    });
   }
 
   Widget _buildFileItem(FileSystemNode node, int depth) {
@@ -192,6 +356,96 @@ class _FileExplorerState extends State<FileExplorer> {
     );
   }
 
+  void _clearSearch() {
+    _searchController.clear();
+    _updateFilteredNodes('');
+  }
+
+  void _onSearchChanged(String query) {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), () {
+      _updateFilteredNodes(query);
+    });
+  }
+
+  void _updateFilteredNodes(String query) {
+    setState(() {
+      if (query.isEmpty) {
+        _filteredNodes = List.from(rootNodes);
+      } else {
+        _filteredNodes = _searchNodes(rootNodes, query.toLowerCase());
+      }
+    });
+  }
+
+  List<FileSystemNode> _searchNodes(List<FileSystemNode> nodes, String query) {
+    List<FileSystemNode> results = [];
+    for (var node in nodes) {
+      if (p.basename(node.entity.path).toLowerCase().contains(query)) {
+        results.add(node);
+      }
+      if (node.entity is Directory && node.children.isNotEmpty) {
+        results.addAll(_searchNodes(node.children, query));
+      }
+    }
+    return results;
+  }
+
+  void _toggleDirectory(FileSystemNode node) {
+    setState(() {
+      if (node.isExpanded) {
+        node.isExpanded = false;
+        expandedDirectories.remove(node.entity.path);
+        node.children.clear();
+      } else {
+        try {
+          node.isExpanded = true;
+          expandedDirectories.add(node.entity.path);
+          node.children = widget.fileService
+              .listDirectory(node.entity.path)
+              .map((entity) => FileSystemNode(entity))
+              .toList();
+          _sortNodes(node.children);
+          _restoreExpandedState(node.children);
+        } catch (e) {
+          print('Error accessing directory: $e');
+          // TODO implement toast
+        }
+      }
+    });
+  }
+
+  void _restoreExpandedState(List<FileSystemNode> nodes) {
+    for (var node in nodes) {
+      if (node.entity is Directory &&
+          expandedDirectories.contains(node.entity.path)) {
+        node.isExpanded = true;
+        node.children = widget.fileService
+            .listDirectory(node.entity.path)
+            .map((entity) => FileSystemNode(entity))
+            .toList();
+        _sortNodes(node.children);
+        _restoreExpandedState(node.children);
+      }
+    }
+  }
+
+  void _refreshDirectory() {
+    setState(() {
+      _initializeRootNodes();
+      _updateFilteredNodes(_searchController.text);
+    });
+  }
+
+  void _initializeRootNodes() {
+    rootNodes = widget.fileService
+        .listDirectory(widget.initialDirectory)
+        .map((entity) => FileSystemNode(entity))
+        .toList();
+    _sortNodes(rootNodes);
+    _restoreExpandedState(rootNodes);
+  }
+
   void _startExpandTimer(FileSystemNode node) {
     _cancelExpandTimer();
     _hoveredFolderPath = node.entity.path;
@@ -230,6 +484,19 @@ class _FileExplorerState extends State<FileExplorer> {
 
     if (newPath != sourcePath) {
       widget.fileService.renameFile(sourcePath, newPath);
+
+      // Update expandedDirectories if a directory was moved
+      if (sourceIsDirectory) {
+        final oldPrefix = sourcePath + p.separator;
+        final newPrefix = newPath + p.separator;
+        expandedDirectories = expandedDirectories.map((path) {
+          if (path.startsWith(oldPrefix)) {
+            return newPrefix + path.substring(oldPrefix.length);
+          }
+          return path;
+        }).toSet();
+      }
+
       _refreshDirectory();
     }
   }
@@ -238,12 +505,6 @@ class _FileExplorerState extends State<FileExplorer> {
     setState(() {
       selectedPaths.clear();
       lastSelectedPath = null;
-    });
-  }
-
-  void _refreshDirectory() {
-    setState(() {
-      _initializeRootNodes();
     });
   }
 
@@ -303,6 +564,13 @@ class _FileExplorerState extends State<FileExplorer> {
       if (node.entity is Directory && !isCommandPressed && !isShiftPressed) {
         _toggleDirectory(node);
       }
+
+      // Update lastClickedDirectory
+      if (node.entity is Directory) {
+        lastClickedDirectory = node.entity.path;
+      } else {
+        lastClickedDirectory = p.dirname(node.entity.path);
+      }
     });
 
     // Open file if it's not a directory and it's a single click without modifiers
@@ -311,25 +579,41 @@ class _FileExplorerState extends State<FileExplorer> {
     }
   }
 
-  void _toggleDirectory(FileSystemNode node) {
+  void _collapseAll() {
     setState(() {
-      if (node.isExpanded) {
+      _collapseNodes(rootNodes);
+      expandedDirectories.clear();
+    });
+  }
+
+  void _collapseNodes(List<FileSystemNode> nodes) {
+    for (var node in nodes) {
+      if (node.entity is Directory) {
         node.isExpanded = false;
         node.children.clear();
-      } else {
-        try {
-          node.isExpanded = true;
-          node.children = widget.fileService
-              .listDirectory(node.entity.path)
-              .map((entity) => FileSystemNode(entity))
-              .toList();
-          _sortNodes(node.children);
-        } catch (e) {
-          print('Error accessing directory: $e');
-          // TODO implement toast
-        }
       }
+    }
+  }
+
+  void _expandAll() {
+    setState(() {
+      _expandNodes(rootNodes);
     });
+  }
+
+  void _expandNodes(List<FileSystemNode> nodes) {
+    for (var node in nodes) {
+      if (node.entity is Directory) {
+        node.isExpanded = true;
+        expandedDirectories.add(node.entity.path);
+        node.children = widget.fileService
+            .listDirectory(node.entity.path)
+            .map((entity) => FileSystemNode(entity))
+            .toList();
+        _sortNodes(node.children);
+        _expandNodes(node.children);
+      }
+    }
   }
 
   void _toggleSelection(String path) {
@@ -515,63 +799,6 @@ class _FileExplorerState extends State<FileExplorer> {
     );
   }
 
-  void _deleteFile(String path) {
-    final bool isDirectory = FileSystemEntity.isDirectorySync(path);
-    final String itemName = p.basename(path);
-    final String itemType = isDirectory ? 'folder' : 'file';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete'),
-        content:
-            Text('Are you sure you want to delete the $itemType "$itemName"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              widget.fileService.deleteFile(path);
-              Navigator.of(context).pop();
-              _refreshDirectory();
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _deleteMultipleFiles(List<String> paths) {
-    final int itemCount = paths.length;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Delete'),
-        content: Text('Are you sure you want to delete $itemCount items?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Cancel'),
-          ),
-          TextButton(
-            onPressed: () {
-              for (var path in paths) {
-                widget.fileService.deleteFile(path);
-              }
-              Navigator.of(context).pop();
-              _refreshDirectory();
-            },
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _openFile(String path) {
     widget.fileService.openFile(path);
     widget.tabService.addTab(
@@ -616,12 +843,10 @@ class _FileExplorerState extends State<FileExplorer> {
     widget.fileService.revealInFinder(path);
   }
 
-  void _initializeRootNodes() {
-    rootNodes = widget.fileService
-        .listDirectory(widget.initialDirectory)
-        .map((entity) => FileSystemNode(entity))
-        .toList();
-    _sortNodes(rootNodes);
+  void _handleDelete() {
+    if (selectedPaths.isNotEmpty) {
+      _deleteMultipleFiles(selectedPaths.toList());
+    }
   }
 
   void _sortNodes(List<FileSystemNode> nodes) {
@@ -638,4 +863,8 @@ class _FileExplorerState extends State<FileExplorer> {
       }
     });
   }
+}
+
+class DeleteIntent extends Intent {
+  const DeleteIntent();
 }

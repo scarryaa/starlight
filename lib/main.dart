@@ -21,7 +21,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   final caretPositionNotifier = CaretPositionNotifier();
-  final fileService = FileService();
+  final fileService = FileService('');
   final tabService = TabService(
       fileService: fileService, caretPositionNotifier: caretPositionNotifier);
   final configService =
@@ -275,8 +275,8 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   late HotkeyService hotkeyService;
   bool _hotkeysRegistered = false;
-  final ValueNotifier<bool> _fileExplorerVisibilityNotifier =
-      ValueNotifier(true);
+  final FocusNode _rootFocusNode = FocusNode();
+  final FocusNode _childFocusNode = FocusNode();
 
   @override
   void initState() {
@@ -286,7 +286,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   void dispose() {
-    _fileExplorerVisibilityNotifier.dispose();
+    _rootFocusNode.dispose();
     super.dispose();
   }
 
@@ -299,55 +299,17 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _registerHotkeys() {
-    final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
-    hotkeyService.registerGlobalHotkey(
-      SingleActivator(LogicalKeyboardKey.keyS,
-          meta: isMacOS, control: !isMacOS),
-      () {
-        if (widget.tabService.currentTabIndexNotifier.value != null) {
-          widget.tabService.updateTabContent(
-              widget.tabService.currentTab!.path,
-              widget
-                  .tabService
-                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
-                  .content,
-              isModified: false);
-          widget.fileService.writeFile(
-              widget.tabService
-                  .tabs[widget.tabService.currentTabIndexNotifier.value!].path,
-              widget
-                  .tabService
-                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
-                  .content);
-        } else {
-          print("Could not save: currentTabIndexNotifier.value is null.");
-        }
-      },
-    );
-    hotkeyService.registerGlobalHotkey(
-        SingleActivator(LogicalKeyboardKey.keyN,
-            meta: isMacOS, control: !isMacOS),
-        () {});
-    hotkeyService.registerGlobalHotkey(
-      SingleActivator(LogicalKeyboardKey.comma,
-          meta: isMacOS, control: !isMacOS),
-      () {
-        widget.configService.openConfig();
-      },
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final themeManager = Provider.of<ThemeManager>(context);
-
     return FocusableActionDetector(
-      actions: const <Type, Action<Intent>>{},
-      shortcuts: const {},
+      focusNode: _rootFocusNode,
+      autofocus: true,
+      actions: {
+        // Your existing actions can go here
+      },
       child: Focus(
-        autofocus: true,
-        onKeyEvent: (FocusNode node, KeyEvent event) {
+        focusNode: _childFocusNode,
+        onKeyEvent: (node, event) {
           final result = hotkeyService.handleKeyEvent(event);
           return result == KeyEventResult.handled
               ? KeyEventResult.handled
@@ -401,6 +363,45 @@ class _MyHomePageState extends State<MyHomePage> {
           ),
         ),
       ),
+    );
+  }
+
+  void _registerHotkeys() {
+    final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+    hotkeyService.registerGlobalHotkey(
+      SingleActivator(LogicalKeyboardKey.keyS,
+          meta: isMacOS, control: !isMacOS),
+      () {
+        if (widget.tabService.currentTabIndexNotifier.value != null) {
+          widget.tabService.updateTabContent(
+              widget.tabService.currentTab!.path,
+              widget
+                  .tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
+                  .content,
+              isModified: false);
+          widget.fileService.writeFile(
+              widget.tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!].path,
+              widget
+                  .tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
+                  .content);
+        } else {
+          print("Could not save: currentTabIndexNotifier.value is null.");
+        }
+      },
+    );
+    hotkeyService.registerGlobalHotkey(
+        SingleActivator(LogicalKeyboardKey.keyN,
+            meta: isMacOS, control: !isMacOS),
+        () {});
+    hotkeyService.registerGlobalHotkey(
+      SingleActivator(LogicalKeyboardKey.comma,
+          meta: isMacOS, control: !isMacOS),
+      () {
+        widget.configService.openConfig();
+      },
     );
   }
 }

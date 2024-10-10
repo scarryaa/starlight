@@ -8,7 +8,7 @@ class FileService extends ChangeNotifier {
   File? _currentFile;
   File? get currentFile => _currentFile;
 
-  FileService() {
+  FileService(String? currentDirectory) {
     currentDirectoryNotifier = ValueNotifier<String>('');
   }
 
