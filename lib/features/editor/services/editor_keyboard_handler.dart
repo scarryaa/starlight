@@ -25,6 +25,8 @@ class EditorKeyboardHandler {
   final Function() notifyListeners;
 
   final Logger _logger = Logger('EditorKeyboardHandler');
+  final RegExp _increaseIndentPattern = RegExp(r'[\{\[\(]$');
+  final RegExp _decreaseIndentPattern = RegExp(r'^[\}\]\)]');
 
   int _lastUpdatedLine = 0;
   int get lastUpdatedLine => _lastUpdatedLine;
@@ -32,6 +34,7 @@ class EditorKeyboardHandler {
   int caretLine = 0;
   int caretPosition = 0;
   int preferredCaretColumn = 0;
+  int? _detectedIndentation;
   HorizontalDirection horizontalDirection = HorizontalDirection.right;
   VerticalDirection verticalDirection = VerticalDirection.down;
 
@@ -49,7 +52,33 @@ class EditorKeyboardHandler {
     required this.notifyListeners,
   }) {
     _logger.info('EditorKeyboardHandler initialized');
+    _detectIndentation();
   }
+
+  void _detectIndentation() {
+    Map<int, int> indentationCounts = {};
+    int maxCount = 0;
+    int mostCommonIndent = configService.config['tabSize'] ?? 4;
+
+    for (int i = 0; i < rope.lineCount; i++) {
+      String line = rope.getLine(i);
+      int leadingSpaces = line.length - line.trimLeft().length;
+      if (leadingSpaces > 0 && leadingSpaces % 2 == 0) {
+        indentationCounts[leadingSpaces] =
+            (indentationCounts[leadingSpaces] ?? 0) + 1;
+        if (indentationCounts[leadingSpaces]! > maxCount) {
+          maxCount = indentationCounts[leadingSpaces]!;
+          mostCommonIndent = leadingSpaces;
+        }
+      }
+    }
+
+    _detectedIndentation = mostCommonIndent > 0 ? mostCommonIndent : null;
+    _logger.info('Detected indentation: $_detectedIndentation');
+  }
+
+  int get effectiveTabSize =>
+      _detectedIndentation ?? (configService.config['tabSize'] ?? 4);
 
   KeyEventResult handleInput(KeyEvent keyEvent) {
     bool isKeyDownEvent = keyEvent is KeyDownEvent;
@@ -115,7 +144,11 @@ class EditorKeyboardHandler {
 
     switch (key) {
       case LogicalKeyboardKey.tab:
-        handleTabKey();
+        if (isShiftPressed) {
+          handleShiftTabKey();
+        } else {
+          handleTabKey();
+        }
         contentModified = true;
         break;
       case LogicalKeyboardKey.backspace:
@@ -202,7 +235,8 @@ class EditorKeyboardHandler {
     int spacesToDelete = 1;
     if (lineContent.isNotEmpty && lineContent.trimRight().isEmpty) {
       int spacesBefore = lineContent.length;
-      spacesToDelete = min((spacesBefore - 1) % tabSize + 1, spacesBefore);
+      spacesToDelete =
+          min((spacesBefore - 1) % effectiveTabSize + 1, spacesBefore);
       _logger.info('Deleting $spacesToDelete spaces');
     } else {
       _logger.info('Deleting single character');
@@ -373,13 +407,122 @@ class EditorKeyboardHandler {
   }
 
   void handleTabKey() {
-    if (selectionManager.selectionStart != selectionManager.selectionEnd) {
-      deleteSelection();
+    _logger.info('Handling tab key');
+    if (selectionManager.hasSelection()) {
+      indentSelection();
+    } else {
+      insertTab();
+    }
+  }
+
+  void handleShiftTabKey() {
+    _logger.info('Handling shift-tab key');
+    if (selectionManager.hasSelection()) {
+      unindentSelection();
+    } else {
+      unindentSingleLine();
+    }
+  }
+
+  void unindentSingleLine() {
+    int lineStart = rope.findClosestLineStart(caretLine);
+    String lineContent = rope.text.substring(lineStart,
+        rope.findClosestLineStart(caretLine) + rope.getLineLength(caretLine));
+    int spacesToRemove = 0;
+
+    // Count the number of spaces at the start of the line, up to effectiveTabSize
+    for (int i = 0; i < min(effectiveTabSize, lineContent.length); i++) {
+      if (lineContent[i] == ' ') {
+        spacesToRemove++;
+      } else {
+        break;
+      }
+    }
+    if (spacesToRemove > 0) {
+      // Remove the spaces
+      rope.delete(lineStart, spacesToRemove);
+
+      // Adjust caret position
+      absoluteCaretPosition =
+          max(absoluteCaretPosition - spacesToRemove, lineStart);
+      caretPosition = max(caretPosition - spacesToRemove, 0);
+
+      _lastUpdatedLine = max(0, caretLine - 1);
+      updateAfterEdit(caretLine, caretLine);
     }
 
-    rope.insert("    ", absoluteCaretPosition);
-    caretPosition += 4;
-    absoluteCaretPosition += 4;
+    _logger.info('Unindented single line, removed $spacesToRemove spaces');
+  }
+
+  void unindentSelection() {
+    int startLine = rope.findLineForPosition(selectionManager.selectionStart);
+    int endLine = rope.findLineForPosition(selectionManager.selectionEnd);
+
+    int totalRemoved = 0;
+    for (int line = startLine; line <= endLine; line++) {
+      totalRemoved += unindentLine(line);
+    }
+
+    // Adjust selection and caret position
+    selectionManager.selectionStart = max(
+        selectionManager.selectionStart - effectiveTabSize,
+        rope.findClosestLineStart(startLine));
+    selectionManager.selectionEnd -= totalRemoved;
+    absoluteCaretPosition -= totalRemoved;
+    updateCaretPosition();
+    _lastUpdatedLine = max(0, startLine - 1);
+    updateAfterEdit(startLine, endLine);
+
+    _logger.info(
+        'Unindented selection from line $startLine to $endLine, removed $totalRemoved spaces total');
+  }
+
+  int unindentLine(int line) {
+    int lineStart = rope.findClosestLineStart(line);
+    String lineContent = rope.text.substring(
+        lineStart, rope.findClosestLineStart(line) + rope.getLineLength(line));
+    int spacesToRemove = 0;
+
+    for (int i = 0; i < min(effectiveTabSize, lineContent.length); i++) {
+      if (lineContent[i] == ' ') {
+        spacesToRemove++;
+      } else {
+        break;
+      }
+    }
+    if (spacesToRemove > 0) {
+      rope.delete(lineStart, spacesToRemove);
+    }
+
+    return spacesToRemove;
+  }
+
+  void indentSelection() {
+    int startLine = rope.findLineForPosition(selectionManager.selectionStart);
+    int endLine = rope.findLineForPosition(selectionManager.selectionEnd);
+    String tabString = ' ' * effectiveTabSize;
+
+    for (int line = startLine; line <= endLine; line++) {
+      int lineStart = rope.findClosestLineStart(line);
+      rope.insert(tabString, lineStart);
+    }
+
+    // Adjust selection and caret position
+    selectionManager.selectionStart += effectiveTabSize;
+    selectionManager.selectionEnd +=
+        effectiveTabSize * (endLine - startLine + 1);
+    absoluteCaretPosition += effectiveTabSize * (endLine - startLine + 1);
+    updateCaretPosition();
+
+    _lastUpdatedLine = max(0, startLine - 1);
+    updateAfterEdit(startLine, endLine);
+  }
+
+  void insertTab() {
+    String tabString = ' ' * effectiveTabSize;
+    rope.insert(tabString, absoluteCaretPosition);
+    caretPosition += effectiveTabSize;
+    absoluteCaretPosition += effectiveTabSize;
   }
 
   void moveCaretHorizontally(int amount) {
