@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
 
@@ -8,6 +9,8 @@ class ConfigService {
   TabService tabService;
   late String configPath;
   Map<String, dynamic> config = {};
+  final ValueNotifier<bool> fileExplorerVisibilityNotifier =
+      ValueNotifier(true);
 
   ConfigService({required this.fileService, required this.tabService}) {
     configPath = _resolveConfigPath();
@@ -16,6 +19,9 @@ class ConfigService {
   void updateConfig(String key, dynamic value) {
     config[key] = value;
     _saveConfig();
+    if (key == 'fileExplorerVisible') {
+      fileExplorerVisibilityNotifier.value = value;
+    }
   }
 
   void _saveConfig() {
@@ -39,8 +45,8 @@ class ConfigService {
       'initialDirectory': '',
       'tabSize': 4,
       'lineHeight': 1.5,
+      'fileExplorerVisible': true,
     };
-
     File(configPath).createSync(recursive: true);
     File(configPath).writeAsStringSync(json.encode(defaultConfig));
   }
@@ -49,6 +55,8 @@ class ConfigService {
     try {
       final fileContent = File(configPath).readAsStringSync();
       config = json.decode(fileContent);
+      fileExplorerVisibilityNotifier.value =
+          config['fileExplorerVisible'] ?? true;
     } catch (e) {
       print('Error loading config: $e');
       // If there's an error loading the config, use default values
@@ -58,6 +66,7 @@ class ConfigService {
   }
 
   void saveConfig() {
+    config['fileExplorerVisible'] = fileExplorerVisibilityNotifier.value;
     File(configPath).writeAsStringSync(json.encode(config));
   }
 
@@ -65,4 +74,11 @@ class ConfigService {
     tabService.addTab(configPath.split('/').last, configPath,
         File.fromUri(Uri(path: configPath)).absolute.path);
   }
+
+  void toggleFileExplorerVisibility() {
+    fileExplorerVisibilityNotifier.value =
+        !fileExplorerVisibilityNotifier.value;
+    updateConfig('fileExplorerVisible', fileExplorerVisibilityNotifier.value);
+  }
 }
+

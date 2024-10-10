@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -39,6 +40,9 @@ class _FileExplorerState extends State<FileExplorer> {
   final ScrollController _scrollController = ScrollController();
   Set<String> selectedPaths = {};
   String? lastSelectedPath;
+  String? _draggedItemPath;
+  Timer? _expandTimer;
+  String? _hoveredFolderPath;
 
   @override
   void initState() {
@@ -49,6 +53,7 @@ class _FileExplorerState extends State<FileExplorer> {
   @override
   void dispose() {
     _scrollController.dispose();
+    _expandTimer?.cancel();
     super.dispose();
   }
 
@@ -63,23 +68,31 @@ class _FileExplorerState extends State<FileExplorer> {
           border: Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
         ),
         width: 250,
-        child: CustomScrollView(
-          controller: _scrollController,
-          slivers: [
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (BuildContext context, int index) {
-                  if (index < rootNodes.length) {
-                    return _buildFileItem(rootNodes[index], 0);
-                  } else if (index == rootNodes.length) {
-                    return SizedBox(height: bottomPadding);
-                  }
-                  return null;
-                },
-                childCount: rootNodes.length + 1,
-              ),
-            ),
-          ],
+        child: DragTarget<String>(
+          onWillAccept: (data) => true,
+          onAccept: (data) {
+            _handleFileDrop(data, widget.initialDirectory);
+          },
+          builder: (context, candidateData, rejectedData) {
+            return CustomScrollView(
+              controller: _scrollController,
+              slivers: [
+                SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (BuildContext context, int index) {
+                      if (index < rootNodes.length) {
+                        return _buildFileItem(rootNodes[index], 0);
+                      } else if (index == rootNodes.length) {
+                        return SizedBox(height: bottomPadding);
+                      }
+                      return null;
+                    },
+                    childCount: rootNodes.length + 1,
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );
@@ -105,38 +118,71 @@ class _FileExplorerState extends State<FileExplorer> {
             });
             _showContextMenu(context, [node], details);
           },
-          child: InkWell(
-            splashFactory: NoSplash.splashFactory,
-            onTap: () => _handleTap(node),
-            child: Container(
-              height: fileHeight,
-              padding: EdgeInsets.only(left: 15.0 * depth + 4),
-              color: isSelected ? Colors.blue.withOpacity(0.2) : null,
-              child: Row(
-                children: [
-                  GestureDetector(
-                    onTap: isDirectory ? () => _toggleDirectory(node) : null,
-                    child: Icon(
-                      isDirectory
-                          ? (node.isExpanded ? Icons.folder_open : Icons.folder)
-                          : Icons.insert_drive_file,
-                      size: 16,
-                      color: isSelected ? Colors.blue : null,
-                    ),
-                  ),
-                  const SizedBox(width: 5),
-                  Expanded(
-                    child: Text(
-                      fileName,
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: isSelected ? Colors.blue : null,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ],
+          child: Draggable<String>(
+            data: node.entity.path,
+            feedback: Material(
+              elevation: 4.0,
+              child: Container(
+                padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                color: Colors.blue.withOpacity(0.8),
+                child: Text(
+                  fileName,
+                  style: TextStyle(color: Colors.white),
+                ),
               ),
+            ),
+            child: DragTarget<String>(
+              onWillAccept: (data) {
+                if (data != node.entity.path && isDirectory) {
+                  _startExpandTimer(node);
+                }
+                return data != node.entity.path;
+              },
+              onLeave: (_) {
+                _cancelExpandTimer();
+              },
+              onAccept: (data) {
+                _handleFileDrop(data, node.entity.path);
+              },
+              builder: (context, candidateData, rejectedData) {
+                return InkWell(
+                  splashFactory: NoSplash.splashFactory,
+                  onTap: () => _handleTap(node),
+                  child: Container(
+                    height: fileHeight,
+                    padding: EdgeInsets.only(left: 15.0 * depth + 4),
+                    color: isSelected ? Colors.blue.withOpacity(0.2) : null,
+                    child: Row(
+                      children: [
+                        GestureDetector(
+                          onTap:
+                              isDirectory ? () => _toggleDirectory(node) : null,
+                          child: Icon(
+                            isDirectory
+                                ? (node.isExpanded
+                                    ? Icons.folder_open
+                                    : Icons.folder)
+                                : Icons.insert_drive_file,
+                            size: 16,
+                            color: isSelected ? Colors.blue : null,
+                          ),
+                        ),
+                        const SizedBox(width: 5),
+                        Expanded(
+                          child: Text(
+                            fileName,
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: isSelected ? Colors.blue : null,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -146,10 +192,58 @@ class _FileExplorerState extends State<FileExplorer> {
     );
   }
 
+  void _startExpandTimer(FileSystemNode node) {
+    _cancelExpandTimer();
+    _hoveredFolderPath = node.entity.path;
+    _expandTimer = Timer(Duration(milliseconds: 500), () {
+      if (_hoveredFolderPath == node.entity.path) {
+        setState(() {
+          if (!node.isExpanded) {
+            _toggleDirectory(node);
+          }
+        });
+      }
+    });
+  }
+
+  void _cancelExpandTimer() {
+    _expandTimer?.cancel();
+    _hoveredFolderPath = null;
+  }
+
+  void _handleFileDrop(String sourcePath, String targetPath) {
+    _cancelExpandTimer();
+    if (sourcePath == targetPath) return;
+
+    final sourceIsDirectory = FileSystemEntity.isDirectorySync(sourcePath);
+    final targetIsDirectory = FileSystemEntity.isDirectorySync(targetPath);
+
+    String destinationPath;
+    if (targetIsDirectory) {
+      destinationPath = targetPath;
+    } else {
+      destinationPath = p.dirname(targetPath);
+    }
+
+    final String fileName = p.basename(sourcePath);
+    final String newPath = p.join(destinationPath, fileName);
+
+    if (newPath != sourcePath) {
+      widget.fileService.renameFile(sourcePath, newPath);
+      _refreshDirectory();
+    }
+  }
+
   void _handleEmptySpaceClick() {
     setState(() {
       selectedPaths.clear();
       lastSelectedPath = null;
+    });
+  }
+
+  void _refreshDirectory() {
+    setState(() {
+      _initializeRootNodes();
     });
   }
 
@@ -544,11 +638,4 @@ class _FileExplorerState extends State<FileExplorer> {
       }
     });
   }
-
-  void _refreshDirectory() {
-    setState(() {
-      _initializeRootNodes();
-    });
-  }
 }
-

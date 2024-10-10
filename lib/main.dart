@@ -275,11 +275,19 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   late HotkeyService hotkeyService;
   bool _hotkeysRegistered = false;
+  final ValueNotifier<bool> _fileExplorerVisibilityNotifier =
+      ValueNotifier(true);
 
   @override
   void initState() {
     super.initState();
     hotkeyService = HotkeyService();
+  }
+
+  @override
+  void dispose() {
+    _fileExplorerVisibilityNotifier.dispose();
+    super.dispose();
   }
 
   @override
@@ -352,11 +360,21 @@ class _MyHomePageState extends State<MyHomePage> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.start,
                   children: <Widget>[
-                    FileExplorer(
-                      fileService: widget.fileService,
-                      initialDirectory:
-                          widget.configService.config['initialDirectory'] ?? '',
-                      tabService: widget.tabService,
+                    ValueListenableBuilder<bool>(
+                      valueListenable:
+                          widget.configService.fileExplorerVisibilityNotifier,
+                      builder: (context, isVisible, child) {
+                        return Visibility(
+                          visible: isVisible,
+                          child: FileExplorer(
+                            fileService: widget.fileService,
+                            initialDirectory: widget
+                                    .configService.config['initialDirectory'] ??
+                                '',
+                            tabService: widget.tabService,
+                          ),
+                        );
+                      },
                     ),
                     Editor(
                       configService: widget.configService,

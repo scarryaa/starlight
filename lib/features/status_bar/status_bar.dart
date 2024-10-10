@@ -35,6 +35,26 @@ class StatusBar extends StatelessWidget {
       ),
       child: Row(
         children: [
+          // File Explorer Toggle
+          ValueListenableBuilder<bool>(
+            valueListenable: configService.fileExplorerVisibilityNotifier,
+            builder: (context, isVisible, child) {
+              return IconButton(
+                icon: Icon(
+                  isVisible ? Icons.folder : Icons.folder_outlined,
+                  size: 16,
+                ),
+                onPressed: configService.toggleFileExplorerVisibility,
+                tooltip:
+                    isVisible ? 'Hide File Explorer' : 'Show File Explorer',
+                padding: EdgeInsets.zero,
+                constraints:
+                    const BoxConstraints.tightFor(width: 24, height: 24),
+              );
+            },
+          ),
+          const SizedBox(width: 8),
+          // Current File Path
           Expanded(
             child: ValueListenableBuilder<int?>(
               valueListenable: tabService.currentTabIndexNotifier,
@@ -50,6 +70,7 @@ class StatusBar extends StatelessWidget {
               },
             ),
           ),
+          // Cursor Position and Tab Size
           ValueListenableBuilder<CursorPosition>(
             valueListenable: tabService.cursorPositionNotifier,
             builder: (context, cursorPosition, child) {

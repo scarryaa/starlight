@@ -127,11 +127,21 @@ class _EditorContentState extends State<EditorContent> {
   void _handleCaretPositionChange() {
     final newPosition = widget.caretPositionNotifier.position;
     setState(() {
-      keyboardHandler.caretLine = newPosition.line;
-      keyboardHandler.caretPosition = newPosition.column;
-      keyboardHandler.stickyColumn = newPosition.column;
+      int validLine = newPosition.line.clamp(0, rope.lineCount - 1).toInt();
+      int lineLength = rope.getLineLength(validLine);
+
+      int validColumn = newPosition.column.clamp(0, lineLength);
+
+      keyboardHandler.caretLine = validLine;
+      keyboardHandler.caretPosition = validColumn;
+      keyboardHandler.stickyColumn = validColumn;
       keyboardHandler.absoluteCaretPosition =
-          rope.findClosestLineStart(newPosition.line) + newPosition.column;
+          rope.findClosestLineStart(validLine) + validColumn;
+
+      if (validLine != newPosition.line || validColumn != newPosition.column) {
+        widget.caretPositionNotifier.updatePosition(validLine, validColumn);
+      }
+
       _ensureCursorVisible();
     });
   }
