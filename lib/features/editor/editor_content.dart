@@ -204,7 +204,7 @@ class _EditorContentState extends State<EditorContent> {
   Widget build(BuildContext context) {
     final contentHeight = max(
           (lineHeight * rope.lineCount) + viewPadding,
-          MediaQuery.of(context).size.height,
+          MediaQuery.of(context).size.height - 35,
         ) -
         35;
 
@@ -280,66 +280,77 @@ class _EditorContentState extends State<EditorContent> {
                       children: [
                         Positioned.fill(
                           child: RawScrollbar(
-                            controller: widget.horizontalController,
-                            thumbVisibility: true,
+                            controller: widget.verticalController,
+                            thumbVisibility: false,
                             thickness: 8,
-                            radius: const Radius.circular(4),
+                            radius: Radius.zero,
                             thumbColor: Colors.grey.withOpacity(0.5),
-                            minThumbLength: 30,
-                            notificationPredicate: (notification) =>
-                                notification.depth == 1,
-                            child: SingleChildScrollView(
-                              physics:
-                                  widget.scrollManager.clampingScrollPhysics,
-                              controller: widget.verticalController,
-                              scrollDirection: Axis.vertical,
+                            fadeDuration: const Duration(milliseconds: 300),
+                            timeToFade: const Duration(milliseconds: 1000),
+                            child: RawScrollbar(
+                              controller: widget.horizontalController,
+                              thumbVisibility: false,
+                              thickness: 8,
+                              radius: Radius.zero,
+                              thumbColor: Colors.grey.withOpacity(0.5),
+                              fadeDuration: const Duration(milliseconds: 300),
+                              timeToFade: const Duration(milliseconds: 1000),
+                              notificationPredicate: (notification) =>
+                                  notification.depth == 1,
                               child: SingleChildScrollView(
                                 physics:
                                     widget.scrollManager.clampingScrollPhysics,
-                                controller: widget.horizontalController,
-                                scrollDirection: Axis.horizontal,
-                                child: SizedBox(
-                                  width: max(
-                                    getMaxLineCount() * charWidth +
-                                        charWidth +
-                                        viewPadding,
-                                    constraints.maxWidth,
-                                  ),
-                                  height: contentHeight,
-                                  child: CustomPaint(
-                                    key: _painterKey,
-                                    painter: EditorPainter(
-                                      buildContext: context,
-                                      currentLineIndex:
-                                          keyboardHandler.caretLine,
-                                      fontSize: widget.fontSize,
-                                      fontFamily: widget.fontFamily,
-                                      lineHeight: widget.lineHeight,
-                                      viewportHeight:
-                                          MediaQuery.of(context).size.height,
-                                      viewportWidth:
-                                          MediaQuery.of(context).size.width,
-                                      verticalOffset: _verticalOffset,
-                                      horizontalOffset: _horizontalOffset,
-                                      lines: rope.text.split('\n'),
-                                      caretPosition:
-                                          keyboardHandler.caretPosition,
-                                      caretLine: keyboardHandler.caretLine,
-                                      selectionStart: widget
-                                          .editorSelectionManager
-                                          .selectionStart,
-                                      selectionEnd: widget
-                                          .editorSelectionManager.selectionEnd,
-                                      lineStarts: rope.lineStarts,
-                                      text: rope.text,
-                                      lastUpdatedLine: _lastUpdatedLine,
+                                controller: widget.verticalController,
+                                scrollDirection: Axis.vertical,
+                                child: SingleChildScrollView(
+                                  physics: widget
+                                      .scrollManager.clampingScrollPhysics,
+                                  controller: widget.horizontalController,
+                                  scrollDirection: Axis.horizontal,
+                                  child: SizedBox(
+                                    width: max(
+                                      getMaxLineCount() * charWidth +
+                                          charWidth +
+                                          viewPadding,
+                                      constraints.maxWidth,
+                                    ),
+                                    height: contentHeight,
+                                    child: CustomPaint(
+                                      key: _painterKey,
+                                      painter: EditorPainter(
+                                        buildContext: context,
+                                        currentLineIndex:
+                                            keyboardHandler.caretLine,
+                                        fontSize: widget.fontSize,
+                                        fontFamily: widget.fontFamily,
+                                        lineHeight: widget.lineHeight,
+                                        viewportHeight:
+                                            MediaQuery.of(context).size.height,
+                                        viewportWidth:
+                                            MediaQuery.of(context).size.width,
+                                        verticalOffset: _verticalOffset,
+                                        horizontalOffset: _horizontalOffset,
+                                        lines: rope.text.split('\n'),
+                                        caretPosition:
+                                            keyboardHandler.caretPosition,
+                                        caretLine: keyboardHandler.caretLine,
+                                        selectionStart: widget
+                                            .editorSelectionManager
+                                            .selectionStart,
+                                        selectionEnd: widget
+                                            .editorSelectionManager
+                                            .selectionEnd,
+                                        lineStarts: rope.lineStarts,
+                                        text: rope.text,
+                                        lastUpdatedLine: _lastUpdatedLine,
+                                      ),
                                     ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
+                        )
                       ],
                     );
                   },

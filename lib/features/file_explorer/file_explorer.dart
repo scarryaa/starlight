@@ -28,6 +28,13 @@ class _FileExplorerState extends State<FileExplorer> {
   final double fileHeight = 25.0;
   late List<FileSystemNode> rootNodes;
   final double bottomPadding = 25.0;
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -36,11 +43,21 @@ class _FileExplorerState extends State<FileExplorer> {
         border: Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
       ),
       width: 250,
-      child: ListView(
-        children: [
-          ...rootNodes.map((node) => _buildFileItem(node, 0)),
-          SizedBox(height: bottomPadding),
-        ],
+      child: RawScrollbar(
+        controller: _scrollController,
+        thumbVisibility: false,
+        thickness: 8,
+        radius: Radius.zero,
+        thumbColor: Colors.grey.withOpacity(0.5),
+        fadeDuration: const Duration(milliseconds: 300),
+        timeToFade: const Duration(milliseconds: 1000),
+        child: ListView(
+          controller: _scrollController,
+          children: [
+            ...rootNodes.map((node) => _buildFileItem(node, 0)),
+            SizedBox(height: bottomPadding),
+          ],
+        ),
       ),
     );
   }
