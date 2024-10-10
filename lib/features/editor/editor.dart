@@ -157,11 +157,23 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
                     onTap: () {
                       widget.tabService.setCurrentTab(index);
                     },
+                    onCloseOthers: () =>
+                        widget.tabService.closeOtherTabs(index),
+                    onCloseAll: widget.tabService.closeAllTabs,
+                    onCopyPath: () => widget.tabService.copyPath(index),
+                    onCopyRelativePath: () =>
+                        widget.tabService.copyRelativePath(index),
                     isModified: tab.isModified,
-                    onSecondaryTap: () {},
-                    onCloseTap: () {
-                      widget.tabService.removeTab(tab.path);
-                    },
+                    onCloseTap: tab.isPinned
+                        ? null
+                        : () {
+                            widget.tabService.removeTab(tab.path);
+                          },
+                    closeLeft: () => widget.tabService.closeLeft(index),
+                    closeRight: () => widget.tabService.closeRight(index),
+                    isPinned: tab.isPinned,
+                    onPinTap: () => widget.tabService.pinTab(index),
+                    onUnpinTap: () => widget.tabService.unpinTab(index),
                   ),
                 );
               }).toList(),

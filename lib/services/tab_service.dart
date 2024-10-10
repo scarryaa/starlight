@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/widgets/tab/tab.dart';
@@ -61,6 +62,86 @@ class TabService extends ChangeNotifier {
         currentTabIndexNotifier.value = null;
       }
       notifyListeners();
+    }
+  }
+
+  void closeLeft(int index) {
+    if (index > 0) {
+      _tabs.removeWhere((tab) => _tabs.indexOf(tab) < index && !tab.isPinned);
+      if (currentTabIndexNotifier.value! >= index) {
+        currentTabIndexNotifier.value = currentTabIndexNotifier.value! - index;
+      } else {
+        currentTabIndexNotifier.value = 0;
+      }
+      notifyListeners();
+    }
+  }
+
+  void closeRight(int index) {
+    if (index < _tabs.length - 1) {
+      _tabs.removeWhere((tab) => _tabs.indexOf(tab) > index && !tab.isPinned);
+      if (currentTabIndexNotifier.value! > index) {
+        currentTabIndexNotifier.value = index;
+      }
+      notifyListeners();
+    }
+  }
+
+  void closeOtherTabs(int index) {
+    _tabs.removeWhere((tab) => _tabs.indexOf(tab) != index && !tab.isPinned);
+    if (_tabs.isNotEmpty) {
+      currentTabIndexNotifier.value = 0;
+      cursorPositionNotifier.value = _tabs[0].cursorPosition;
+    } else {
+      currentTabIndexNotifier.value = null;
+    }
+    notifyListeners();
+  }
+
+  void closeAllTabs() {
+    _tabs.removeWhere((tab) => !tab.isPinned);
+    currentTabIndexNotifier.value = null;
+    cursorPositionNotifier.value = const CursorPosition(line: 0, column: 0);
+    notifyListeners();
+  }
+
+  void pinTab(int index) {
+    if (index >= 0 && index < _tabs.length) {
+      _tabs[index] = _tabs[index].copyWith(isPinned: true);
+      // Move pinned tab to the start of the list
+      if (index > 0) {
+        final pinnedTab = _tabs.removeAt(index);
+        _tabs.insert(0, pinnedTab);
+        if (currentTabIndexNotifier.value == index) {
+          currentTabIndexNotifier.value = 0;
+        } else if (currentTabIndexNotifier.value! < index) {
+          currentTabIndexNotifier.value = currentTabIndexNotifier.value! + 1;
+        }
+      }
+      notifyListeners();
+    }
+  }
+
+  void unpinTab(int index) {
+    if (index >= 0 && index < _tabs.length) {
+      _tabs[index] = _tabs[index].copyWith(isPinned: false);
+      notifyListeners();
+    }
+  }
+
+  void copyRelativePath(int index) {
+    if (index >= 0 && index < _tabs.length) {
+      Clipboard.setData(ClipboardData(text: _tabs[index].fullPath));
+    } else {
+      print('Invalid tab index');
+    }
+  }
+
+  void copyPath(int index) {
+    if (index >= 0 && index < _tabs.length) {
+      Clipboard.setData(ClipboardData(text: _tabs[index].fullAbsolutePath));
+    } else {
+      print('Invalid tab index');
     }
   }
 

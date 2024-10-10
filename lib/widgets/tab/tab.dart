@@ -11,7 +11,15 @@ class Tab extends StatefulWidget {
   final bool isSelected;
   final VoidCallback? onTap;
   final VoidCallback? onCloseTap;
-  final VoidCallback? onSecondaryTap;
+  final VoidCallback? onCloseOthers;
+  final VoidCallback? onCloseAll;
+  final VoidCallback? onCopyPath;
+  final VoidCallback? onCopyRelativePath;
+  final VoidCallback? closeLeft;
+  final VoidCallback? closeRight;
+  final bool isPinned;
+  final VoidCallback? onPinTap;
+  final VoidCallback? onUnpinTap;
   bool isModified;
   CursorPosition cursorPosition;
 
@@ -23,9 +31,17 @@ class Tab extends StatefulWidget {
     required this.content,
     required this.isSelected,
     this.onTap,
-    this.onSecondaryTap,
     this.onCloseTap,
+    this.onCloseOthers,
+    this.onCloseAll,
+    this.onCopyPath,
+    this.onCopyRelativePath,
+    this.closeLeft,
+    this.closeRight,
     required this.isModified,
+    this.isPinned = false,
+    this.onPinTap,
+    this.onUnpinTap,
     this.cursorPosition = const CursorPosition(line: 0, column: 0),
   });
 
@@ -40,6 +56,7 @@ class Tab extends StatefulWidget {
     bool? isSelected,
     bool? isModified,
     CursorPosition? cursorPosition,
+    bool? isPinned,
   }) {
     return Tab(
       fullPath: fullPath ?? this.fullPath,
@@ -49,12 +66,88 @@ class Tab extends StatefulWidget {
       isSelected: isSelected ?? this.isSelected,
       isModified: isModified ?? this.isModified,
       cursorPosition: cursorPosition ?? this.cursorPosition,
+      onCloseTap: onCloseTap,
+      onCloseOthers: onCloseOthers,
+      onCloseAll: onCloseAll,
+      onCopyPath: onCopyPath,
+      isPinned: isPinned ?? this.isPinned,
+      onPinTap: onPinTap,
+      onUnpinTap: onUnpinTap,
     );
   }
 }
 
 class _TabState extends State<Tab> {
   bool _isHovering = false;
+
+  void _showContextMenu(BuildContext context, TapDownDetails details) {
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final Offset offset = renderBox.localToGlobal(details.localPosition);
+
+    showMenu<String>(
+      context: context,
+      position: RelativeRect.fromLTRB(
+        offset.dx,
+        offset.dy,
+        offset.dx + 1,
+        offset.dy + 1,
+      ),
+      items: <PopupMenuEntry<String>>[
+        PopupMenuItem<String>(
+          value: 'close',
+          onTap: widget.onCloseTap,
+          child: const Text('Close', style: TextStyle(fontSize: 12)),
+        ),
+        PopupMenuItem<String>(
+          value: 'closeOthers',
+          onTap: widget.onCloseOthers,
+          child: const Text('Close Others', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'closeLeft',
+          onTap: widget.closeLeft,
+          child: const Text('Close Left', style: TextStyle(fontSize: 12)),
+        ),
+        PopupMenuItem<String>(
+          value: 'closeRight',
+          onTap: widget.closeRight,
+          child: const Text('Close Right', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'closeAll',
+          onTap: widget.onCloseAll,
+          child: const Text('Close All', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem<String>(
+          value: 'copyPath',
+          onTap: widget.onCopyPath,
+          child: const Text('Copy Path', style: TextStyle(fontSize: 12)),
+        ),
+        PopupMenuItem<String>(
+          value: 'copyRelativePath',
+          onTap: widget.onCopyRelativePath,
+          child:
+              const Text('Copy Relative Path', style: TextStyle(fontSize: 12)),
+        ),
+        const PopupMenuDivider(),
+        if (!widget.isPinned)
+          PopupMenuItem<String>(
+            value: 'pinTab',
+            onTap: widget.onPinTap,
+            child: const Text('Pin Tab', style: TextStyle(fontSize: 12)),
+          ),
+        if (widget.isPinned)
+          PopupMenuItem<String>(
+            value: 'unpinTab',
+            onTap: widget.onUnpinTap,
+            child: const Text('Unpin Tab', style: TextStyle(fontSize: 12)),
+          ),
+      ],
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -63,10 +156,10 @@ class _TabState extends State<Tab> {
       onExit: (_) => setState(() => _isHovering = false),
       child: GestureDetector(
         onTap: widget.onTap,
-        onSecondaryTap: widget.onSecondaryTap,
+        onSecondaryTapDown: (details) => _showContextMenu(context, details),
         child: Listener(
           onPointerDown: (PointerDownEvent event) {
-            if (event.buttons == kMiddleMouseButton) {
+            if (event.buttons == kMiddleMouseButton && !widget.isPinned) {
               widget.onCloseTap?.call();
             }
           },
@@ -74,6 +167,11 @@ class _TabState extends State<Tab> {
             theme: TooltipTheme.light,
             waitDuration: const Duration(milliseconds: 500),
             message: widget.fullAbsolutePath,
+            textStyle: const TextStyle(
+              fontSize: 12,
+              color: Colors.black87,
+              fontWeight: FontWeight.w400,
+            ),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
               decoration: BoxDecoration(
@@ -129,18 +227,17 @@ class _TabState extends State<Tab> {
                                 },
                               ),
                             ),
-                            onPressed: widget.onCloseTap,
-                            child: Text(
-                              "×",
-                              style: TextStyle(
-                                color: widget.isSelected
-                                    ? Colors.white
-                                    : Colors.black,
-                              ),
+                            onPressed: widget.isPinned
+                                ? widget.onUnpinTap
+                                : (widget.isModified ? null : widget.onPinTap),
+                            child: Icon(
+                              widget.isPinned ? Icons.push_pin : Icons.close,
+                              size: 16,
+                              color: Colors.black,
                             ),
                           )
                         : const SizedBox.shrink(),
-                  )
+                  ),
                 ],
               ),
             ),

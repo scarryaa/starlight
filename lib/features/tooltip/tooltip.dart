@@ -10,6 +10,7 @@ class CustomTooltip extends StatelessWidget {
   final String message;
   final Duration waitDuration;
   final TooltipTheme theme;
+  final TextStyle? textStyle;
 
   const CustomTooltip({
     super.key,
@@ -17,6 +18,7 @@ class CustomTooltip extends StatelessWidget {
     required this.message,
     this.waitDuration = const Duration(milliseconds: 500),
     this.theme = TooltipTheme.dark,
+    this.textStyle,
   });
 
   @override
@@ -39,7 +41,7 @@ class CustomTooltip extends StatelessWidget {
       ),
       textStyle: TextStyle(
         color: isDarkTheme ? Colors.white : Colors.black87,
-        fontSize: 12,
+        fontSize: textStyle?.fontSize,
         fontWeight: FontWeight.w400,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
