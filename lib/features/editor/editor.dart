@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' hide VerticalDirection;
+import 'package:flutter/material.dart' hide VerticalDirection, Tab;
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
 import 'package:starlight/services/hotkey_service.dart';
@@ -7,6 +7,7 @@ import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/features/editor/editor_content.dart';
 import 'package:starlight/features/editor/models/rope.dart';
+import 'package:starlight/widgets/tab/tab.dart';
 
 class Editor extends StatefulWidget {
   final TabService tabService;
@@ -35,67 +36,56 @@ class Editor extends StatefulWidget {
 
 class _EditorState extends State<Editor> with TickerProviderStateMixin {
   final EditorScrollManager _scrollManager = EditorScrollManager();
-  late List<ScrollController> _verticalControllers;
-  late List<ScrollController> _horizontalControllers;
+  final Map<String, ScrollController> _verticalControllers = {};
+  final Map<String, ScrollController> _horizontalControllers = {};
   List<Widget> _editorInstances = [];
   late TabController tabController;
+
   @override
   void initState() {
     super.initState();
     _initScrollControllers();
     tabController = TabController(
-        length: widget.tabService.tabs.length,
-        vsync: this,
-        animationDuration: Duration.zero);
+      length: widget.tabService.tabs.length,
+      vsync: this,
+      animationDuration: Duration.zero,
+    );
     _updateEditorInstances();
     widget.tabService.addListener(_handleTabsChanged);
   }
 
   void _initScrollControllers() {
-    _verticalControllers = List.generate(
-      widget.tabService.tabs.length,
-      (_) => ScrollController(),
-    );
-    _horizontalControllers = List.generate(
-      widget.tabService.tabs.length,
-      (_) => ScrollController(),
-    );
-  }
-
-  void _disposeScrollControllers() {
-    for (var controller in _verticalControllers) {
-      controller.dispose();
-    }
-    for (var controller in _horizontalControllers) {
-      controller.dispose();
+    for (var tab in widget.tabService.tabs) {
+      _verticalControllers[tab.path] = ScrollController();
+      _horizontalControllers[tab.path] = ScrollController();
     }
   }
-
-  @override
-  void dispose() {
-    _disposeScrollControllers();
-    tabController.dispose();
-    widget.tabService.removeListener(_handleTabsChanged);
-    super.dispose();
-  }
-
 
   void _handleTabsChanged() {
+    if (!mounted) return;
+
     setState(() {
-      int oldLength = tabController.length;
-      int newLength = widget.tabService.tabs.length;
-
-
-      if (oldLength != newLength) {
-        _disposeScrollControllers();
-        _initScrollControllers();
-        tabController.dispose();
-        tabController = TabController(
-          length: newLength,
-          vsync: this,
-          animationDuration: Duration.zero,
-        );
+      // Add controllers for new tabs
+      for (var tab in widget.tabService.tabs) {
+        if (!_verticalControllers.containsKey(tab.path)) {
+          _verticalControllers[tab.path] = ScrollController();
+          _horizontalControllers[tab.path] = ScrollController();
+        }
       }
+
+      // Remove controllers for closed tabs
+      _verticalControllers.removeWhere(
+          (key, _) => !widget.tabService.tabs.any((tab) => tab.path == key));
+      _horizontalControllers.removeWhere(
+          (key, _) => !widget.tabService.tabs.any((tab) => tab.path == key));
+
+      // Recreate TabController
+      tabController.dispose();
+      tabController = TabController(
+        length: widget.tabService.tabs.length,
+        vsync: this,
+        animationDuration: Duration.zero,
+      );
 
       _updateEditorInstances();
 
@@ -104,28 +94,19 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
         if (newIndex != tabController.index) {
           tabController.animateTo(newIndex);
         }
-      } else {
       }
     });
   }
 
-  void _updateEditorInstances() {
-    _editorInstances = List.generate(
-      widget.tabService.tabs.length,
-      (index) => _buildEditor(index),
-    );
-  }
-
-  
-  Widget _buildEditor(int index) {
+  Widget _buildEditor(Tab tab) {
     return EditorContent(
-      key: ValueKey(widget.tabService.tabs[index].path),
+      key: ValueKey(tab.path),
       editorSelectionManager: widget.editorSelectionManager,
       hotkeyService: widget.hotkeyService,
-      verticalController: _verticalControllers[index],
-      horizontalController: _horizontalControllers[index],
+      verticalController: _verticalControllers[tab.path]!,
+      horizontalController: _horizontalControllers[tab.path]!,
       scrollManager: _scrollManager,
-      tab: widget.tabService.tabs[index],
+      tab: tab,
       fileService: widget.fileService,
       tabService: widget.tabService,
       lineHeight: widget.lineHeight,
@@ -133,6 +114,11 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       fontSize: widget.fontSize,
       tabSize: widget.tabSize,
     );
+  }
+
+  void _updateEditorInstances() {
+    _editorInstances =
+        widget.tabService.tabs.map((tab) => _buildEditor(tab)).toList();
   }
 
   @override
@@ -187,4 +173,24 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       ),
     );
   }
+
+  @override
+  void dispose() {
+    for (var controller in _verticalControllers.values) {
+      controller.dispose();
+    }
+    for (var controller in _horizontalControllers.values) {
+      controller.dispose();
+    }
+    tabController.dispose();
+    widget.tabService.removeListener(_handleTabsChanged);
+    super.dispose();
+  }
+}
+
+class ScrollInfo {
+  final double vertical;
+  final double horizontal;
+
+  ScrollInfo({required this.vertical, required this.horizontal});
 }

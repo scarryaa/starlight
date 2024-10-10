@@ -48,6 +48,7 @@ class _EditorGutterState extends State<EditorGutter> {
 
   void _syncEditorScroll() {
     if (!_isScrolling &&
+        widget.editorVerticalScrollController.hasClients &&
         widget.editorVerticalScrollController.position.maxScrollExtent > 0) {
       _isScrolling = true;
       widget.editorVerticalScrollController
@@ -57,7 +58,9 @@ class _EditorGutterState extends State<EditorGutter> {
   }
 
   void _syncGutterScroll() {
-    if (!_isScrolling && _gutterScrollController.position.maxScrollExtent > 0) {
+    if (!_isScrolling &&
+        _gutterScrollController.hasClients &&
+        _gutterScrollController.position.maxScrollExtent > 0) {
       _isScrolling = true;
       _gutterScrollController
           .jumpTo(widget.editorVerticalScrollController.offset);
@@ -81,7 +84,7 @@ class _EditorGutterState extends State<EditorGutter> {
       _gutterWidth = textPainter.width + 35;
     });
   }
-
+  
   @override
   void didUpdateWidget(EditorGutter oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -91,7 +94,9 @@ class _EditorGutterState extends State<EditorGutter> {
       _calculateWidth();
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _syncGutterScroll();
+      if (mounted) {
+        _syncGutterScroll();
+      }
     });
   }
 

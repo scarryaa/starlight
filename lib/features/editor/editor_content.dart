@@ -29,8 +29,10 @@ class EditorContent extends StatefulWidget {
   final double fontSize;
   final int tabSize;
 
-  const EditorContent({
-    super.key,
+    const EditorContent({
+    Key? key,
+    required this.editorSelectionManager,
+    required this.hotkeyService,
     required this.verticalController,
     required this.horizontalController,
     required this.scrollManager,
@@ -41,9 +43,7 @@ class EditorContent extends StatefulWidget {
     required this.fontFamily,
     required this.fontSize,
     required this.tabSize,
-    required this.hotkeyService,
-    required this.editorSelectionManager,
-  });
+  }) : super(key: key);
 
   @override
   State<EditorContent> createState() => _EditorContentState();
@@ -69,6 +69,7 @@ class _EditorContentState extends State<EditorContent> {
   int _lastClickTime = 0;
   static const int _doubleClickTime = 300; // milliseconds
   late EditorKeyboardHandler keyboardHandler;
+  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -112,6 +113,7 @@ class _EditorContentState extends State<EditorContent> {
 
   @override
   void dispose() {
+    _isDisposed = true;
     widget.verticalController.removeListener(_handleVerticalScroll);
     widget.horizontalController.removeListener(_handleHorizontalScroll);
     super.dispose();
