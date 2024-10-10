@@ -12,12 +12,12 @@ class CustomTooltip extends StatelessWidget {
   final TooltipTheme theme;
 
   const CustomTooltip({
-    Key? key,
+    super.key,
     required this.child,
     required this.message,
     this.waitDuration = const Duration(milliseconds: 500),
     this.theme = TooltipTheme.dark,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -27,7 +27,7 @@ class CustomTooltip extends StatelessWidget {
       message: message,
       waitDuration: waitDuration,
       decoration: BoxDecoration(
-        color: isDarkTheme ? Colors.grey[850] : Colors.white,
+        color: isDarkTheme ? Colors.grey[850] : const Color(0xFFFFFFFF),
         borderRadius: BorderRadius.circular(4),
         boxShadow: [
           BoxShadow(

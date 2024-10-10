@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:starlight/services/tab_service.dart';
+import 'package:path/path.dart' as p;
 
 class FileExplorer extends StatefulWidget {
   final String initialDirectory;
@@ -125,7 +126,10 @@ class _FileExplorerState extends State<FileExplorer> {
   }
 
   void _addTab(String path) {
-    final fullAbsolutePath = File(path).absolute.path;
-    widget.tabService.addTab(path.split('/').last, path, fullAbsolutePath);
+    final fullAbsolutePath =
+        p.normalize(File(path).absolute.path); // Clean up path
+    final fileName = p.basename(path);
+
+    widget.tabService.addTab(fileName, path, fullAbsolutePath);
   }
 }

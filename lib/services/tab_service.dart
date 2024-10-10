@@ -8,7 +8,7 @@ class TabService extends ChangeNotifier {
   FileService fileService;
   final ValueNotifier<int?> currentTabIndexNotifier = ValueNotifier<int?>(null);
   final ValueNotifier<CursorPosition> cursorPositionNotifier =
-      ValueNotifier(CursorPosition(line: 0, column: 0));
+      ValueNotifier(const CursorPosition(line: 0, column: 0));
 
   TabService({required this.fileService});
 
