@@ -16,11 +16,13 @@ class StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
     return Container(
       height: 24,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFFFF),
+        color: theme.colorScheme.surface,
         border: Border(
           top: BorderSide(
             color: Colors.lightBlue[200]!,

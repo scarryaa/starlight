@@ -1,48 +1,51 @@
 import 'package:flutter/material.dart';
-
-enum TooltipTheme {
-  light,
-  dark,
-}
+import 'package:provider/provider.dart';
+import 'package:starlight/services/theme_manager.dart';
 
 class CustomTooltip extends StatelessWidget {
   final Widget child;
   final String message;
   final Duration waitDuration;
-  final TooltipTheme theme;
   final TextStyle? textStyle;
 
   const CustomTooltip({
-    super.key,
+    Key? key,
     required this.child,
     required this.message,
     this.waitDuration = const Duration(milliseconds: 500),
-    this.theme = TooltipTheme.dark,
     this.textStyle,
-  });
+  }) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    final isDarkTheme = theme == TooltipTheme.dark;
+    final themeManager = Provider.of<ThemeManager>(context);
+    final theme = Theme.of(context);
+    final isDarkMode = themeManager.themeMode == ThemeMode.dark ||
+        (themeManager.themeMode == ThemeMode.system &&
+            MediaQuery.of(context).platformBrightness == Brightness.dark);
 
     return Tooltip(
       message: message,
       waitDuration: waitDuration,
       decoration: BoxDecoration(
-        color: isDarkTheme ? Colors.grey[850] : const Color(0xFFFFFFFF),
+        color: isDarkMode
+            ? theme.colorScheme.surface
+            : theme.colorScheme.inverseSurface,
         borderRadius: BorderRadius.circular(4),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
+            color: theme.shadowColor.withOpacity(0.1),
             blurRadius: 4,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       textStyle: TextStyle(
-        color: isDarkTheme ? Colors.white : Colors.black87,
-        fontSize: textStyle?.fontSize,
-        fontWeight: FontWeight.w400,
+        color: isDarkMode
+            ? theme.colorScheme.onSurface
+            : theme.colorScheme.onInverseSurface,
+        fontSize: textStyle?.fontSize ?? 12,
+        fontWeight: textStyle?.fontWeight ?? FontWeight.w400,
       ),
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
       preferBelow: true,
@@ -50,3 +53,4 @@ class CustomTooltip extends StatelessWidget {
     );
   }
 }
+

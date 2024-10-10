@@ -329,6 +329,7 @@ class EditorKeyboardHandler {
 
     updateLineCounts();
     ensureCursorVisible();
+    updateModifiedState();
   }
 
   void copyText() {
@@ -353,6 +354,7 @@ class EditorKeyboardHandler {
     } else {
       deleteSelection();
     }
+    updateModifiedState();
   }
 
   void deleteLine() {

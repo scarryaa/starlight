@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
 import 'package:starlight/features/status_bar/status_bar.dart';
@@ -9,10 +10,12 @@ import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
+import 'package:starlight/services/theme_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  ThemeManager themeManager = ThemeManager();
 
   if (!kIsWeb) {
     if (defaultTargetPlatform == TargetPlatform.windows ||
@@ -35,21 +38,32 @@ void main() async {
     }
   }
 
-  runApp(const MyApp());
+  runApp(MyApp(
+    themeManager: themeManager,
+  ));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final ThemeManager themeManager;
+
+  const MyApp({super.key, required this.themeManager});
+
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'starlight',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+    return ChangeNotifierProvider.value(
+      value: themeManager,
+      child: Consumer<ThemeManager>(
+        builder: (context, themeManager, child) {
+          return MaterialApp(
+            title: 'starlight',
+            debugShowCheckedModeBanner: false,
+            theme: themeManager.lightTheme,
+            darkTheme: themeManager.darkTheme,
+            themeMode: themeManager.themeMode,
+            home: MyHomePage(title: 'starlight'),
+          );
+        },
       ),
-      home: MyHomePage(title: 'starlight'),
     );
   }
 }
@@ -60,6 +74,7 @@ class MyHomePage extends StatefulWidget {
     hotkeyService = HotkeyService();
     configService =
         ConfigService(fileService: fileService, tabService: tabService);
+    themeManager = ThemeManager();
     _initializeConfig();
   }
 
@@ -67,6 +82,7 @@ class MyHomePage extends StatefulWidget {
   late TabService tabService;
   late HotkeyService hotkeyService;
   late ConfigService configService;
+  late ThemeManager themeManager;
   final String title;
 
   void _initializeConfig() {
@@ -74,6 +90,8 @@ class MyHomePage extends StatefulWidget {
       configService.createDefaultConfig();
     }
     configService.loadConfig();
+    themeManager
+        .setThemeMode(configService.config['themeMode'] ?? ThemeMode.system);
   }
 
   @override

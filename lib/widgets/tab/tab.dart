@@ -133,7 +133,6 @@ class _TabState extends State<Tab> {
             }
           },
           child: CustomTooltip(
-            theme: TooltipTheme.light,
             waitDuration: const Duration(milliseconds: 500),
             message: widget.fullAbsolutePath,
             textStyle: const TextStyle(

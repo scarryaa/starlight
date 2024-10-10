@@ -51,8 +51,8 @@ class CommonContextMenu extends StatelessWidget {
                 }
                 return InkWell(
                   onTap: () {
-                    Navigator.of(context).pop(); // Close the menu
-                    item.onTap?.call(); // Call the item's onTap function
+                    Navigator.of(context).pop();
+                    item.onTap?.call();
                   },
                   hoverColor: theme.hoverColor,
                   child: Padding(
