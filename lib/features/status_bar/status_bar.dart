@@ -23,7 +23,7 @@ class StatusBar extends StatelessWidget {
         color: const Color(0xFFFFFFFF),
         border: Border(
           top: BorderSide(
-            color: Theme.of(context).colorScheme.outline,
+            color: Colors.lightBlue[200]!,
             width: 1,
           ),
         ),

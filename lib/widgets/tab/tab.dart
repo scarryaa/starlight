@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide TooltipTheme;
+import 'package:starlight/features/context_menu/context_menu.dart';
 import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/features/tooltip/tooltip.dart';
 
@@ -84,93 +85,36 @@ class _TabState extends State<Tab> {
     final RenderBox renderBox = context.findRenderObject() as RenderBox;
     final Offset offset = renderBox.localToGlobal(details.localPosition);
 
-    showMenu<String>(
+    final RelativeRect position = RelativeRect.fromLTRB(
+      offset.dx,
+      offset.dy,
+      offset.dx + 1,
+      offset.dy + 1,
+    );
+
+    final List<ContextMenuItem> menuItems = [
+      ContextMenuItem(label: 'Close', onTap: widget.onCloseTap),
+      ContextMenuItem(label: 'Close Others', onTap: widget.onCloseOthers),
+      const ContextMenuItem(isDivider: true, label: ''),
+      ContextMenuItem(label: 'Close Left', onTap: widget.closeLeft),
+      ContextMenuItem(label: 'Close Right', onTap: widget.closeRight),
+      const ContextMenuItem(isDivider: true, label: ''),
+      ContextMenuItem(label: 'Close All', onTap: widget.onCloseAll),
+      const ContextMenuItem(isDivider: true, label: ''),
+      ContextMenuItem(label: 'Copy Path', onTap: widget.onCopyPath),
+      ContextMenuItem(
+          label: 'Copy Relative Path', onTap: widget.onCopyRelativePath),
+      const ContextMenuItem(isDivider: true, label: ''),
+      if (!widget.isPinned)
+        ContextMenuItem(label: 'Pin Tab', onTap: widget.onPinTap),
+      if (widget.isPinned)
+        ContextMenuItem(label: 'Unpin Tab', onTap: widget.onUnpinTap),
+    ];
+
+    showCommonContextMenu(
       context: context,
-      position: RelativeRect.fromLTRB(
-        offset.dx,
-        offset.dy,
-        offset.dx + 1,
-        offset.dy + 1,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      constraints: const BoxConstraints(
-        minWidth: 120,
-        maxWidth: 150,
-      ),
-      popUpAnimationStyle:
-          AnimationStyle(duration: const Duration(milliseconds: 0)),
-      items: <PopupMenuEntry<String>>[
-        PopupMenuItem<String>(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          value: 'close',
-          onTap: widget.onCloseTap,
-          child: const Text('Close', style: TextStyle(fontSize: 13)),
-        ),
-        PopupMenuItem<String>(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          value: 'closeOthers',
-          onTap: widget.onCloseOthers,
-          child: const Text('Close Others', style: TextStyle(fontSize: 13)),
-        ),
-        const PopupMenuDivider(height: 8),
-        PopupMenuItem<String>(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          value: 'closeLeft',
-          onTap: widget.closeLeft,
-          child: const Text('Close Left', style: TextStyle(fontSize: 13)),
-        ),
-        PopupMenuItem<String>(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          value: 'closeRight',
-          onTap: widget.closeRight,
-          child: const Text('Close Right', style: TextStyle(fontSize: 13)),
-        ),
-        const PopupMenuDivider(height: 8),
-        PopupMenuItem<String>(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          value: 'closeAll',
-          onTap: widget.onCloseAll,
-          child: const Text('Close All', style: TextStyle(fontSize: 13)),
-        ),
-        const PopupMenuDivider(height: 8),
-        PopupMenuItem<String>(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          value: 'copyPath',
-          onTap: widget.onCopyPath,
-          child: const Text('Copy Path', style: TextStyle(fontSize: 13)),
-        ),
-        PopupMenuItem<String>(
-          height: 32,
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          value: 'copyRelativePath',
-          onTap: widget.onCopyRelativePath,
-          child:
-              const Text('Copy Relative Path', style: TextStyle(fontSize: 13)),
-        ),
-        const PopupMenuDivider(height: 8),
-        if (!widget.isPinned)
-          PopupMenuItem<String>(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            value: 'pinTab',
-            onTap: widget.onPinTap,
-            child: const Text('Pin Tab', style: TextStyle(fontSize: 13)),
-          ),
-        if (widget.isPinned)
-          PopupMenuItem<String>(
-            height: 32,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            value: 'unpinTab',
-            onTap: widget.onUnpinTap,
-            child: const Text('Unpin Tab', style: TextStyle(fontSize: 13)),
-          ),
-      ],
+      position: position,
+      items: menuItems,
     );
   }
 

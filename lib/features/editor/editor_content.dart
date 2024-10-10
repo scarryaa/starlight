@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/material.dart' hide VerticalDirection;
+import 'package:starlight/features/context_menu/context_menu.dart';
 import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
@@ -162,9 +163,9 @@ class _EditorContentState extends State<EditorContent> {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
 
-    final Offset shiftedPosition = details.globalPosition.translate(120, 0);
+    final Offset shiftedPosition = details.globalPosition.translate(0, 0);
 
-    final RelativeRect positionRect = RelativeRect.fromRect(
+    final RelativeRect position = RelativeRect.fromRect(
       Rect.fromPoints(shiftedPosition, shiftedPosition),
       Offset.zero & overlay.size,
     );
@@ -179,63 +180,17 @@ class _EditorContentState extends State<EditorContent> {
       });
     }
 
-    showMenu(
+    final List<ContextMenuItem> menuItems = [
+      ContextMenuItem(label: 'Cut', onTap: _cut),
+      ContextMenuItem(label: 'Copy', onTap: _copy),
+      ContextMenuItem(label: 'Paste', onTap: _paste),
+    ];
+
+    showCommonContextMenu(
       context: context,
-      position: positionRect,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      constraints: const BoxConstraints(
-        minWidth: 100,
-        maxWidth: 120,
-      ),
-      popUpAnimationStyle:
-          AnimationStyle(duration: const Duration(milliseconds: 0)),
-      items: <PopupMenuEntry>[
-        const PopupMenuItem(
-          height: 36,
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          value: 'cut',
-          child: Row(
-            children: [
-              Text('Cut', style: TextStyle(fontSize: 14)),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          height: 36,
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          value: 'copy',
-          child: Row(
-            children: [
-              Text('Copy', style: TextStyle(fontSize: 14)),
-            ],
-          ),
-        ),
-        const PopupMenuItem(
-          height: 36,
-          padding: EdgeInsets.symmetric(horizontal: 12),
-          value: 'paste',
-          child: Row(
-            children: [
-              Text('Paste', style: TextStyle(fontSize: 14)),
-            ],
-          ),
-        ),
-      ],
-    ).then((value) {
-      if (value != null) {
-        switch (value) {
-          case 'cut':
-            _cut();
-            break;
-          case 'copy':
-            _copy();
-            break;
-          case 'paste':
-            _paste();
-            break;
-        }
-      }
-    });
+      position: position,
+      items: menuItems,
+    );
   }
 
   bool isPositionInSelection(int position) {
