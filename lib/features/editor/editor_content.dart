@@ -2,9 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide VerticalDirection;
-import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
@@ -183,18 +181,29 @@ class _EditorContentState extends State<EditorContent> {
     showMenu(
       context: context,
       position: positionRect,
+      popUpAnimationStyle:
+          AnimationStyle(duration: const Duration(milliseconds: 0)),
       items: <PopupMenuEntry>[
         const PopupMenuItem(
           value: 'cut',
-          child: Text('Cut'),
+          child: Text(
+            'Cut',
+            style: TextStyle(fontSize: 12),
+          ),
         ),
         const PopupMenuItem(
           value: 'copy',
-          child: Text('Copy'),
+          child: Text(
+            'Copy',
+            style: TextStyle(fontSize: 12),
+          ),
         ),
         const PopupMenuItem(
           value: 'paste',
-          child: Text('Paste'),
+          child: Text(
+            'Paste',
+            style: TextStyle(fontSize: 12),
+          ),
         ),
       ],
     ).then((value) {

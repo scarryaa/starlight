@@ -92,6 +92,8 @@ class _TabState extends State<Tab> {
         offset.dx + 1,
         offset.dy + 1,
       ),
+      popUpAnimationStyle:
+          AnimationStyle(duration: const Duration(milliseconds: 0)),
       items: <PopupMenuEntry<String>>[
         PopupMenuItem<String>(
           value: 'close',
