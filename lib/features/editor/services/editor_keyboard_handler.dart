@@ -36,6 +36,7 @@ class EditorKeyboardHandler {
   int? _detectedIndentation;
   HorizontalDirection horizontalDirection = HorizontalDirection.right;
   VerticalDirection verticalDirection = VerticalDirection.down;
+  int stickyColumn = 0;
 
   EditorKeyboardHandler({
     required this.rope,
@@ -526,37 +527,13 @@ class EditorKeyboardHandler {
     absoluteCaretPosition += effectiveTabSize;
   }
 
-  void moveCaretHorizontally(int amount) {
-    int newCaretPosition = caretPosition + amount;
-    int currentLineLength = rope.getLineLength(caretLine);
-
-    if (newCaretPosition >= 0 && newCaretPosition <= currentLineLength) {
-      caretPosition = newCaretPosition;
-      absoluteCaretPosition += amount;
-    } else if (newCaretPosition < 0 && caretLine > 0) {
-      caretLine--;
-      caretPosition = rope.getLineLength(caretLine);
-      absoluteCaretPosition =
-          rope.findClosestLineStart(caretLine) + caretPosition;
-    } else if (newCaretPosition > currentLineLength &&
-        caretLine < rope.lineCount - 1) {
-      caretLine++;
-      caretPosition = 0;
-      absoluteCaretPosition = rope.findClosestLineStart(caretLine);
-    }
-
-        absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
-    updateAndNotifyCursorPosition();  
-    selectionManager.moveSelectionHorizontally(absoluteCaretPosition);
-  }
-
   void moveCaretVertically(int amount) {
     int targetLine = caretLine + amount;
     if (targetLine >= 0 && targetLine < rope.lineCount) {
       int targetLineStart = rope.findClosestLineStart(targetLine);
       int targetLineLength = rope.getLineLength(targetLine);
 
-      caretPosition = min(preferredCaretColumn, targetLineLength);
+      caretPosition = applyStickyColumn(targetLineLength);
       caretLine = targetLine;
       absoluteCaretPosition = targetLineStart + caretPosition;
     } else if (targetLine == rope.lineCount) {
@@ -564,24 +541,48 @@ class EditorKeyboardHandler {
       caretLine = rope.lineCount - 1;
       caretPosition = rope.getLineLength(caretLine);
       absoluteCaretPosition = rope.length;
-      preferredCaretColumn = caretPosition;
     } else if (targetLine < 0) {
       // Move to the beginning of the first line
       caretLine = 0;
       caretPosition = 0;
       absoluteCaretPosition = 0;
-      preferredCaretColumn = 0;
     }
 
     updateAndNotifyCursorPosition();
     selectionManager.moveSelectionVertically(absoluteCaretPosition);
   }
 
+  void moveCaretHorizontally(int amount) {
+    int newCaretPosition = caretPosition + amount;
+    int currentLineLength = rope.getLineLength(caretLine);
+
+    if (newCaretPosition >= 0 && newCaretPosition <= currentLineLength) {
+      caretPosition = newCaretPosition;
+      absoluteCaretPosition += amount;
+      stickyColumn = caretPosition;
+    } else if (newCaretPosition < 0 && caretLine > 0) {
+      caretLine--;
+      caretPosition = rope.getLineLength(caretLine);
+      absoluteCaretPosition =
+          rope.findClosestLineStart(caretLine) + caretPosition;
+      stickyColumn = caretPosition;
+    } else if (newCaretPosition > currentLineLength &&
+        caretLine < rope.lineCount - 1) {
+      caretLine++;
+      caretPosition = 0;
+      absoluteCaretPosition = rope.findClosestLineStart(caretLine);
+    }
+
+    absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
+    updateAndNotifyCursorPosition();
+    selectionManager.moveSelectionHorizontally(absoluteCaretPosition);
+  }
+
   void updateAndNotifyCursorPosition() {
     caretLine = rope.findLineForPosition(absoluteCaretPosition);
     int lineStart = rope.findClosestLineStart(caretLine);
     caretPosition = absoluteCaretPosition - lineStart;
-    preferredCaretColumn = caretPosition;
+    stickyColumn = max(stickyColumn, caretPosition);
 
     // Sync cursor position with TabService
     if (tabService.currentTab != null) {
@@ -590,5 +591,9 @@ class EditorKeyboardHandler {
         CursorPosition(line: caretLine, column: caretPosition),
       );
     }
+  }
+
+  int applyStickyColumn(int lineLength) {
+    return min(stickyColumn, lineLength);
   }
 }

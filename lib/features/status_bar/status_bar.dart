@@ -57,7 +57,7 @@ class StatusBar extends StatelessWidget {
                   ),
                   const SizedBox(width: 16),
                   Text(
-                    'Tab: ${configService.config['tabSize'] ?? 4}',
+                    'Tabs: ${configService.config['tabSize'] ?? 4}',
                     style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ],
