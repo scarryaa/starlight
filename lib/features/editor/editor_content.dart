@@ -2,7 +2,9 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:math';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide VerticalDirection;
+import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/gutter/gutter.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
@@ -72,7 +74,6 @@ class _EditorContentState extends State<EditorContent> {
   int _lastClickTime = 0;
   static const int _doubleClickTime = 300; // milliseconds
   late EditorKeyboardHandler keyboardHandler;
-  bool _isDisposed = false;
 
   @override
   void initState() {
@@ -117,7 +118,6 @@ class _EditorContentState extends State<EditorContent> {
 
   @override
   void dispose() {
-    _isDisposed = true;
     widget.verticalController.removeListener(_handleVerticalScroll);
     widget.horizontalController.removeListener(_handleHorizontalScroll);
     super.dispose();
@@ -146,6 +146,77 @@ class _EditorContentState extends State<EditorContent> {
         },
       );
     });
+  }
+
+  void _cut() {
+    keyboardHandler.cutText();
+  }
+
+  void _copy() {
+    keyboardHandler.copyText();
+  }
+
+  void _paste() async {
+    keyboardHandler.pasteText();
+  }
+
+  void _showContextMenu(BuildContext context, TapUpDetails details) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
+    final RelativeRect positionRect = RelativeRect.fromRect(
+      Rect.fromPoints(details.globalPosition, details.globalPosition),
+      Offset.zero & overlay.size,
+    );
+
+    // Get the position from the tap location
+    final tapPosition = getPositionFromOffset(details.localPosition);
+
+    // If the tap is not in the current selection, update the caret position
+    if (!isPositionInSelection(tapPosition)) {
+      setState(() {
+        keyboardHandler.absoluteCaretPosition = tapPosition;
+        keyboardHandler.updateAndNotifyCursorPosition();
+        widget.editorSelectionManager.clearSelection();
+      });
+    }
+
+    showMenu(
+      context: context,
+      position: positionRect,
+      items: <PopupMenuEntry>[
+        const PopupMenuItem(
+          value: 'cut',
+          child: Text('Cut'),
+        ),
+        const PopupMenuItem(
+          value: 'copy',
+          child: Text('Copy'),
+        ),
+        const PopupMenuItem(
+          value: 'paste',
+          child: Text('Paste'),
+        ),
+      ],
+    ).then((value) {
+      if (value != null) {
+        switch (value) {
+          case 'cut':
+            _cut();
+            break;
+          case 'copy':
+            _copy();
+            break;
+          case 'paste':
+            _paste();
+            break;
+        }
+      }
+    });
+  }
+
+  bool isPositionInSelection(int position) {
+    return position >= widget.editorSelectionManager.selectionStart &&
+        position < widget.editorSelectionManager.selectionEnd;
   }
 
   @override
@@ -181,6 +252,10 @@ class _EditorContentState extends State<EditorContent> {
               onTapDown: (TapDownDetails details) {
                 f.requestFocus();
                 _handleTap(details);
+              },
+              onSecondaryTapUp: (TapUpDetails details) {
+                f.requestFocus();
+                _showContextMenu(context, details);
               },
               onLongPressStart: (LongPressStartDetails details) {
                 f.requestFocus();
