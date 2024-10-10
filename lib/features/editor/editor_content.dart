@@ -236,7 +236,7 @@ class _EditorContentState extends State<EditorContent> {
           (lineHeight * rope.lineCount) + viewPadding,
           MediaQuery.of(context).size.height - 35,
         ) -
-        35;
+        70;
 
     return Row(
       children: [
