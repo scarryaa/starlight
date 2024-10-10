@@ -32,7 +32,7 @@ class TabService extends ChangeNotifier {
   }
 
   void addTab(String fileName, String path, String fullAbsolutePath) {
-    if (!_tabs.any((tab) => tab.path == path)) {
+    if (!_tabs.any((tab) => tab.fullPath == path)) {
       final fileContent = fileService.readFile(path);
       _tabs.add(Tab(
         fullAbsolutePath: fullAbsolutePath,
@@ -44,6 +44,10 @@ class TabService extends ChangeNotifier {
       ));
       setCurrentTab(_tabs.length - 1);
       notifyListeners();
+    } else {
+      // If the tab already exists, just set it as the current tab
+      int existingIndex = _tabs.indexWhere((tab) => tab.fullPath == path);
+      setCurrentTab(existingIndex);
     }
   }
 

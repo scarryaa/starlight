@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 class EditorGutter extends StatefulWidget {
-  static const double width = 40;
   final double height;
   final double lineHeight;
   final ScrollController editorVerticalScrollController;
@@ -32,12 +31,14 @@ class EditorGutter extends StatefulWidget {
 class _EditorGutterState extends State<EditorGutter> {
   late ScrollController _gutterScrollController;
   bool _isScrolling = false;
+  late double _gutterWidth;
 
   @override
   void initState() {
     super.initState();
     _gutterScrollController = ScrollController();
     _setupScrollListeners();
+    _calculateWidth();
   }
 
   void _setupScrollListeners() {
@@ -64,20 +65,40 @@ class _EditorGutterState extends State<EditorGutter> {
     }
   }
 
+  void _calculateWidth() {
+    final TextPainter textPainter = TextPainter(
+      text: TextSpan(
+        text: widget.lineCount.toString(),
+        style: TextStyle(
+          fontFamily: widget.fontFamily,
+          fontSize: widget.fontSize,
+        ),
+      ),
+      textDirection: TextDirection.ltr,
+    )..layout();
+
+    setState(() {
+      _gutterWidth = textPainter.width + 35;
+    });
+  }
+
   @override
   void didUpdateWidget(EditorGutter oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.lineCount != widget.lineCount) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        _syncGutterScroll();
-      });
+    if (oldWidget.lineCount != widget.lineCount ||
+        oldWidget.fontSize != widget.fontSize ||
+        oldWidget.fontFamily != widget.fontFamily) {
+      _calculateWidth();
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _syncGutterScroll();
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: EditorGutter.width,
+      width: _gutterWidth,
       height: widget.height + widget.viewPadding * 2,
       child: ScrollConfiguration(
         behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
@@ -124,3 +145,4 @@ class _EditorGutterState extends State<EditorGutter> {
     super.dispose();
   }
 }
+
