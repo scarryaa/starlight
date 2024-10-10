@@ -1,4 +1,6 @@
 import 'dart:io';
+import 'package:bitsdojo_window/bitsdojo_window.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -12,6 +14,7 @@ import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/services/theme_manager.dart';
 import 'package:window_manager/window_manager.dart';
+import 'package:path/path.dart' as path;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,28 +29,37 @@ void main() async {
   }
   configService.loadConfig();
 
+  final initialDirectory = configService.config['initialDirectory'] ?? '';
+  fileService.setCurrentDirectory(initialDirectory);
+
   final themeManager = ThemeManager(
     initialThemeMode: configService.config['theme'] ?? 'system',
   );
 
   if (!kIsWeb) {
-    if (defaultTargetPlatform == TargetPlatform.windows ||
-        defaultTargetPlatform == TargetPlatform.macOS ||
-        defaultTargetPlatform == TargetPlatform.linux) {
+    if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       await windowManager.ensureInitialized();
 
       WindowOptions windowOptions = const WindowOptions(
-        minimumSize: Size(700, 600),
         size: Size(700, 600),
         center: true,
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
-        titleBarStyle: TitleBarStyle.normal,
+        titleBarStyle: TitleBarStyle.hidden,
       );
+
       windowManager.waitUntilReadyToShow(windowOptions, () async {
         await windowManager.show();
         await windowManager.focus();
       });
+
+      if (Platform.isWindows) {
+        doWhenWindowReady(() {
+          appWindow.minSize = const Size(700, 600);
+          appWindow.alignment = Alignment.center;
+          appWindow.show();
+        });
+      }
     }
   }
 
@@ -57,6 +69,26 @@ void main() async {
     fileService: fileService,
     tabService: tabService,
   ));
+}
+
+class WindowButtons extends StatelessWidget {
+  const WindowButtons({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+
+    return Row(
+      children: [
+        MinimizeWindowButton(
+            colors: WindowButtonColors(iconNormal: theme.iconTheme.color)),
+        MaximizeWindowButton(
+            colors: WindowButtonColors(iconNormal: theme.iconTheme.color)),
+        CloseWindowButton(
+            colors: WindowButtonColors(iconNormal: theme.iconTheme.color)),
+      ],
+    );
+  }
 }
 
 class MyApp extends StatelessWidget {
@@ -85,14 +117,126 @@ class MyApp extends StatelessWidget {
             theme: themeManager.lightTheme,
             darkTheme: themeManager.darkTheme,
             themeMode: themeManager.themeMode,
-            home: MyHomePage(
-              title: 'starlight',
-              configService: configService,
-              fileService: fileService,
-              tabService: tabService,
+            home: Scaffold(
+              body: Column(
+                children: [
+                  CustomTitleBar(
+                    themeManager: themeManager,
+                    configService: configService,
+                    fileService: fileService,
+                  ),
+                  Expanded(
+                    child: MyHomePage(
+                      title: 'starlight',
+                      configService: configService,
+                      fileService: fileService,
+                      tabService: tabService,
+                    ),
+                  ),
+                ],
+              ),
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+class CustomTitleBar extends StatelessWidget {
+  final ThemeManager themeManager;
+  final ConfigService configService;
+  final FileService fileService;
+
+  const CustomTitleBar({
+    super.key,
+    required this.themeManager,
+    required this.configService,
+    required this.fileService,
+  });
+
+  Future<void> _selectDirectory(BuildContext context) async {
+    String? selectedDirectory = await FilePicker.platform.getDirectoryPath();
+    if (selectedDirectory != null) {
+      configService.updateConfig('initialDirectory', selectedDirectory);
+      fileService.setCurrentDirectory(selectedDirectory);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 28,
+      color: themeManager.themeMode == ThemeMode.dark
+          ? Colors.grey[900]
+          : Colors.grey[300],
+      child: WindowTitleBarBox(
+        child: Row(
+          children: [
+            Expanded(
+              child: MoveWindow(
+                child: Row(
+                  children: [
+                    const SizedBox(width: 8),
+                    const MacosWindowButtons(),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      child: ValueListenableBuilder<String>(
+                        valueListenable: fileService.currentDirectoryNotifier,
+                        builder: (context, currentDirectory, child) {
+                          return TextButton(
+                            onPressed: () => _selectDirectory(context),
+                            child: Text(
+                              currentDirectory.isEmpty
+                                  ? "Select a project"
+                                  : path.basename(currentDirectory),
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                                color: themeManager.themeMode == ThemeMode.dark
+                                    ? Colors.white
+                                    : Colors.black,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class MacosWindowButtons extends StatelessWidget {
+  const MacosWindowButtons({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        _windowButton(Colors.red, 12),
+        const SizedBox(width: 8),
+        _windowButton(Colors.yellow, 12),
+        const SizedBox(width: 8),
+        _windowButton(Colors.green, 12),
+      ],
+    );
+  }
+
+  Widget _windowButton(Color color, double size) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
       ),
     );
   }
@@ -104,7 +248,7 @@ class MyHomePage extends StatefulWidget {
   final FileService fileService;
   final TabService tabService;
 
-  MyHomePage({
+  const MyHomePage({
     super.key,
     required this.title,
     required this.configService,

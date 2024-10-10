@@ -29,8 +29,7 @@ class FileSystemNode {
   FileSystemNode(
     this.entity, {
     this.isExpanded = false,
-    this.children = const [],
-  });
+  }) : children = [];
 }
 
 class _FileExplorerState extends State<FileExplorer> {
@@ -232,7 +231,8 @@ class _FileExplorerState extends State<FileExplorer> {
               .toList();
           _sortNodes(node.children);
         } catch (e) {
-          print(e);
+          print('Error accessing directory: $e');
+          // TODO implement toast
         }
       }
     });

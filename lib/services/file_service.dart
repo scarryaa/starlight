@@ -4,13 +4,29 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 class FileService extends ChangeNotifier {
+  late ValueNotifier<String> currentDirectoryNotifier;
   File? _currentFile;
   File? get currentFile => _currentFile;
+
+  FileService() {
+    currentDirectoryNotifier = ValueNotifier<String>('');
+  }
+
   set currentFile(File? file) {
     if (_currentFile != file) {
       _currentFile = file;
       notifyListeners();
     }
+  }
+
+  void setCurrentDirectory(String directory) {
+    currentDirectoryNotifier.value = directory;
+    refreshDirectory(directory);
+    notifyListeners();
+  }
+
+  void refreshDirectory(String directory) {
+    notifyListeners();
   }
 
   List<File> openFiles = [];
@@ -194,4 +210,3 @@ class FileService extends ChangeNotifier {
     }
   }
 }
-

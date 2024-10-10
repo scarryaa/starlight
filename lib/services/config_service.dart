@@ -13,6 +13,17 @@ class ConfigService {
     configPath = _resolveConfigPath();
   }
 
+  void updateConfig(String key, dynamic value) {
+    config[key] = value;
+    _saveConfig();
+  }
+
+  void _saveConfig() {
+    final configFile = File(configPath);
+    final jsonString = jsonEncode(config);
+    configFile.writeAsStringSync(jsonString);
+  }
+
   String _resolveConfigPath() {
     final String homeDir = Platform.environment['HOME'] ??
         Platform.environment['USERPROFILE'] ??
@@ -53,10 +64,5 @@ class ConfigService {
   void openConfig() {
     tabService.addTab(configPath.split('/').last, configPath,
         File.fromUri(Uri(path: configPath)).absolute.path);
-  }
-
-  void updateConfig(String key, dynamic value) {
-    config[key] = value;
-    saveConfig();
   }
 }
