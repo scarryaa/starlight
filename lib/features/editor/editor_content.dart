@@ -161,15 +161,16 @@ class _EditorContentState extends State<EditorContent> {
   void _showContextMenu(BuildContext context, TapUpDetails details) {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
+
+    final Offset shiftedPosition = details.globalPosition.translate(120, 0);
+
     final RelativeRect positionRect = RelativeRect.fromRect(
-      Rect.fromPoints(details.globalPosition, details.globalPosition),
+      Rect.fromPoints(shiftedPosition, shiftedPosition),
       Offset.zero & overlay.size,
     );
 
-    // Get the position from the tap location
     final tapPosition = getPositionFromOffset(details.localPosition);
 
-    // If the tap is not in the current selection, update the caret position
     if (!isPositionInSelection(tapPosition)) {
       setState(() {
         keyboardHandler.absoluteCaretPosition = tapPosition;
@@ -181,28 +182,42 @@ class _EditorContentState extends State<EditorContent> {
     showMenu(
       context: context,
       position: positionRect,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      constraints: const BoxConstraints(
+        minWidth: 100,
+        maxWidth: 120,
+      ),
       popUpAnimationStyle:
           AnimationStyle(duration: const Duration(milliseconds: 0)),
       items: <PopupMenuEntry>[
         const PopupMenuItem(
+          height: 36,
+          padding: EdgeInsets.symmetric(horizontal: 12),
           value: 'cut',
-          child: Text(
-            'Cut',
-            style: TextStyle(fontSize: 12),
+          child: Row(
+            children: [
+              Text('Cut', style: TextStyle(fontSize: 14)),
+            ],
           ),
         ),
         const PopupMenuItem(
+          height: 36,
+          padding: EdgeInsets.symmetric(horizontal: 12),
           value: 'copy',
-          child: Text(
-            'Copy',
-            style: TextStyle(fontSize: 12),
+          child: Row(
+            children: [
+              Text('Copy', style: TextStyle(fontSize: 14)),
+            ],
           ),
         ),
         const PopupMenuItem(
+          height: 36,
+          padding: EdgeInsets.symmetric(horizontal: 12),
           value: 'paste',
-          child: Text(
-            'Paste',
-            style: TextStyle(fontSize: 12),
+          child: Row(
+            children: [
+              Text('Paste', style: TextStyle(fontSize: 14)),
+            ],
           ),
         ),
       ],
