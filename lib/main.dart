@@ -43,9 +43,19 @@ void main() async {
     if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
       await windowManager.ensureInitialized();
 
-      WindowOptions windowOptions = const WindowOptions(
-        size: Size(700, 600),
-        center: true,
+      Size windowSize = configService.getWindowSize();
+      Offset windowPosition = configService.getWindowPosition();
+
+      // Ensure the window size is not smaller than the minimum size
+      windowSize = Size(
+        windowSize.width < 700 ? 700 : windowSize.width,
+        windowSize.height < 600 ? 600 : windowSize.height,
+      );
+
+      WindowOptions windowOptions = WindowOptions(
+        size: windowSize,
+        minimumSize: const Size(700, 600),
+        center: windowPosition == Offset.zero,
         backgroundColor: Colors.transparent,
         skipTaskbar: false,
         titleBarStyle: TitleBarStyle.hidden,
@@ -59,7 +69,8 @@ void main() async {
       if (Platform.isWindows) {
         doWhenWindowReady(() {
           appWindow.minSize = const Size(700, 600);
-          appWindow.alignment = Alignment.center;
+          appWindow.size = windowSize;
+          appWindow.position = windowPosition;
           appWindow.show();
         });
       }
@@ -95,7 +106,7 @@ class WindowButtons extends StatelessWidget {
   }
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   final ThemeManager themeManager;
   final ConfigService configService;
   final FileService fileService;
@@ -112,14 +123,48 @@ class MyApp extends StatelessWidget {
   });
 
   @override
+  State<MyApp> createState() => _MyAppState();
+}
+
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeMetrics() {
+    _saveWindowSizeAndPosition();
+  }
+
+  void _saveWindowSizeAndPosition() {
+    if (!kIsWeb &&
+        (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
+      windowManager.getSize().then((size) {
+        widget.configService.saveWindowSize(size);
+      });
+      windowManager.getPosition().then((position) {
+        widget.configService.saveWindowPosition(position);
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider.value(value: themeManager),
-        Provider.value(value: configService),
-        ChangeNotifierProvider.value(value: fileService),
-        ChangeNotifierProvider.value(value: tabService),
-        ChangeNotifierProvider.value(value: caretPositionNotifier),
+        ChangeNotifierProvider.value(value: widget.themeManager),
+        Provider.value(value: widget.configService),
+        ChangeNotifierProvider.value(value: widget.fileService),
+        ChangeNotifierProvider.value(value: widget.tabService),
+        ChangeNotifierProvider.value(value: widget.caretPositionNotifier),
       ],
       child: Consumer<ThemeManager>(
         builder: (context, themeManager, child) {
@@ -134,15 +179,15 @@ class MyApp extends StatelessWidget {
                 children: [
                   CustomTitleBar(
                     themeManager: themeManager,
-                    configService: configService,
-                    fileService: fileService,
+                    configService: widget.configService,
+                    fileService: widget.fileService,
                   ),
                   Expanded(
                     child: MyHomePage(
                       title: 'starlight',
-                      configService: configService,
-                      fileService: fileService,
-                      tabService: tabService,
+                      configService: widget.configService,
+                      fileService: widget.fileService,
+                      tabService: widget.tabService,
                     ),
                   ),
                 ],
@@ -304,9 +349,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return FocusableActionDetector(
       focusNode: _rootFocusNode,
       autofocus: true,
-      actions: {
-        // Your existing actions can go here
-      },
+      actions: {},
       child: Focus(
         focusNode: _childFocusNode,
         onKeyEvent: (node, event) {

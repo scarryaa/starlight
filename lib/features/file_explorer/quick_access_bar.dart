@@ -10,7 +10,7 @@ class QuickAccessBar extends StatelessWidget {
   final bool isSearchVisible;
 
   const QuickAccessBar({
-    Key? key,
+    super.key,
     required this.onNewFile,
     required this.onNewFolder,
     required this.onRefresh,
@@ -18,7 +18,7 @@ class QuickAccessBar extends StatelessWidget {
     required this.onExpandAll,
     required this.onSearch,
     required this.isSearchVisible,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -34,7 +34,6 @@ class QuickAccessBar extends StatelessWidget {
         ),
       ),
       child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
           _buildIconButton(Icons.add, 'New File', onNewFile),
           _buildIconButton(Icons.create_new_folder, 'New Folder', onNewFolder),
@@ -42,6 +41,7 @@ class QuickAccessBar extends StatelessWidget {
           _buildIconButton(Icons.unfold_less, 'Collapse All', onCollapseAll),
           _buildIconButton(Icons.unfold_more, 'Expand All', onExpandAll),
           _buildIconButton(Icons.search, 'Search', onSearch),
+          const Spacer(),
         ],
       ),
     );
@@ -49,16 +49,19 @@ class QuickAccessBar extends StatelessWidget {
 
   Widget _buildIconButton(
       IconData icon, String tooltip, VoidCallback onPressed) {
-    return Tooltip(
-      message: tooltip,
-      child: SizedBox(
-        width: 20,
-        height: 20,
-        child: IconButton(
-          padding: const EdgeInsets.all(0),
-          icon: Icon(icon, size: 16),
-          onPressed: onPressed,
-          splashRadius: 5,
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: Tooltip(
+        message: tooltip,
+        child: SizedBox(
+          width: 24,
+          height: 24,
+          child: IconButton(
+            padding: const EdgeInsets.all(0),
+            icon: Icon(icon, size: 18),
+            onPressed: onPressed,
+            splashRadius: 12,
+          ),
         ),
       ),
     );

@@ -14,11 +14,11 @@ class FileExplorer extends StatefulWidget {
   final FileService fileService;
 
   const FileExplorer({
-    Key? key,
+    super.key,
     required this.initialDirectory,
     required this.tabService,
     required this.fileService,
-  }) : super(key: key);
+  });
 
   @override
   State<FileExplorer> createState() => _FileExplorerState();
@@ -34,6 +34,7 @@ class FileSystemNode {
 class _FileExplorerState extends State<FileExplorer> {
   static const double fileHeight = 25.0;
   static const double bottomPadding = 25.0;
+  static const double minWidth = 250.0;
 
   late List<FileSystemNode> rootNodes;
   final ScrollController _scrollController = ScrollController();
@@ -51,6 +52,7 @@ class _FileExplorerState extends State<FileExplorer> {
   final FocusNode _explorerFocusNode = FocusNode();
   final FocusNode _explorerChildFocusNode = FocusNode();
   bool _isShiftPressed = false;
+  double _width = 250.0;
 
   @override
   void initState() {
@@ -81,9 +83,37 @@ class _FileExplorerState extends State<FileExplorer> {
         ),
       },
       shortcuts: {
-        LogicalKeySet(LogicalKeyboardKey.delete): DeleteIntent(),
+        LogicalKeySet(LogicalKeyboardKey.delete): const DeleteIntent(),
       },
-      child: _buildExplorerContent(),
+      child: Row(
+        children: [
+          SizedBox(
+            width: _width,
+            child: _buildExplorerContent(),
+          ),
+          MouseRegion(
+            cursor: SystemMouseCursors.resizeColumn,
+            child: GestureDetector(
+              onHorizontalDragUpdate: (details) {
+                setState(() {
+                  _width += details.delta.dx;
+                  _width = _width.clamp(
+                      minWidth, MediaQuery.of(context).size.width - 200);
+                });
+              },
+              child: Container(
+                width: 2,
+                color: Colors.transparent,
+                child: Center(
+                  child: Container(
+                    width: 1,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -93,17 +123,22 @@ class _FileExplorerState extends State<FileExplorer> {
       onKeyEvent: _handleKeyEvent,
       child: GestureDetector(
         onTap: _handleEmptySpaceClick,
-        onSecondaryTapDown: (details) => _showEmptySpaceContextMenu(context, details),
+        onSecondaryTapDown: (details) =>
+            _showEmptySpaceContextMenu(context, details),
         child: Container(
           decoration: BoxDecoration(
-            border: Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
+            border:
+                Border(right: BorderSide(width: 1, color: Colors.blue[200]!)),
           ),
-          width: 250,
           child: Column(
             children: [
               QuickAccessBar(
-                onNewFile: () => _createNew(lastClickedDirectory ?? widget.initialDirectory, isFile: true),
-                onNewFolder: () => _createNew(lastClickedDirectory ?? widget.initialDirectory, isFile: false),
+                onNewFile: () => _createNew(
+                    lastClickedDirectory ?? widget.initialDirectory,
+                    isFile: true),
+                onNewFolder: () => _createNew(
+                    lastClickedDirectory ?? widget.initialDirectory,
+                    isFile: false),
                 onRefresh: _refreshDirectory,
                 onCollapseAll: _collapseAll,
                 onExpandAll: _expandAll,
@@ -135,7 +170,8 @@ class _FileExplorerState extends State<FileExplorer> {
           focusedBorder: UnderlineInputBorder(
             borderSide: BorderSide(color: Colors.lightBlue[400]!),
           ),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
+          contentPadding:
+              const EdgeInsets.symmetric(horizontal: 8, vertical: 0),
           suffixIcon: IconButton(
             icon: const Icon(Icons.clear, size: 16),
             onPressed: _clearSearch,
@@ -150,8 +186,9 @@ class _FileExplorerState extends State<FileExplorer> {
 
   Widget _buildFileList() {
     return DragTarget<String>(
-      onWillAccept: (_) => true,
-      onAccept: (data) => _handleFileDrop(data, widget.initialDirectory),
+      onWillAcceptWithDetails: (_) => true,
+      onAcceptWithDetails: (details) =>
+          _handleFileDrop(details.data, widget.initialDirectory),
       builder: (context, _, __) {
         return CustomScrollView(
           controller: _scrollController,
@@ -162,7 +199,7 @@ class _FileExplorerState extends State<FileExplorer> {
                   if (index < _filteredNodes.length) {
                     return _buildFileItem(_filteredNodes[index], 0);
                   } else if (index == _filteredNodes.length) {
-                    return SizedBox(height: bottomPadding);
+                    return const SizedBox(height: bottomPadding);
                   }
                   return null;
                 },
@@ -191,12 +228,15 @@ class _FileExplorerState extends State<FileExplorer> {
             feedback: Material(
               elevation: 4.0,
               child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
                 color: Colors.blue.withOpacity(0.8),
-                child: Text(fileName, style: const TextStyle(color: Colors.white)),
+                child:
+                    Text(fileName, style: const TextStyle(color: Colors.white)),
               ),
             ),
-            child: _buildDragTarget(node, isDirectory, fileName, isSelected, depth),
+            child: _buildDragTarget(
+                node, isDirectory, fileName, isSelected, depth),
           ),
         ),
         if (node.isExpanded)
@@ -205,16 +245,18 @@ class _FileExplorerState extends State<FileExplorer> {
     );
   }
 
-  Widget _buildDragTarget(FileSystemNode node, bool isDirectory, String fileName, bool isSelected, int depth) {
+  Widget _buildDragTarget(FileSystemNode node, bool isDirectory,
+      String fileName, bool isSelected, int depth) {
     return DragTarget<String>(
-      onWillAccept: (data) {
-        if (data != node.entity.path && isDirectory) {
+      onWillAcceptWithDetails: (details) {
+        if (details.data != node.entity.path && isDirectory) {
           _startExpandTimer(node);
         }
-        return data != node.entity.path;
+        return details.data != node.entity.path;
       },
       onLeave: (_) => _cancelExpandTimer(),
-      onAccept: (data) => _handleFileDrop(data, node.entity.path),
+      onAcceptWithDetails: (details) =>
+          _handleFileDrop(details.data, node.entity.path),
       builder: (context, _, __) {
         return InkWell(
           splashFactory: NoSplash.splashFactory,
@@ -252,6 +294,22 @@ class _FileExplorerState extends State<FileExplorer> {
         );
       },
     );
+  }
+
+  void _handleFileDrop(String sourcePath, String targetPath) {
+    _cancelExpandTimer();
+    if (sourcePath == targetPath) return;
+
+    final targetIsDirectory = FileSystemEntity.isDirectorySync(targetPath);
+    final String destinationPath =
+        targetIsDirectory ? targetPath : p.dirname(targetPath);
+    final String newPath = p.join(destinationPath, p.basename(sourcePath));
+
+    if (newPath != sourcePath) {
+      widget.fileService.renameFile(sourcePath, newPath);
+      _updateExpandedDirectories(sourcePath, newPath);
+      _refreshDirectory();
+    }
   }
 
   void _initializeRootNodes() {
@@ -311,14 +369,18 @@ class _FileExplorerState extends State<FileExplorer> {
 
   void _handleTap(FileSystemNode node) {
     final bool isCommandPressed = RawKeyboard.instance.keysPressed
-        .contains(LogicalKeyboardKey.metaLeft) ||
-        RawKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.metaRight) ||
-        RawKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.controlLeft) ||
-        RawKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.controlRight);
+            .contains(LogicalKeyboardKey.metaLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.metaRight) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.controlLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.controlRight);
 
     final bool isShiftPressed = RawKeyboard.instance.keysPressed
-        .contains(LogicalKeyboardKey.shiftLeft) ||
-        RawKeyboard.instance.keysPressed.contains(LogicalKeyboardKey.shiftRight);
+            .contains(LogicalKeyboardKey.shiftLeft) ||
+        RawKeyboard.instance.keysPressed
+            .contains(LogicalKeyboardKey.shiftRight);
 
     setState(() {
       if (isCommandPressed) {
@@ -354,21 +416,6 @@ class _FileExplorerState extends State<FileExplorer> {
     _showContextMenu(context, [node], details);
   }
 
-  void _handleFileDrop(String sourcePath, String targetPath) {
-    _cancelExpandTimer();
-    if (sourcePath == targetPath) return;
-
-    final targetIsDirectory = FileSystemEntity.isDirectorySync(targetPath);
-    final String destinationPath = targetIsDirectory ? targetPath : p.dirname(targetPath);
-    final String newPath = p.join(destinationPath, p.basename(sourcePath));
-
-    if (newPath != sourcePath) {
-      widget.fileService.renameFile(sourcePath, newPath);
-      _updateExpandedDirectories(sourcePath, newPath);
-      _refreshDirectory();
-    }
-  }
-
   void _updateExpandedDirectories(String oldPath, String newPath) {
     if (FileSystemEntity.isDirectorySync(oldPath)) {
       final oldPrefix = oldPath + p.separator;
@@ -382,8 +429,10 @@ class _FileExplorerState extends State<FileExplorer> {
     }
   }
 
-  void _showContextMenu(BuildContext context, List<FileSystemNode> nodes, TapDownDetails details) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  void _showContextMenu(BuildContext context, List<FileSystemNode> nodes,
+      TapDownDetails details) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
     final RelativeRect position = RelativeRect.fromRect(
       Rect.fromPoints(details.globalPosition, details.globalPosition),
       Offset.zero & overlay.size,
@@ -412,17 +461,23 @@ class _FileExplorerState extends State<FileExplorer> {
     final bool isDirectory = node.entity is Directory;
 
     return [
-      ContextMenuItem(label: 'New File', onTap: () => _createNew(path, isFile: true)),
-      ContextMenuItem(label: 'New Folder', onTap: () => _createNew(path, isFile: false)),
+      ContextMenuItem(
+          label: 'New File', onTap: () => _createNew(path, isFile: true)),
+      ContextMenuItem(
+          label: 'New Folder', onTap: () => _createNew(path, isFile: false)),
       const ContextMenuItem(isDivider: true, label: ''),
-      ContextMenuItem(label: 'Reveal In Finder', onTap: () => _revealFileInFinder(path)),
+      ContextMenuItem(
+          label: 'Reveal In Finder', onTap: () => _revealFileInFinder(path)),
       const ContextMenuItem(isDivider: true, label: ''),
       ContextMenuItem(label: 'Copy', onTap: () => _copyFiles([path])),
       ContextMenuItem(label: 'Cut', onTap: () => _cutFiles([path])),
-      ContextMenuItem(label: 'Paste', onTap: () => _pasteFiles(isDirectory ? path : p.dirname(path))),
+      ContextMenuItem(
+          label: 'Paste',
+          onTap: () => _pasteFiles(isDirectory ? path : p.dirname(path))),
       const ContextMenuItem(isDivider: true, label: ''),
       ContextMenuItem(label: 'Copy Path', onTap: () => _copyPath(path)),
-      ContextMenuItem(label: 'Copy Relative Path', onTap: () => _copyRelativePath(path)),
+      ContextMenuItem(
+          label: 'Copy Relative Path', onTap: () => _copyRelativePath(path)),
       const ContextMenuItem(isDivider: true, label: ''),
       ContextMenuItem(label: 'Rename', onTap: () => _renameFile(node)),
       ContextMenuItem(label: 'Delete', onTap: () => _deleteFile(path)),
@@ -431,8 +486,10 @@ class _FileExplorerState extends State<FileExplorer> {
 
   List<ContextMenuItem> _buildMultiSelectionMenu(FileSystemNode node) {
     return [
-      ContextMenuItem(label: 'Copy', onTap: () => _copyFiles(selectedPaths.toList())),
-      ContextMenuItem(label: 'Cut', onTap: () => _cutFiles(selectedPaths.toList())),
+      ContextMenuItem(
+          label: 'Copy', onTap: () => _copyFiles(selectedPaths.toList())),
+      ContextMenuItem(
+          label: 'Cut', onTap: () => _cutFiles(selectedPaths.toList())),
       ContextMenuItem(
         label: 'Paste',
         onTap: () {
@@ -442,7 +499,9 @@ class _FileExplorerState extends State<FileExplorer> {
         },
       ),
       const ContextMenuItem(isDivider: true, label: ''),
-      ContextMenuItem(label: 'Delete Selected', onTap: () => _deleteMultipleFiles(selectedPaths.toList())),
+      ContextMenuItem(
+          label: 'Delete Selected',
+          onTap: () => _deleteMultipleFiles(selectedPaths.toList())),
     ];
   }
 
@@ -456,7 +515,8 @@ class _FileExplorerState extends State<FileExplorer> {
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: InputDecoration(hintText: isFile ? 'file.txt' : 'New Folder'),
+            decoration:
+                InputDecoration(hintText: isFile ? 'file.txt' : 'New Folder'),
           ),
           actions: [
             TextButton(
@@ -466,7 +526,9 @@ class _FileExplorerState extends State<FileExplorer> {
             TextButton(
               onPressed: () {
                 final path = p.join(parentPath, controller.text);
-                isFile ? widget.fileService.createFile(path) : widget.fileService.createFolder(path);
+                isFile
+                    ? widget.fileService.createFile(path)
+                    : widget.fileService.createFolder(path);
                 Navigator.of(context).pop();
                 _refreshDirectory();
               },
@@ -482,7 +544,8 @@ class _FileExplorerState extends State<FileExplorer> {
     showDialog(
       context: context,
       builder: (context) {
-        final TextEditingController controller = TextEditingController(text: p.basename(node.entity.path));
+        final TextEditingController controller =
+            TextEditingController(text: p.basename(node.entity.path));
         return AlertDialog(
           title: const Text('Rename'),
           content: TextField(
@@ -497,7 +560,8 @@ class _FileExplorerState extends State<FileExplorer> {
             ),
             TextButton(
               onPressed: () {
-                final newPath = p.join(p.dirname(node.entity.path), controller.text);
+                final newPath =
+                    p.join(p.dirname(node.entity.path), controller.text);
                 widget.fileService.renameFile(node.entity.path, newPath);
                 Navigator.of(context).pop();
                 _refreshDirectory();
@@ -512,14 +576,16 @@ class _FileExplorerState extends State<FileExplorer> {
 
   void _openFile(String path) {
     widget.fileService.openFile(path);
-    widget.tabService.addTab(p.basename(path), path, widget.fileService.getAbsolutePath(path));
+    widget.tabService.addTab(
+        p.basename(path), path, widget.fileService.getAbsolutePath(path));
   }
 
   void _copyFiles(List<String> paths) => widget.fileService.copyFiles(paths);
   void _cutFiles(List<String> paths) => widget.fileService.cutFiles(paths);
 
   void _pasteFiles(String destinationPath) {
-    widget.fileService.pasteFiles(destinationPath, onNameConflict: _handleNameConflict);
+    widget.fileService
+        .pasteFiles(destinationPath, onNameConflict: _handleNameConflict);
     _refreshDirectory();
   }
 
@@ -528,16 +594,20 @@ class _FileExplorerState extends State<FileExplorer> {
     String extension = p.extension(path);
     int copyNumber = 1;
     String newPath = path;
-    while (FileSystemEntity.typeSync(newPath) != FileSystemEntityType.notFound) {
-      newPath = p.join(p.dirname(path), '$baseName - Copy $copyNumber$extension');
+    while (
+        FileSystemEntity.typeSync(newPath) != FileSystemEntityType.notFound) {
+      newPath =
+          p.join(p.dirname(path), '$baseName - Copy $copyNumber$extension');
       copyNumber++;
     }
     return newPath;
   }
 
   void _copyPath(String path) => widget.fileService.copyPath(path);
-  void _copyRelativePath(String path) => widget.fileService.copyRelativePath(path, widget.initialDirectory);
-  void _revealFileInFinder(String path) => widget.fileService.revealInFinder(path);
+  void _copyRelativePath(String path) =>
+      widget.fileService.copyRelativePath(path, widget.initialDirectory);
+  void _revealFileInFinder(String path) =>
+      widget.fileService.revealInFinder(path);
 
   void _deleteFile(String path) {
     _isShiftPressed ? _performDelete([path]) : _showDeleteConfirmation([path]);
@@ -552,13 +622,15 @@ class _FileExplorerState extends State<FileExplorer> {
     final String itemType = itemCount == 1
         ? (FileSystemEntity.isDirectorySync(paths.first) ? 'folder' : 'file')
         : 'items';
-    final String itemName = itemCount == 1 ? p.basename(paths.first) : '$itemCount $itemType';
+    final String itemName =
+        itemCount == 1 ? p.basename(paths.first) : '$itemCount $itemType';
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete'),
-        content: Text('Are you sure you want to delete ${itemCount == 1 ? 'the $itemType' : ''} "$itemName"?'),
+        content: Text(
+            'Are you sure you want to delete ${itemCount == 1 ? 'the $itemType' : ''} "$itemName"?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -667,7 +739,9 @@ class _FileExplorerState extends State<FileExplorer> {
   }
 
   void _toggleSelection(String path) {
-    selectedPaths.contains(path) ? selectedPaths.remove(path) : selectedPaths.add(path);
+    selectedPaths.contains(path)
+        ? selectedPaths.remove(path)
+        : selectedPaths.add(path);
     lastSelectedPath = path;
   }
 
@@ -716,18 +790,25 @@ class _FileExplorerState extends State<FileExplorer> {
     });
   }
 
-  void _showEmptySpaceContextMenu(BuildContext context, TapDownDetails details) {
-    final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+  void _showEmptySpaceContextMenu(
+      BuildContext context, TapDownDetails details) {
+    final RenderBox overlay =
+        Overlay.of(context).context.findRenderObject() as RenderBox;
     final RelativeRect position = RelativeRect.fromRect(
       Rect.fromPoints(details.globalPosition, details.globalPosition),
       Offset.zero & overlay.size,
     );
 
     final List<ContextMenuItem> menuItems = [
-      ContextMenuItem(label: 'New File', onTap: () => _createNew(widget.initialDirectory, isFile: true)),
-      ContextMenuItem(label: 'New Folder', onTap: () => _createNew(widget.initialDirectory, isFile: false)),
+      ContextMenuItem(
+          label: 'New File',
+          onTap: () => _createNew(widget.initialDirectory, isFile: true)),
+      ContextMenuItem(
+          label: 'New Folder',
+          onTap: () => _createNew(widget.initialDirectory, isFile: false)),
       const ContextMenuItem(isDivider: true, label: ''),
-      ContextMenuItem(label: 'Paste', onTap: () => _pasteFiles(widget.initialDirectory)),
+      ContextMenuItem(
+          label: 'Paste', onTap: () => _pasteFiles(widget.initialDirectory)),
     ];
 
     showCommonContextMenu(
@@ -784,7 +865,10 @@ class _FileExplorerState extends State<FileExplorer> {
       } else if (a.entity is! Directory && b.entity is Directory) {
         return 1;
       } else {
-        return p.basename(a.entity.path).toLowerCase().compareTo(p.basename(b.entity.path).toLowerCase());
+        return p
+            .basename(a.entity.path)
+            .toLowerCase()
+            .compareTo(p.basename(b.entity.path).toLowerCase());
       }
     });
   }
