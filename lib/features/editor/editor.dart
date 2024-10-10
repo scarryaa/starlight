@@ -93,7 +93,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       _updateEditorInstances();
 
       if (widget.tabService.tabs.isNotEmpty) {
-        int newIndex = widget.tabService.currentTabIndex ?? 0;
+        int newIndex = widget.tabService.currentTabIndexNotifier.value ?? 0;
         if (newIndex != tabController.index) {
           tabController.animateTo(newIndex);
         }
@@ -138,7 +138,8 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
               onReorder: (oldIndex, newIndex) {
                 setState(() {
                   widget.tabService.reorderTabs(oldIndex, newIndex);
-                  tabController.index = widget.tabService.currentTabIndex ?? 0;
+                  tabController.index =
+                      widget.tabService.currentTabIndexNotifier.value ?? 0;
                 });
               },
               children: widget.tabService.tabs.asMap().entries.map((entry) {

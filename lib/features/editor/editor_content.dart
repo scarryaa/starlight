@@ -323,7 +323,7 @@ class _EditorContentState extends State<EditorContent> {
 
   void handleClick(int position) {
     keyboardHandler.absoluteCaretPosition = position;
-    keyboardHandler.updateCaretPosition();
+    keyboardHandler.updateAndNotifyCursorPosition();
     widget.editorSelectionManager.clearSelection();
   }
 
@@ -336,7 +336,7 @@ class _EditorContentState extends State<EditorContent> {
     widget.editorSelectionManager.updateSelection();
 
     keyboardHandler.absoluteCaretPosition = selectionEnd;
-    keyboardHandler.updateCaretPosition();
+    keyboardHandler.updateAndNotifyCursorPosition();
   }
 
   void handleTripleClick(int position) {
@@ -351,7 +351,7 @@ class _EditorContentState extends State<EditorContent> {
     widget.editorSelectionManager.updateSelection();
 
     keyboardHandler.absoluteCaretPosition = lineEnd;
-    keyboardHandler.updateCaretPosition();
+    keyboardHandler.updateAndNotifyCursorPosition();
   }
 
   void handleDragStart(Offset localPosition) {
@@ -364,7 +364,7 @@ class _EditorContentState extends State<EditorContent> {
       widget.editorSelectionManager.updateSelection();
 
       keyboardHandler.absoluteCaretPosition = dragStartPosition;
-      keyboardHandler.updateCaretPosition();
+      keyboardHandler.updateAndNotifyCursorPosition();
     });
   }
 
@@ -408,7 +408,7 @@ class _EditorContentState extends State<EditorContent> {
         widget.editorSelectionManager.updateSelection();
         keyboardHandler.absoluteCaretPosition =
             widget.editorSelectionManager.selectionFocus;
-        keyboardHandler.updateCaretPosition();
+        keyboardHandler.updateAndNotifyCursorPosition();
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _ensureCursorVisible();
@@ -422,7 +422,7 @@ class _EditorContentState extends State<EditorContent> {
       _isDragging = false;
       keyboardHandler.absoluteCaretPosition =
           widget.editorSelectionManager.selectionEnd;
-      keyboardHandler.updateCaretPosition();
+      keyboardHandler.updateAndNotifyCursorPosition();
     });
   }
 
@@ -555,10 +555,10 @@ class _EditorContentState extends State<EditorContent> {
   }
 
   void saveFile() {
-    if (widget.tabService.currentTabIndex == null) return;
+    if (widget.tabService.currentTabIndexNotifier.value == null) return;
 
-    final currentTab =
-        widget.tabService.tabs[widget.tabService.currentTabIndex!];
+    final currentTab = widget
+        .tabService.tabs[widget.tabService.currentTabIndexNotifier.value!];
     try {
       File(currentTab.path).writeAsStringSync(rope.text);
       widget.tabService

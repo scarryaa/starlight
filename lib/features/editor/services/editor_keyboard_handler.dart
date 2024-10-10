@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/material.dart' hide VerticalDirection;
 import 'package:flutter/services.dart';
 import 'package:logging/logging.dart';
+import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
@@ -25,8 +26,6 @@ class EditorKeyboardHandler {
   final Function() notifyListeners;
 
   final Logger _logger = Logger('EditorKeyboardHandler');
-  final RegExp _increaseIndentPattern = RegExp(r'[\{\[\(]$');
-  final RegExp _decreaseIndentPattern = RegExp(r'^[\}\]\)]');
 
   int _lastUpdatedLine = 0;
   int get lastUpdatedLine => _lastUpdatedLine;
@@ -112,6 +111,7 @@ class EditorKeyboardHandler {
     if (result == KeyEventResult.handled) {
       updateLineCounts();
       tabService.currentTab!.content = rope.text;
+      updateAndNotifyCursorPosition();
       notifyListeners();
       ensureCursorVisible();
     }
@@ -136,6 +136,7 @@ class EditorKeyboardHandler {
     rope.insert(character, absoluteCaretPosition);
     caretPosition++;
     absoluteCaretPosition++;
+    updateAndNotifyCursorPosition();
   }
 
   KeyEventResult _handleSpecialKeys(
@@ -262,7 +263,7 @@ class EditorKeyboardHandler {
 
       rope.delete(start, length);
       absoluteCaretPosition = start;
-      updateCaretPosition();
+      updateAndNotifyCursorPosition();
       selectionManager.clearSelection();
 
       _lastUpdatedLine = max(0, startLine - 1);
@@ -320,7 +321,7 @@ class EditorKeyboardHandler {
 
     rope.insert(textToBePasted, absoluteCaretPosition);
     absoluteCaretPosition += textToBePasted.length;
-    updateCaretPosition();
+    updateAndNotifyCursorPosition();
 
     selectionManager.selectionStart =
         selectionManager.selectionEnd = absoluteCaretPosition;
@@ -469,7 +470,7 @@ class EditorKeyboardHandler {
         rope.findClosestLineStart(startLine));
     selectionManager.selectionEnd -= totalRemoved;
     absoluteCaretPosition -= totalRemoved;
-    updateCaretPosition();
+    updateAndNotifyCursorPosition();
     _lastUpdatedLine = max(0, startLine - 1);
     updateAfterEdit(startLine, endLine);
 
@@ -512,7 +513,7 @@ class EditorKeyboardHandler {
     selectionManager.selectionEnd +=
         effectiveTabSize * (endLine - startLine + 1);
     absoluteCaretPosition += effectiveTabSize * (endLine - startLine + 1);
-    updateCaretPosition();
+    updateAndNotifyCursorPosition();
 
     _lastUpdatedLine = max(0, startLine - 1);
     updateAfterEdit(startLine, endLine);
@@ -544,8 +545,8 @@ class EditorKeyboardHandler {
       absoluteCaretPosition = rope.findClosestLineStart(caretLine);
     }
 
-    absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
-    preferredCaretColumn = caretPosition;
+        absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
+    updateAndNotifyCursorPosition();  
     selectionManager.moveSelectionHorizontally(absoluteCaretPosition);
   }
 
@@ -572,13 +573,22 @@ class EditorKeyboardHandler {
       preferredCaretColumn = 0;
     }
 
+    updateAndNotifyCursorPosition();
     selectionManager.moveSelectionVertically(absoluteCaretPosition);
   }
 
-  void updateCaretPosition() {
+  void updateAndNotifyCursorPosition() {
     caretLine = rope.findLineForPosition(absoluteCaretPosition);
     int lineStart = rope.findClosestLineStart(caretLine);
     caretPosition = absoluteCaretPosition - lineStart;
-    preferredCaretColumn = caretPosition; // Update preferred column
+    preferredCaretColumn = caretPosition;
+
+    // Sync cursor position with TabService
+    if (tabService.currentTab != null) {
+      tabService.updateCursorPosition(
+        tabService.currentTab!.path,
+        CursorPosition(line: caretLine, column: caretPosition),
+      );
+    }
   }
 }

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
+import 'package:starlight/features/status_bar/status_bar.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
@@ -73,18 +74,23 @@ class _MyHomePageState extends State<MyHomePage> {
       SingleActivator(LogicalKeyboardKey.keyS,
           meta: isMacOS, control: !isMacOS),
       () {
-        if (widget.tabService.currentTabIndex != null) {
+        if (widget.tabService.currentTabIndexNotifier.value != null) {
           widget.tabService.updateTabContent(
               widget.tabService.currentTab!.path,
               widget
-                  .tabService.tabs[widget.tabService.currentTabIndex!].content,
+                  .tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
+                  .content,
               isModified: false);
           widget.fileService.writeFile(
-              widget.tabService.tabs[widget.tabService.currentTabIndex!].path,
+              widget.tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!].path,
               widget
-                  .tabService.tabs[widget.tabService.currentTabIndex!].content);
+                  .tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
+                  .content);
         } else {
-          print("Could not save: currentTabIndex is null.");
+          print("Could not save: currentTabIndexNotifier.value is null.");
         }
       },
     );
@@ -115,25 +121,37 @@ class _MyHomePageState extends State<MyHomePage> {
               : KeyEventResult.ignored;
         },
         child: Scaffold(
-          body: Row(
-            mainAxisAlignment: MainAxisAlignment.start,
-            children: <Widget>[
-              FileExplorer(
-                initialDirectory:
-                    widget.configService.config['initialDirectory'] ?? '',
-                tabService: widget.tabService,
+          body: Column(
+            children: [
+              Expanded(
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: <Widget>[
+                    FileExplorer(
+                      initialDirectory:
+                          widget.configService.config['initialDirectory'] ?? '',
+                      tabService: widget.tabService,
+                    ),
+                    Editor(
+                      configService: widget.configService,
+                      hotkeyService: widget.hotkeyService,
+                      tabService: widget.tabService,
+                      fileService: widget.fileService,
+                      lineHeight:
+                          widget.configService.config['lineHeight'] ?? 1.5,
+                      fontFamily: widget.configService.config['fontFamily'] ??
+                          'ZedMono Nerd Font',
+                      fontSize:
+                          widget.configService.config['fontSize'].toDouble() ??
+                              16,
+                      tabSize: widget.configService.config['tabSize'] ?? 4,
+                    ),
+                  ],
+                ),
               ),
-              Editor(
-                configService: widget.configService,
-                hotkeyService: widget.hotkeyService,
+              StatusBar(
                 tabService: widget.tabService,
-                fileService: widget.fileService,
-                lineHeight: widget.configService.config['lineHeight'] ?? 1.5,
-                fontFamily: widget.configService.config['fontFamily'] ??
-                    'ZedMono Nerd Font',
-                fontSize:
-                    widget.configService.config['fontSize'].toDouble() ?? 16,
-                tabSize: widget.configService.config['tabSize'] ?? 4,
+                configService: widget.configService,
               ),
             ],
           ),

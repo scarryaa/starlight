@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart' hide TooltipTheme;
+import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/features/tooltip/tooltip.dart';
 
 class Tab extends StatefulWidget {
@@ -12,6 +13,7 @@ class Tab extends StatefulWidget {
   final VoidCallback? onCloseTap;
   final VoidCallback? onSecondaryTap;
   bool isModified;
+  CursorPosition cursorPosition;
 
   Tab({
     super.key,
@@ -24,10 +26,31 @@ class Tab extends StatefulWidget {
     this.onSecondaryTap,
     this.onCloseTap,
     required this.isModified,
+    this.cursorPosition = const CursorPosition(line: 0, column: 0),
   });
 
   @override
   State<Tab> createState() => _TabState();
+
+  Tab copyWith({
+    String? fullPath,
+    String? fullAbsolutePath,
+    String? path,
+    String? content,
+    bool? isSelected,
+    bool? isModified,
+    CursorPosition? cursorPosition,
+  }) {
+    return Tab(
+      fullPath: fullPath ?? this.fullPath,
+      fullAbsolutePath: fullAbsolutePath ?? this.fullAbsolutePath,
+      path: path ?? this.path,
+      content: content ?? this.content,
+      isSelected: isSelected ?? this.isSelected,
+      isModified: isModified ?? this.isModified,
+      cursorPosition: cursorPosition ?? this.cursorPosition,
+    );
+  }
 }
 
 class _TabState extends State<Tab> {

@@ -1,31 +1,30 @@
 import 'package:flutter/foundation.dart';
+import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/widgets/tab/tab.dart';
 
 class TabService extends ChangeNotifier {
   final List<Tab> _tabs = [];
   FileService fileService;
-  int? currentTabIndex;
+  final ValueNotifier<int?> currentTabIndexNotifier = ValueNotifier<int?>(null);
+  final ValueNotifier<CursorPosition> cursorPositionNotifier =
+      ValueNotifier(CursorPosition(line: 0, column: 0));
 
   TabService({required this.fileService});
 
   List<Tab> get tabs => List.unmodifiable(_tabs);
-  Tab? get currentTab =>
-      currentTabIndex != null ? _tabs[currentTabIndex!] : null;
+
+  Tab? get currentTab => currentTabIndexNotifier.value != null
+      ? _tabs[currentTabIndexNotifier.value!]
+      : null;
 
   void setCurrentTab(int index) {
     if (index >= 0 && index < _tabs.length) {
-      currentTabIndex = index;
+      currentTabIndexNotifier.value = index;
+      cursorPositionNotifier.value = _tabs[index].cursorPosition;
       // Update isSelected for all tabs
       for (int i = 0; i < _tabs.length; i++) {
-        _tabs[i] = Tab(
-          fullAbsolutePath: _tabs[i].fullAbsolutePath,
-          fullPath: _tabs[i].fullPath,
-          isModified: _tabs[i].isModified,
-          path: _tabs[i].path,
-          content: _tabs[i].content,
-          isSelected: i == index,
-        );
+        _tabs[i] = _tabs[i].copyWith(isSelected: i == index);
       }
       notifyListeners();
     }
@@ -56,9 +55,10 @@ class TabService extends ChangeNotifier {
     if (index != -1) {
       _tabs.removeAt(index);
       if (_tabs.isNotEmpty) {
-        currentTabIndex = index < _tabs.length ? index : _tabs.length - 1;
+        currentTabIndexNotifier.value =
+            index < _tabs.length ? index : _tabs.length - 1;
       } else {
-        currentTabIndex = null;
+        currentTabIndexNotifier.value = null;
       }
       notifyListeners();
     }
@@ -75,6 +75,7 @@ class TabService extends ChangeNotifier {
         content: content,
         isSelected: _tabs[index].isSelected,
         isModified: isModified,
+        cursorPosition: _tabs[index].cursorPosition,
       );
       notifyListeners();
     }
@@ -86,12 +87,14 @@ class TabService extends ChangeNotifier {
     }
     final Tab tab = _tabs.removeAt(oldIndex);
     _tabs.insert(newIndex, tab);
-    if (currentTabIndex == oldIndex) {
-      currentTabIndex = newIndex;
-    } else if (currentTabIndex! > oldIndex && currentTabIndex! <= newIndex) {
-      currentTabIndex = currentTabIndex! - 1;
-    } else if (currentTabIndex! < oldIndex && currentTabIndex! >= newIndex) {
-      currentTabIndex = currentTabIndex! + 1;
+    if (currentTabIndexNotifier.value == oldIndex) {
+      currentTabIndexNotifier.value = newIndex;
+    } else if (currentTabIndexNotifier.value! > oldIndex &&
+        currentTabIndexNotifier.value! <= newIndex) {
+      currentTabIndexNotifier.value = currentTabIndexNotifier.value! - 1;
+    } else if (currentTabIndexNotifier.value! < oldIndex &&
+        currentTabIndexNotifier.value! >= newIndex) {
+      currentTabIndexNotifier.value = currentTabIndexNotifier.value! + 1;
     }
     notifyListeners();
   }
@@ -106,8 +109,19 @@ class TabService extends ChangeNotifier {
         path: _tabs[index].path,
         content: _tabs[index].content,
         isSelected: _tabs[index].isSelected,
+        cursorPosition: _tabs[index].cursorPosition,
       );
       notifyListeners();
+    }
+  }
+
+  void updateCursorPosition(String path, CursorPosition position) {
+    final index = _tabs.indexWhere((tab) => tab.path == path);
+    if (index != -1 && _tabs[index].cursorPosition != position) {
+      _tabs[index] = _tabs[index].copyWith(cursorPosition: position);
+      if (index == currentTabIndexNotifier.value) {
+        cursorPositionNotifier.value = position;
+      }
     }
   }
 }
