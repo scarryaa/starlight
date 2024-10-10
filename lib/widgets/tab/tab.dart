@@ -197,7 +197,7 @@ class _TabState extends State<Tab> {
                             ),
                             onPressed: widget.isPinned
                                 ? widget.onUnpinTap
-                                : (widget.isModified ? null : widget.onPinTap),
+                                : widget.onCloseTap,
                             child: Icon(
                               widget.isPinned ? Icons.push_pin : Icons.close,
                               size: 16,
