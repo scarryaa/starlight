@@ -1,16 +1,38 @@
 # starlight
 
-A new Flutter project.
+starlight aims to be a fast, modern, and reliable code editor.
+
+## Features
+
+- **Speed First**: Built to be fast.
+- **Modern UI**: A clean, intuitive interface that is easy to navigate.
+- **Cross-Platform**: Works smoothly on both mobile and desktop environments (WIP, mobile w/limited functionality).
 
 ## Getting Started
 
-This project is a starting point for a Flutter application.
+To get started with starlight:
 
-A few resources to get you started if this is your first Flutter project:
+1. Clone this repository:
+   ```sh
+   git clone https://github.com/scarryaa/starlight.git
+   ```
+2. Navigate to the project directory:
+   ```sh
+   cd starlight
+   ```
+3. Install dependencies:
+   ```sh
+   flutter pub get
+   ```
+4. Run the application:
+   ```sh
+   flutter run
+   ```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+## Contributing
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Contributions are welcome.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
