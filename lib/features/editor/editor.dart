@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart' hide VerticalDirection, Tab;
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
+import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
 import 'package:starlight/services/file_service.dart';
@@ -18,12 +19,14 @@ class Editor extends StatefulWidget {
   final String fontFamily;
   final double fontSize;
   final int tabSize;
+  final ConfigService configService;
 
   Editor({
     super.key,
     required this.tabService,
     required this.fileService,
     required this.hotkeyService,
+    required this.configService,
     this.lineHeight = 1.5,
     this.fontFamily = "ZedMono Nerd Font",
     this.fontSize = 16,
@@ -102,6 +105,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     return EditorContent(
       key: ValueKey(tab.path),
       editorSelectionManager: widget.editorSelectionManager,
+      configService: widget.configService,
       hotkeyService: widget.hotkeyService,
       verticalController: _verticalControllers[tab.path]!,
       horizontalController: _horizontalControllers[tab.path]!,

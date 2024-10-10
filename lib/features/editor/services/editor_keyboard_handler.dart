@@ -3,9 +3,11 @@ import 'dart:math';
 
 import 'package:flutter/material.dart' hide VerticalDirection;
 import 'package:flutter/services.dart';
+import 'package:logging/logging.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
+import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/services/tab_service.dart';
 
@@ -14,12 +16,15 @@ class EditorKeyboardHandler {
   final TabService tabService;
   final EditorSelectionManager selectionManager;
   final HotkeyService hotkeyService;
+  final ConfigService configService;
   final Function(int, int) updateSelection;
   final Function updateLineCounts;
   final Function saveFile;
   final Function ensureCursorVisible;
   final Function(int, int) updateAfterEdit;
   final Function() notifyListeners;
+
+  final Logger _logger = Logger('EditorKeyboardHandler');
 
   int _lastUpdatedLine = 0;
   int get lastUpdatedLine => _lastUpdatedLine;
@@ -35,13 +40,17 @@ class EditorKeyboardHandler {
     required this.tabService,
     required this.selectionManager,
     required this.hotkeyService,
+    required this.configService,
     required this.updateSelection,
     required this.updateLineCounts,
     required this.saveFile,
     required this.ensureCursorVisible,
     required this.updateAfterEdit,
     required this.notifyListeners,
-  });
+  }) {
+    _logger.info('EditorKeyboardHandler initialized');
+  }
+
   KeyEventResult handleInput(KeyEvent keyEvent) {
     bool isKeyDownEvent = keyEvent is KeyDownEvent;
     bool isKeyRepeatEvent = keyEvent is KeyRepeatEvent;
@@ -100,12 +109,6 @@ class EditorKeyboardHandler {
     absoluteCaretPosition++;
   }
 
-  bool _isContentModifyingKey(LogicalKeyboardKey key) {
-    return key == LogicalKeyboardKey.tab ||
-        key == LogicalKeyboardKey.backspace ||
-        key == LogicalKeyboardKey.enter;
-  }
-
   KeyEventResult _handleSpecialKeys(
       LogicalKeyboardKey key, bool isShiftPressed) {
     bool contentModified = false;
@@ -145,36 +148,71 @@ class EditorKeyboardHandler {
   }
 
   void handleBackspaceKey() {
+    _logger.info('Handling backspace key');
     if (selectionManager.hasSelection()) {
+      _logger.info('Deleting selection');
       deleteSelection();
-    } else if (absoluteCaretPosition > 0) {
-      int startLine = rope.findLineForPosition(absoluteCaretPosition);
-      int endLine = startLine;
-
-      if (caretPosition == 0 && caretLine > 0) {
-        // Deleting a newline character
-        caretLine--;
-        int previousLineLength = rope.getLineLength(caretLine);
-        rope.delete(absoluteCaretPosition - 1, 1);
-        absoluteCaretPosition--;
-        caretPosition = previousLineLength;
-        endLine = startLine;
-        startLine = caretLine;
-      } else if (caretPosition > 0) {
-        // Deleting a regular character
-        rope.delete(absoluteCaretPosition - 1, 1);
-        caretPosition--;
-        absoluteCaretPosition--;
-      }
-
-      // Update caret position bounds
-      caretLine = max(0, caretLine);
-      caretPosition = max(0, min(caretPosition, rope.getLineLength(caretLine)));
-      absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
-
-      _lastUpdatedLine = max(0, startLine - 1);
-      updateAfterEdit(startLine, endLine);
+      return;
     }
+
+    if (absoluteCaretPosition <= 0) {
+      _logger.info('Caret at the beginning of the document, nothing to delete');
+      return;
+    }
+
+    int startLine = rope.findLineForPosition(absoluteCaretPosition);
+    int endLine = startLine;
+    int tabSize = configService.config['tabSize'] ?? 4;
+    _logger.info('Tab size: $tabSize');
+
+    if (caretPosition == 0 && caretLine > 0) {
+      _logger.info('Deleting newline character');
+      deleteNewline();
+    } else {
+      _logger.info('Checking for tab or space deletion');
+      deleteTabOrSpace(tabSize);
+    }
+
+    // Update caret position bounds
+    caretLine = max(0, caretLine);
+    caretPosition = max(0, min(caretPosition, rope.getLineLength(caretLine)));
+    absoluteCaretPosition = max(0, min(absoluteCaretPosition, rope.length));
+
+    _lastUpdatedLine = max(0, startLine - 1);
+    updateAfterEdit(startLine, endLine);
+    _logger.info('Backspace handling complete');
+  }
+
+  void deleteNewline() {
+    caretLine--;
+    int previousLineLength = rope.getLineLength(caretLine);
+    rope.delete(absoluteCaretPosition - 1, 1);
+    absoluteCaretPosition--;
+    caretPosition = previousLineLength;
+    _logger.info('Newline deleted. New caret position: $absoluteCaretPosition');
+  }
+
+  void deleteTabOrSpace(int tabSize) {
+    String lineContent = rope.text.substring(
+      rope.findClosestLineStart(caretLine),
+      absoluteCaretPosition,
+    );
+    _logger.info('Line content before caret: "$lineContent"');
+
+    int spacesToDelete = 1;
+    if (lineContent.isNotEmpty && lineContent.trimRight().isEmpty) {
+      int spacesBefore = lineContent.length;
+      spacesToDelete = min((spacesBefore - 1) % tabSize + 1, spacesBefore);
+      _logger.info('Deleting $spacesToDelete spaces');
+    } else {
+      _logger.info('Deleting single character');
+    }
+
+    rope.delete(absoluteCaretPosition - spacesToDelete, spacesToDelete);
+    caretPosition -= spacesToDelete;
+    absoluteCaretPosition -= spacesToDelete;
+    _logger.info(
+        'Deleted $spacesToDelete character(s). New caret position: $absoluteCaretPosition');
   }
 
   void deleteSelection() {

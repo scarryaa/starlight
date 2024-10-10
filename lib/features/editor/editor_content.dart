@@ -10,6 +10,7 @@ import 'package:starlight/features/editor/models/selection_mode.dart';
 import 'package:starlight/features/editor/services/editor_keyboard_handler.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
+import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
 import 'package:starlight/services/file_service.dart';
@@ -20,6 +21,7 @@ class EditorContent extends StatefulWidget {
   final ScrollController horizontalController;
   final EditorScrollManager scrollManager;
   final EditorSelectionManager editorSelectionManager;
+  final ConfigService configService;
   final HotkeyService hotkeyService;
   final CustomTab.Tab tab;
   final FileService fileService;
@@ -29,8 +31,9 @@ class EditorContent extends StatefulWidget {
   final double fontSize;
   final int tabSize;
 
-    const EditorContent({
-    Key? key,
+  const EditorContent({
+    super.key,
+    required this.configService,
     required this.editorSelectionManager,
     required this.hotkeyService,
     required this.verticalController,
@@ -43,7 +46,7 @@ class EditorContent extends StatefulWidget {
     required this.fontFamily,
     required this.fontSize,
     required this.tabSize,
-  }) : super(key: key);
+  });
 
   @override
   State<EditorContent> createState() => _EditorContentState();
@@ -86,6 +89,7 @@ class _EditorContentState extends State<EditorContent> {
 
     keyboardHandler = EditorKeyboardHandler(
       rope: rope,
+      configService: widget.configService,
       tabService: widget.tabService,
       hotkeyService: widget.hotkeyService,
       selectionManager: widget.editorSelectionManager,
@@ -665,7 +669,8 @@ class EditorPainter extends CustomPainter {
           );
           tp.layout(maxWidth: size.width);
 
-          double yPosition = (lineHeight * i) + ((lineHeight - tp.height) / 2);
+          double yPosition =
+              (lineHeight * i) + ((lineHeight - tp.height) / 1.3);
           tp.paint(canvas, Offset(0, yPosition));
         }
       }

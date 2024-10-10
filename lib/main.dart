@@ -124,6 +124,7 @@ class _MyHomePageState extends State<MyHomePage> {
                 tabService: widget.tabService,
               ),
               Editor(
+                configService: widget.configService,
                 hotkeyService: widget.hotkeyService,
                 tabService: widget.tabService,
                 fileService: widget.fileService,
