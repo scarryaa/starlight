@@ -348,6 +348,17 @@ class EditorKeyboardHandler {
 
   void cutText() {
     copyText();
+    if (selectionManager.selectionStart == selectionManager.selectionEnd) {
+      deleteLine();
+    } else {
+      deleteSelection();
+    }
+  }
+
+  void deleteLine() {
+    int lineStart = rope.findClosestLineStart(caretLine);
+    selectionManager.selectionStart = lineStart;
+    selectionManager.selectionEnd = lineStart + rope.getLineLength(caretLine);
     deleteSelection();
   }
 
