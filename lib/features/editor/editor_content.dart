@@ -162,6 +162,44 @@ class _EditorContentState extends State<EditorContent> {
     });
   }
 
+  List<int>? findMatchingQuote(int position, String quoteChar) {
+    int lineStart =
+        rope.findClosestLineStart(rope.findLineForPosition(position));
+    int lineEnd =
+        rope.findClosestLineStart(rope.findLineForPosition(position) + 1) - 1;
+
+    List<int> quotePositions = [];
+    String otherQuoteChar = quoteChar == "'" ? '"' : "'";
+    bool inOtherQuote = false;
+
+    for (int i = lineStart; i <= lineEnd; i++) {
+      String currentChar = rope.charAt(i);
+
+      if (currentChar == otherQuoteChar &&
+          (i == lineStart || rope.charAt(i - 1) != '\\')) {
+        inOtherQuote = !inOtherQuote;
+      }
+
+      if (!inOtherQuote &&
+          currentChar == quoteChar &&
+          (i == lineStart || rope.charAt(i - 1) != '\\')) {
+        quotePositions.add(i);
+      }
+    }
+
+    if (quotePositions.length < 2) {
+      return null;
+    }
+
+    for (int i = 0; i < quotePositions.length; i += 2) {
+      if (position >= quotePositions[i] && position <= quotePositions[i + 1]) {
+        return [quotePositions[i], quotePositions[i + 1]];
+      }
+    }
+
+    return null;
+  }
+
   List<int>? findMatchingBracket(int position) {
     final brackets = {
       '(': ')',
@@ -169,7 +207,9 @@ class _EditorContentState extends State<EditorContent> {
       '{': '}',
       ')': '(',
       ']': '[',
-      '}': '{'
+      '}': '{',
+      "'": "'",
+      '"': '"'
     };
     final openBrackets = ['(', '[', '{'];
 
@@ -177,6 +217,9 @@ class _EditorContentState extends State<EditorContent> {
     if (position < rope.length) {
       String currentChar = rope.charAt(position);
       if (brackets.containsKey(currentChar)) {
+        if (currentChar == "'" || currentChar == '"') {
+          return findMatchingQuote(position, currentChar);
+        }
         return findMatchingBracketHelper(
             position, currentChar, brackets, openBrackets);
       }
@@ -186,6 +229,9 @@ class _EditorContentState extends State<EditorContent> {
     if (position > 0) {
       String prevChar = rope.charAt(position - 1);
       if (brackets.containsKey(prevChar)) {
+        if (prevChar == "'" || prevChar == '"') {
+          return findMatchingQuote(position - 1, prevChar);
+        }
         return findMatchingBracketHelper(
             position - 1, prevChar, brackets, openBrackets);
       }
@@ -198,8 +244,8 @@ class _EditorContentState extends State<EditorContent> {
       Map<String, String> brackets, List<String> openBrackets) {
     bool isOpenBracket = openBrackets.contains(currentChar);
     int direction = isOpenBracket ? 1 : -1;
-    int matchPosition = position;
-    int nestingLevel = 0;
+    int matchPosition = position + direction;
+    int nestingLevel = 1;
 
     while (matchPosition >= 0 && matchPosition < rope.length) {
       String char = rope.charAt(matchPosition);
@@ -916,7 +962,7 @@ class EditorPainter extends CustomPainter {
       );
     }
 
-    // Draw bracket highlighting
+    // Draw bracket and quote highlighting
     if (matchingBrackets != null &&
         !isDragging &&
         !(selectionStart != selectionEnd)) {
@@ -940,28 +986,35 @@ class EditorPainter extends CustomPainter {
             ..style = PaintingStyle.fill,
         );
 
-        // Draw the bracket character
-        TextPainter bracketPainter = TextPainter(
+        // Draw the bracket or quote character
+        TextPainter charPainter = TextPainter(
           text: TextSpan(
             text: bracketChar,
             style: TextStyle(
-              color: bracketHighlightColor,
+              color: invertColor(bracketHighlightColor),
               fontSize: fontSize,
               fontFamily: fontFamily,
             ),
           ),
           textDirection: TextDirection.ltr,
         );
-        bracketPainter.layout();
-        bracketPainter.paint(
+        charPainter.layout();
+        charPainter.paint(
           canvas,
           Offset(
-            column * charWidth + (charWidth - bracketPainter.width) / 2,
-            line * lineHeight + (lineHeight - bracketPainter.height) / 2,
+            column * charWidth + (charWidth - charPainter.width) / 2,
+            line * lineHeight + (lineHeight - charPainter.height) / 2,
           ),
         );
       }
     }
+  }
+
+  Color invertColor(Color color) {
+    final r = 255 - color.red;
+    final g = 255 - color.green;
+    final b = 255 - color.blue;
+    return Color.fromARGB(color.alpha, r, g, b);
   }
 
   List<List<int>> calculateIndentationLevels() {
@@ -996,26 +1049,57 @@ class EditorPainter extends CustomPainter {
   void drawCodeBlockLines(
       Canvas canvas, int firstVisibleLine, int lastVisibleLine, Size size) {
     List<int> activeIndents = [];
+    Map<int, double> indentStartY = {};
+
     for (int i = 0; i < firstVisibleLine && i < lines.length; i++) {
       updateActiveIndents(activeIndents, getIndentation(lines[i]));
     }
+
     for (int i = firstVisibleLine;
         i < lastVisibleLine && i < lines.length;
         i++) {
       int currentIndent = getIndentation(lines[i]);
       double y = lineHeight * i;
-      // Remove any indents that are greater than or equal to the current indent
-      activeIndents.removeWhere((indent) => indent >= currentIndent);
+
+      // Remove any indents that are greater than the current indent
+      List<int> endingIndents =
+          activeIndents.where((indent) => indent > currentIndent).toList();
+      for (int indent in endingIndents) {
+        if (indentStartY.containsKey(indent)) {
+          double startY = indentStartY[indent]!;
+          canvas.drawLine(
+              Offset(indent * charWidth - 15, startY),
+              Offset(indent * charWidth - 15, y),
+              Paint()
+                ..color = codeBlockLineColor
+                ..strokeWidth = codeBlockLineWidth);
+          indentStartY.remove(indent);
+        }
+        activeIndents.remove(indent);
+      }
+
       // Add the current indent if it's not already in activeIndents
       if (currentIndent > 0 && !activeIndents.contains(currentIndent)) {
         activeIndents.add(currentIndent);
+        indentStartY[currentIndent] = y;
       }
-      // Draw lines for all active indents
+
+      // Update the start Y for indents that are still active but not present in this line
       for (int indent in activeIndents) {
-        double x = indent * charWidth;
+        if (indent < currentIndent && !indentStartY.containsKey(indent)) {
+          indentStartY[indent] = y;
+        }
+      }
+    }
+
+    // Draw remaining active indents to the bottom of the visible area
+    double bottomY = lineHeight * lastVisibleLine;
+    for (int indent in activeIndents) {
+      if (indentStartY.containsKey(indent)) {
+        double startY = indentStartY[indent]!;
         canvas.drawLine(
-            Offset(x - 15, y),
-            Offset(x - 15, y + lineHeight),
+            Offset(indent * charWidth - 15, startY),
+            Offset(indent * charWidth - 15, bottomY),
             Paint()
               ..color = codeBlockLineColor
               ..strokeWidth = codeBlockLineWidth);
@@ -1024,8 +1108,8 @@ class EditorPainter extends CustomPainter {
   }
 
   void updateActiveIndents(List<int> activeIndents, int currentIndent) {
-    // Remove any indents that are greater than or equal to the current indent
-    activeIndents.removeWhere((indent) => indent >= currentIndent);
+    // Remove any indents that are greater than the current indent
+    activeIndents.removeWhere((indent) => indent > currentIndent);
 
     // Add the current indent if it's not already in activeIndents
     if (currentIndent > 0 && !activeIndents.contains(currentIndent)) {
@@ -1039,7 +1123,7 @@ class EditorPainter extends CustomPainter {
       if (line[i] == ' ') {
         spaces++;
       } else if (line[i] == '\t') {
-        spaces += 4; // Assuming 1 tab = 4 spaces
+        spaces += 4;
       } else {
         break;
       }
