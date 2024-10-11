@@ -735,6 +735,9 @@ class EditorPainter extends CustomPainter {
   final BuildContext buildContext;
   final SyntaxHighlightingService _highlightingService =
       SyntaxHighlightingService();
+  final Color codeBlockLineColor = Colors.grey.withOpacity(0.15);
+  final double codeBlockLineWidth = 1.0;
+  late List<List<int>> indentationLevels;
 
   EditorPainter({
     required this.lines,
@@ -773,12 +776,15 @@ class EditorPainter extends CustomPainter {
     final selectionColor = theme.colorScheme.primary.withOpacity(0.3);
     final caretColor = theme.colorScheme.primary;
     final currentLineColor = theme.colorScheme.primary.withOpacity(0.1);
+    final highlightCaretOnIndentColor =
+        theme.colorScheme.primary.withOpacity(0.7);
 
     int firstVisibleLine = max((verticalOffset / lineHeight).floor(), 0);
     int lastVisibleLine = min(
         firstVisibleLine + (viewportHeight / lineHeight).ceil(), lines.length);
 
     if (lines.isNotEmpty) {
+      indentationLevels = calculateIndentationLevels();
       for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
         if (i < lines.length) {
           List<TextSpan> highlightedSpans =
@@ -824,6 +830,118 @@ class EditorPainter extends CustomPainter {
           ..style = PaintingStyle.fill,
       );
     }
+
+    if (lines.isNotEmpty) {
+      indentationLevels = calculateIndentationLevels();
+      for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
+        if (i < lines.length) {
+          drawCodeBlockLines(canvas, firstVisibleLine, lastVisibleLine, size,
+              selectionColor, caretLine, highlightCaretOnIndentColor);
+        }
+      }
+    }
+  }
+
+  List<List<int>> calculateIndentationLevels() {
+    List<List<int>> levels = [];
+    List<int> indentStack = [0];
+
+    for (String line in lines) {
+      int indent = getIndentation(line);
+      List<int> currentLevels = [];
+
+      while (indentStack.last > indent) {
+        indentStack.removeLast();
+      }
+
+      for (int i = 0; i < indentStack.length - 1; i++) {
+        if (indentStack[i] < indent) {
+          currentLevels.add(indentStack[i]);
+        }
+      }
+
+      if (indent > indentStack.last) {
+        indentStack.add(indent);
+        currentLevels.add(indent);
+      }
+
+      levels.add(currentLevels);
+    }
+
+    return levels;
+  }
+
+  void drawCodeBlockLines(
+      Canvas canvas,
+      int firstVisibleLine,
+      int lastVisibleLine,
+      Size size,
+      Color highlightColor,
+      int caretLine,
+      Color highlightCaretOnIndentColor) {
+    List<int> activeIndents = [];
+    for (int i = 0; i < firstVisibleLine && i < lines.length; i++) {
+      updateActiveIndents(activeIndents, getIndentation(lines[i]));
+    }
+    for (int i = firstVisibleLine;
+        i < lastVisibleLine && i < lines.length;
+        i++) {
+      int currentIndent = getIndentation(lines[i]);
+      double y = lineHeight * i;
+      // Remove any indents that are greater than or equal to the current indent
+      activeIndents.removeWhere((indent) => indent >= currentIndent);
+      // Add the current indent if it's not already in activeIndents
+      if (currentIndent > 0 && !activeIndents.contains(currentIndent)) {
+        activeIndents.add(currentIndent);
+      }
+      // Draw lines for all active indents
+      for (int indent in activeIndents) {
+        double x = indent * charWidth;
+        bool isCaretLine = i == caretLine;
+        bool isCaretOnIndent = isCaretLine && (indent - 2 == caretPosition);
+
+        Color lineColor;
+        if (isCaretOnIndent) {
+          // Invert the color when the caret is on the indent line
+          lineColor = Color(0xFFFFFFFF - highlightCaretOnIndentColor.value);
+        } else if (isCaretLine) {
+          lineColor = highlightColor;
+        } else {
+          lineColor = codeBlockLineColor;
+        }
+
+        canvas.drawLine(
+            Offset(x - 15, y),
+            Offset(x - 15, y + lineHeight),
+            Paint()
+              ..color = lineColor
+              ..strokeWidth = codeBlockLineWidth);
+      }
+    }
+  }
+
+  void updateActiveIndents(List<int> activeIndents, int currentIndent) {
+    // Remove any indents that are greater than or equal to the current indent
+    activeIndents.removeWhere((indent) => indent >= currentIndent);
+
+    // Add the current indent if it's not already in activeIndents
+    if (currentIndent > 0 && !activeIndents.contains(currentIndent)) {
+      activeIndents.add(currentIndent);
+    }
+  }
+
+  int getIndentation(String line) {
+    int spaces = 0;
+    for (int i = 0; i < line.length; i++) {
+      if (line[i] == ' ') {
+        spaces++;
+      } else if (line[i] == '\t') {
+        spaces += 4; // Assuming 1 tab = 4 spaces
+      } else {
+        break;
+      }
+    }
+    return spaces;
   }
 
   @override
