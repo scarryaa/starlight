@@ -6,6 +6,7 @@ import 'package:flutter/material.dart' hide VerticalDirection;
 import 'package:provider/provider.dart';
 import 'package:starlight/features/context_menu/context_menu.dart';
 import 'package:starlight/features/editor/gutter/gutter.dart';
+import 'package:starlight/features/editor/minimap/minimap.dart';
 import 'package:starlight/features/editor/models/direction.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 import 'package:starlight/features/editor/models/selection_mode.dart';
@@ -36,6 +37,7 @@ class EditorContent extends StatefulWidget {
   final double fontSize;
   final int tabSize;
   final CaretPositionNotifier caretPositionNotifier;
+  final bool showMinimap;
 
   const EditorContent({
     super.key,
@@ -53,6 +55,7 @@ class EditorContent extends StatefulWidget {
     required this.fontSize,
     required this.tabSize,
     required this.caretPositionNotifier,
+    this.showMinimap = true,
   });
 
   @override
@@ -362,146 +365,173 @@ class _EditorContentState extends State<EditorContent> {
               }
               return true;
             },
-            child: GestureDetector(
-              onTapDown: (TapDownDetails details) {
-                f.requestFocus();
-                _handleTap(details);
-              },
-              onSecondaryTapUp: (TapUpDetails details) {
-                f.requestFocus();
-                _showContextMenu(context, details);
-              },
-              onLongPressStart: (LongPressStartDetails details) {
-                f.requestFocus();
-                handleDragStart(details.localPosition);
-              },
-              onLongPressMoveUpdate: (LongPressMoveUpdateDetails details) {
-                f.requestFocus();
-                handleDragUpdate(details.localPosition);
-              },
-              onLongPressEnd: (LongPressEndDetails details) {
-                f.requestFocus();
-                handleDragEnd();
-              },
-              onPanStart: (DragStartDetails details) {
-                f.requestFocus();
-                handleDragStart(details.localPosition);
-              },
-              onPanUpdate: (DragUpdateDetails details) {
-                f.requestFocus();
-                handleDragUpdate(details.localPosition);
-              },
-              onPanEnd: (DragEndDetails details) {
-                f.requestFocus();
-                handleDragEnd();
-              },
-              behavior: HitTestBehavior.translucent,
-              child: Focus(
-                focusNode: f,
-                onKeyEvent: (node, event) {
-                  var result = keyboardHandler.handleInput(event);
-                  setState(() {
-                    _lastUpdatedLine = keyboardHandler.lastUpdatedLine;
-                    _matchingBrackets = findMatchingBracket(
-                        keyboardHandler.absoluteCaretPosition);
-                  });
-                  return result;
-                },
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    _editorSize = Size(constraints.maxWidth, contentHeight);
+            child: Stack(
+              children: [
+                GestureDetector(
+                  onTapDown: (TapDownDetails details) {
+                    f.requestFocus();
+                    _handleTap(details);
+                  },
+                  onSecondaryTapUp: (TapUpDetails details) {
+                    f.requestFocus();
+                    _showContextMenu(context, details);
+                  },
+                  onLongPressStart: (LongPressStartDetails details) {
+                    f.requestFocus();
+                    handleDragStart(details.localPosition);
+                  },
+                  onLongPressMoveUpdate: (LongPressMoveUpdateDetails details) {
+                    f.requestFocus();
+                    handleDragUpdate(details.localPosition);
+                  },
+                  onLongPressEnd: (LongPressEndDetails details) {
+                    f.requestFocus();
+                    handleDragEnd();
+                  },
+                  onPanStart: (DragStartDetails details) {
+                    f.requestFocus();
+                    handleDragStart(details.localPosition);
+                  },
+                  onPanUpdate: (DragUpdateDetails details) {
+                    f.requestFocus();
+                    handleDragUpdate(details.localPosition);
+                  },
+                  onPanEnd: (DragEndDetails details) {
+                    f.requestFocus();
+                    handleDragEnd();
+                  },
+                  behavior: HitTestBehavior.translucent,
+                  child: Focus(
+                    focusNode: f,
+                    onKeyEvent: (node, event) {
+                      var result = keyboardHandler.handleInput(event);
+                      setState(() {
+                        _lastUpdatedLine = keyboardHandler.lastUpdatedLine;
+                        _matchingBrackets = findMatchingBracket(
+                            keyboardHandler.absoluteCaretPosition);
+                      });
+                      return result;
+                    },
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        _editorSize = Size(constraints.maxWidth, contentHeight);
 
-                    return Stack(
-                      children: [
-                        Positioned.fill(
-                          child: RawScrollbar(
-                            controller: widget.verticalController,
-                            thumbVisibility: false,
-                            thickness: 8,
-                            radius: Radius.zero,
-                            thumbColor: Colors.grey.withOpacity(0.5),
-                            fadeDuration: const Duration(milliseconds: 300),
-                            timeToFade: const Duration(milliseconds: 1000),
-                            child: RawScrollbar(
-                              controller: widget.horizontalController,
-                              thumbVisibility: false,
-                              thickness: 8,
-                              radius: Radius.zero,
-                              thumbColor: Colors.grey.withOpacity(0.5),
-                              fadeDuration: const Duration(milliseconds: 300),
-                              timeToFade: const Duration(milliseconds: 1000),
-                              notificationPredicate: (notification) =>
-                                  notification.depth == 1,
-                              child: ScrollConfiguration(
-                                behavior: const ScrollBehavior()
-                                    .copyWith(scrollbars: false),
-                                child: SingleChildScrollView(
-                                  physics: widget
-                                      .scrollManager.clampingScrollPhysics,
-                                  controller: widget.verticalController,
-                                  scrollDirection: Axis.vertical,
-                                  child: SingleChildScrollView(
-                                    physics: widget
-                                        .scrollManager.clampingScrollPhysics,
-                                    controller: widget.horizontalController,
-                                    scrollDirection: Axis.horizontal,
-                                    child: SizedBox(
-                                      width: max(
-                                        getMaxLineCount() * charWidth +
-                                            charWidth +
-                                            viewPadding,
-                                        constraints.maxWidth,
-                                      ),
-                                      height: contentHeight,
-                                      child: CustomPaint(
-                                        key: _painterKey,
-                                        painter: EditorPainter(
-                                          isDragging: _isDragging,
-                                          rope: rope,
-                                          buildContext: context,
-                                          currentLineIndex:
-                                              keyboardHandler.caretLine,
-                                          fontSize: widget.fontSize,
-                                          fontFamily: widget.fontFamily,
-                                          lineHeight: widget.lineHeight,
-                                          viewportHeight: MediaQuery.of(context)
-                                              .size
-                                              .height,
-                                          viewportWidth:
-                                              MediaQuery.of(context).size.width,
-                                          verticalOffset: _verticalOffset,
-                                          horizontalOffset: _horizontalOffset,
-                                          lines: rope.text.split('\n'),
-                                          caretPosition:
-                                              keyboardHandler.caretPosition,
-                                          caretLine: keyboardHandler.caretLine,
-                                          selectionStart: widget
-                                              .editorSelectionManager
-                                              .selectionStart,
-                                          selectionEnd: widget
-                                              .editorSelectionManager
-                                              .selectionEnd,
-                                          lineStarts: rope.lineStarts,
-                                          text: rope.text,
-                                          lastUpdatedLine: _lastUpdatedLine,
-                                          matchingBrackets: _matchingBrackets,
+                        return Stack(
+                          children: [
+                            Positioned.fill(
+                              child: RawScrollbar(
+                                controller: widget.verticalController,
+                                thumbVisibility: false,
+                                thickness: 8,
+                                radius: Radius.zero,
+                                thumbColor: Colors.grey.withOpacity(0.5),
+                                fadeDuration: const Duration(milliseconds: 300),
+                                timeToFade: const Duration(milliseconds: 1000),
+                                child: RawScrollbar(
+                                  controller: widget.horizontalController,
+                                  thumbVisibility: false,
+                                  thickness: 8,
+                                  radius: Radius.zero,
+                                  thumbColor: Colors.grey.withOpacity(0.5),
+                                  fadeDuration:
+                                      const Duration(milliseconds: 300),
+                                  timeToFade:
+                                      const Duration(milliseconds: 1000),
+                                  notificationPredicate: (notification) =>
+                                      notification.depth == 1,
+                                  child: ScrollConfiguration(
+                                    behavior: const ScrollBehavior()
+                                        .copyWith(scrollbars: false),
+                                    child: SingleChildScrollView(
+                                      physics: widget
+                                          .scrollManager.clampingScrollPhysics,
+                                      controller: widget.verticalController,
+                                      scrollDirection: Axis.vertical,
+                                      child: SingleChildScrollView(
+                                        physics: widget.scrollManager
+                                            .clampingScrollPhysics,
+                                        controller: widget.horizontalController,
+                                        scrollDirection: Axis.horizontal,
+                                        child: SizedBox(
+                                          width: max(
+                                            getMaxLineCount() * charWidth +
+                                                charWidth +
+                                                viewPadding,
+                                            constraints.maxWidth,
+                                          ),
+                                          height: contentHeight,
+                                          child: CustomPaint(
+                                            key: _painterKey,
+                                            painter: EditorPainter(
+                                              syntaxHighlighter:
+                                                  SyntaxHighlightingService(),
+                                              isDragging: _isDragging,
+                                              rope: rope,
+                                              buildContext: context,
+                                              currentLineIndex:
+                                                  keyboardHandler.caretLine,
+                                              fontSize: widget.fontSize,
+                                              fontFamily: widget.fontFamily,
+                                              lineHeight: widget.lineHeight,
+                                              viewportHeight:
+                                                  MediaQuery.of(context)
+                                                      .size
+                                                      .height,
+                                              viewportWidth:
+                                                  MediaQuery.of(context)
+                                                      .size
+                                                      .width,
+                                              verticalOffset: _verticalOffset,
+                                              horizontalOffset:
+                                                  _horizontalOffset,
+                                              lines: rope.text.split('\n'),
+                                              caretPosition:
+                                                  keyboardHandler.caretPosition,
+                                              caretLine:
+                                                  keyboardHandler.caretLine,
+                                              selectionStart: widget
+                                                  .editorSelectionManager
+                                                  .selectionStart,
+                                              selectionEnd: widget
+                                                  .editorSelectionManager
+                                                  .selectionEnd,
+                                              lineStarts: rope.lineStarts,
+                                              text: rope.text,
+                                              lastUpdatedLine: _lastUpdatedLine,
+                                              matchingBrackets:
+                                                  _matchingBrackets,
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ),
-                        )
-                      ],
-                    );
-                  },
+                            )
+                          ],
+                        );
+                      },
+                    ),
+                  ),
                 ),
-              ),
+                Positioned(
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  child: EditorMinimap(
+                    syntaxHighlighter: SyntaxHighlightingService(),
+                    rope: rope,
+                    verticalController: widget.verticalController,
+                    editorHeight: contentHeight,
+                    lineHeight: lineHeight,
+                    currentLine: keyboardHandler.caretLine,
+                  ),
+                ),
+              ],
             ),
           ),
-        )
+        ),
       ],
     );
   }
@@ -858,13 +888,14 @@ class EditorPainter extends CustomPainter {
   final int lastUpdatedLine;
   final int currentLineIndex;
   final BuildContext buildContext;
-  final SyntaxHighlightingService _highlightingService =
+  final SyntaxHighlightingService highlightingService =
       SyntaxHighlightingService();
   final Color codeBlockLineColor = Colors.grey.withOpacity(0.15);
   final double codeBlockLineWidth = 1.0;
   late List<List<int>> indentationLevels;
   final List<int>? matchingBrackets;
   Rope rope;
+  SyntaxHighlightingService syntaxHighlighter;
   bool isDragging = false;
 
   EditorPainter({
@@ -888,6 +919,7 @@ class EditorPainter extends CustomPainter {
     required this.matchingBrackets,
     required this.rope,
     required this.isDragging,
+    required this.syntaxHighlighter,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -919,7 +951,7 @@ class EditorPainter extends CustomPainter {
           drawCodeBlockLines(canvas, firstVisibleLine, lastVisibleLine, size);
 
           List<TextSpan> highlightedSpans =
-              _highlightingService.highlightSyntax(lines[i], isDarkMode);
+              highlightingService.highlightSyntax(lines[i], isDarkMode);
           TextSpan span = TextSpan(
             children: highlightedSpans,
             style: TextStyle(
