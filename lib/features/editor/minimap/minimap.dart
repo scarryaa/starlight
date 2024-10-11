@@ -13,14 +13,14 @@ class EditorMinimap extends StatefulWidget {
   final SyntaxHighlightingService syntaxHighlighter;
 
   const EditorMinimap({
-    Key? key,
+    super.key,
     required this.rope,
     required this.verticalController,
     required this.editorHeight,
     required this.lineHeight,
     required this.currentLine,
     required this.syntaxHighlighter,
-  }) : super(key: key);
+  });
 
   @override
   State<EditorMinimap> createState() => _EditorMinimapState();
@@ -29,6 +29,7 @@ class EditorMinimap extends StatefulWidget {
 class _EditorMinimapState extends State<EditorMinimap> {
   static const double _scrollMultiplier = 0.5;
   static const double _minScrollAmount = 1.0;
+  static const double _miniMapWidth = 100.0;
   late MinimapCache _minimapCache;
   double? _dragStartScrollOffset;
   double? _dragStartY;
@@ -37,6 +38,20 @@ class _EditorMinimapState extends State<EditorMinimap> {
   void initState() {
     super.initState();
     widget.verticalController.addListener(_handleScroll);
+    _updateMinimapCache();
+  }
+
+  @override
+  void didUpdateWidget(EditorMinimap oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.rope != widget.rope ||
+        oldWidget.editorHeight != widget.editorHeight ||
+        oldWidget.lineHeight != widget.lineHeight) {
+      _updateMinimapCache();
+    }
+  }
+
+  void _updateMinimapCache() {
     _minimapCache = MinimapCache(
       rope: widget.rope,
       syntaxHighlighter: widget.syntaxHighlighter,
@@ -46,68 +61,46 @@ class _EditorMinimapState extends State<EditorMinimap> {
   }
 
   @override
-  void didUpdateWidget(EditorMinimap oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.rope != widget.rope ||
-        oldWidget.editorHeight != widget.editorHeight ||
-        oldWidget.lineHeight != widget.lineHeight) {
-      _minimapCache = MinimapCache(
-        rope: widget.rope,
-        syntaxHighlighter: widget.syntaxHighlighter,
-        editorHeight: widget.editorHeight,
-        lineHeight: widget.lineHeight,
-      );
-    }
-  }
-
-  @override
   void dispose() {
     widget.verticalController.removeListener(_handleScroll);
     super.dispose();
   }
 
   void _handleScroll() {
-    if (mounted) {
-      setState(() {});
-    }
+    if (mounted) setState(() {});
   }
 
   void _handleMinimapDragStart(DragStartDetails details) {
-    _dragStartScrollOffset = widget.verticalController.offset;
+    _dragStartScrollOffset = widget.verticalController.hasClients
+        ? widget.verticalController.offset
+        : null;
     _dragStartY = details.localPosition.dy;
   }
 
   void _handleMinimapDragUpdate(DragUpdateDetails details) {
-    if (!widget.verticalController.hasClients || _dragStartScrollOffset == null || _dragStartY == null) return;
+    if (!widget.verticalController.hasClients ||
+        _dragStartScrollOffset == null ||
+        _dragStartY == null) return;
 
-    final miniMapScale = min(0.1, 300 / widget.editorHeight);
-    final miniMapHeight = widget.editorHeight * miniMapScale;
-
-    // Calculate the drag distance in the full-size editor scale
-    final dragDistance = (details.localPosition.dy - _dragStartY!) / miniMapScale;
-
-    // Calculate the new scroll position
+    final miniMapScale = _calculateMinimapScale();
+    final dragDistance =
+        (details.localPosition.dy - _dragStartY!) / miniMapScale;
     final newScrollPosition = _dragStartScrollOffset! + dragDistance;
 
-    // Clamp the new position to the valid range
-    final clampedPosition = newScrollPosition.clamp(
-      0.0,
-      widget.verticalController.position.maxScrollExtent,
-    );
-
-    // Jump to the new position
-    widget.verticalController.jumpTo(clampedPosition);
+    _scrollToPosition(newScrollPosition);
   }
 
   void _handleMinimapDragEnd(DragEndDetails details) {
-    _dragStartScrollOffset = null;
-    _dragStartY = null;
+    _dragStartScrollOffset = _dragStartY = null;
   }
 
   void _handleMouseWheel(PointerSignalEvent event) {
     if (event is PointerScrollEvent && widget.verticalController.hasClients) {
       final scrollDelta = event.scrollDelta.dy;
-      final scaleFactor = widget.editorHeight / widget.verticalController.position.viewportDimension;
+      final viewportDimension =
+          widget.verticalController.position.viewportDimension;
+
+      final scaleFactor = widget.editorHeight / viewportDimension;
       var scrollAmount = scrollDelta * scaleFactor * _scrollMultiplier;
 
       if (scrollAmount.abs() < _minScrollAmount) {
@@ -115,49 +108,53 @@ class _EditorMinimapState extends State<EditorMinimap> {
       }
 
       final newScrollPosition = widget.verticalController.offset + scrollAmount;
-      final clampedPosition = newScrollPosition.clamp(
-        0.0,
-        widget.verticalController.position.maxScrollExtent,
-      );
-
-      widget.verticalController.jumpTo(clampedPosition);
+      _scrollToPosition(newScrollPosition);
     }
   }
 
+  void _scrollToPosition(double position) {
+    final maxScrollExtent = widget.verticalController.position.maxScrollExtent;
+    final clampedPosition = position.clamp(0.0, maxScrollExtent);
+    widget.verticalController.jumpTo(clampedPosition);
+  }
+
+  double _calculateMinimapScale() => min(0.1, 300 / widget.editorHeight);
+
   @override
   Widget build(BuildContext context) {
-    final miniMapScale = min(0.1, 300 / widget.editorHeight);
-    const miniMapWidth = 100.0;
+    if (!widget.verticalController.hasClients) {
+      return const SizedBox.shrink();
+    }
+
+    final miniMapScale = _calculateMinimapScale();
     final miniMapHeight = widget.editorHeight * miniMapScale;
 
-    return SizedBox(
-      width: miniMapWidth,
+    return Container(
+      width: _miniMapWidth,
       height: miniMapHeight,
+      decoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: Theme.of(context).dividerColor,
+            width: 1.0,
+          ),
+        ),
+      ),
       child: Listener(
         onPointerSignal: _handleMouseWheel,
         child: GestureDetector(
           onVerticalDragStart: _handleMinimapDragStart,
           onVerticalDragUpdate: _handleMinimapDragUpdate,
           onVerticalDragEnd: _handleMinimapDragEnd,
-          onTapDown: (TapDownDetails details) {
-            _handleMinimapDragStart(DragStartDetails(localPosition: details.localPosition));
-            _handleMinimapDragUpdate(DragUpdateDetails(
-              globalPosition: details.globalPosition,
-              localPosition: details.localPosition,
-            ));
-            _handleMinimapDragEnd(DragEndDetails());
-          },
+          onTapDown: _handleTapDown,
           child: CustomPaint(
-            size: Size(miniMapWidth, miniMapHeight),
+            size: Size(_miniMapWidth, miniMapHeight),
             painter: MinimapPainter(
               minimapCache: _minimapCache,
               scale: miniMapScale,
-              scrollOffset: widget.verticalController.hasClients
-                  ? widget.verticalController.offset
-                  : 0.0,
-              viewportHeight: widget.verticalController.hasClients
-                  ? widget.verticalController.position.viewportDimension
-                  : 0,
+              scrollOffset: widget.verticalController.offset,
+              viewportHeight:
+                  widget.verticalController.position.viewportDimension,
               editorHeight: widget.editorHeight,
               currentLine: widget.currentLine,
             ),
@@ -166,7 +163,18 @@ class _EditorMinimapState extends State<EditorMinimap> {
       ),
     );
   }
+
+  void _handleTapDown(TapDownDetails details) {
+    _handleMinimapDragStart(
+        DragStartDetails(localPosition: details.localPosition));
+    _handleMinimapDragUpdate(DragUpdateDetails(
+      globalPosition: details.globalPosition,
+      localPosition: details.localPosition,
+    ));
+    _handleMinimapDragEnd(DragEndDetails());
+  }
 }
+
 class MinimapCache {
   final Rope rope;
   final SyntaxHighlightingService syntaxHighlighter;
@@ -184,13 +192,15 @@ class MinimapCache {
   }
 
   List<List<MinimapSpan>> _generateCache() {
-    final List<List<MinimapSpan>> cache = [];
-    for (int i = 0; i < rope.lineCount; i++) {
+    return List.generate(rope.lineCount, (i) {
       final lineContent = rope.getLine(i);
-      final highlightedSpans = syntaxHighlighter.highlightSyntax(lineContent, false);
-      cache.add(highlightedSpans.map((span) => MinimapSpan(span.text!, span.style?.color ?? Colors.white)).toList());
-    }
-    return cache;
+      final highlightedSpans =
+          syntaxHighlighter.highlightSyntax(lineContent, false);
+      return highlightedSpans
+          .map((span) =>
+              MinimapSpan(span.text!, span.style?.color ?? Colors.white))
+          .toList();
+    });
   }
 }
 
@@ -198,7 +208,7 @@ class MinimapSpan {
   final String text;
   final Color color;
 
-  MinimapSpan(this.text, this.color);
+  const MinimapSpan(this.text, this.color);
 }
 
 class MinimapPainter extends CustomPainter {
@@ -209,7 +219,7 @@ class MinimapPainter extends CustomPainter {
   final double editorHeight;
   final int currentLine;
 
-  MinimapPainter({
+  const MinimapPainter({
     required this.minimapCache,
     required this.scale,
     required this.scrollOffset,
@@ -222,14 +232,21 @@ class MinimapPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final scaleFactor = size.height / editorHeight;
 
-    // Draw the minimap content
+    _drawMinimapContent(canvas, size, scaleFactor);
+    _drawViewportIndicator(canvas, size);
+    _drawCurrentLineIndicator(canvas, size, scaleFactor);
+  }
+
+  void _drawMinimapContent(Canvas canvas, Size size, double scaleFactor) {
     for (int i = 0; i < minimapCache.cachedLines.length; i++) {
       final yPosition = i * minimapCache.lineHeight * scaleFactor;
       if (yPosition > size.height) break;
-      drawHighlightedLine(canvas, minimapCache.cachedLines[i], yPosition, size.width);
+      _drawHighlightedLine(
+          canvas, minimapCache.cachedLines[i], yPosition, size.width);
     }
+  }
 
-    // Draw the viewport indicator
+  void _drawViewportIndicator(Canvas canvas, Size size) {
     final viewportRatio = viewportHeight / editorHeight;
     final indicatorHeight = size.height * viewportRatio;
 
@@ -244,18 +261,21 @@ class MinimapPainter extends CustomPainter {
       Rect.fromLTWH(0, indicatorTop, size.width, indicatorHeight),
       indicatorPaint,
     );
+  }
 
-    // Draw current line indicator
+  void _drawCurrentLineIndicator(Canvas canvas, Size size, double scaleFactor) {
     final currentLineY = currentLine * minimapCache.lineHeight * scaleFactor;
     canvas.drawRect(
-      Rect.fromLTWH(0, currentLineY, size.width, minimapCache.lineHeight * scaleFactor),
+      Rect.fromLTWH(
+          0, currentLineY, size.width, minimapCache.lineHeight * scaleFactor),
       Paint()
         ..color = Colors.yellow.withOpacity(0.5)
         ..style = PaintingStyle.fill,
     );
   }
 
-  void drawHighlightedLine(Canvas canvas, List<MinimapSpan> spans, double yPosition, double maxWidth) {
+  void _drawHighlightedLine(Canvas canvas, List<MinimapSpan> spans,
+      double yPosition, double maxWidth) {
     double xOffset = 0.0;
 
     for (final span in spans) {
@@ -287,3 +307,4 @@ class MinimapPainter extends CustomPainter {
         oldDelegate.minimapCache != minimapCache;
   }
 }
+
