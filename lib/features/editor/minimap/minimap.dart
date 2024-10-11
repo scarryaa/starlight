@@ -233,44 +233,53 @@ class MinimapPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final scaleFactor = size.height / editorHeight;
+    final contentHeight =
+        minimapCache.rope.lineCount * minimapCache.lineHeight * scale;
+    final scaleFactor =
+        contentHeight < size.height ? 1.0 : size.height / contentHeight;
 
-    _drawMinimapContent(canvas, size, scaleFactor);
-    _drawViewportIndicator(canvas, size);
-    _drawCurrentLineIndicator(canvas, size, scaleFactor);
+    _drawMinimapContent(canvas, size, scaleFactor.toDouble());
+    _drawViewportIndicator(canvas, size, scaleFactor.toDouble());
+    _drawCurrentLineIndicator(canvas, size, scaleFactor.toDouble());
   }
 
   void _drawMinimapContent(Canvas canvas, Size size, double scaleFactor) {
     for (int i = 0; i < minimapCache.cachedLines.length; i++) {
-      final yPosition = i * minimapCache.lineHeight * scaleFactor;
+      final yPosition = i * minimapCache.lineHeight * scale * scaleFactor;
       if (yPosition > size.height) break;
       _drawHighlightedLine(
           canvas, minimapCache.cachedLines[i], yPosition, size.width);
     }
   }
 
-  void _drawViewportIndicator(Canvas canvas, Size size) {
+  void _drawViewportIndicator(Canvas canvas, Size size, double scaleFactor) {
+    final contentHeight =
+        minimapCache.rope.lineCount * minimapCache.lineHeight * scale;
+    final actualHeight = min<double>(contentHeight, size.height).toDouble();
     final viewportRatio = viewportHeight / editorHeight;
-    final indicatorHeight = size.height * viewportRatio;
+    final indicatorHeight = actualHeight * viewportRatio;
 
-    final scrollRatio = scrollOffset / (editorHeight - viewportHeight);
-    final indicatorTop = scrollRatio * (size.height - indicatorHeight);
+    final maxScrollOffset = max(0, editorHeight - viewportHeight);
+    final scrollRatio =
+        maxScrollOffset > 0 ? scrollOffset / maxScrollOffset : 0.0;
+    final indicatorTop = scrollRatio * (actualHeight - indicatorHeight);
 
     final indicatorPaint = Paint()
       ..color = Colors.blue.withOpacity(0.3)
       ..style = PaintingStyle.fill;
 
     canvas.drawRect(
-      Rect.fromLTWH(0, indicatorTop, size.width, indicatorHeight),
+      Rect.fromLTWH(0, indicatorTop.toDouble(), size.width, indicatorHeight),
       indicatorPaint,
     );
   }
 
   void _drawCurrentLineIndicator(Canvas canvas, Size size, double scaleFactor) {
-    final currentLineY = currentLine * minimapCache.lineHeight * scaleFactor;
+    final currentLineY =
+        currentLine * minimapCache.lineHeight * scale * scaleFactor;
     canvas.drawRect(
-      Rect.fromLTWH(
-          0, currentLineY, size.width, minimapCache.lineHeight * scaleFactor),
+      Rect.fromLTWH(0, currentLineY, size.width,
+          minimapCache.lineHeight * scale * scaleFactor),
       Paint()
         ..color = Colors.lightBlue.withOpacity(0.2)
         ..style = PaintingStyle.fill,

@@ -106,7 +106,7 @@ class _FileExplorerState extends State<FileExplorer> {
                 color: Colors.transparent,
                 child: Center(
                   child: Container(
-                    width: 1,
+                    width: 0,
                   ),
                 ),
               ),
