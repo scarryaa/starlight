@@ -852,8 +852,6 @@ class EditorPainter extends CustomPainter {
     final selectionColor = theme.colorScheme.primary.withOpacity(0.3);
     final caretColor = theme.colorScheme.primary;
     final currentLineColor = theme.colorScheme.primary.withOpacity(0.1);
-    final highlightCaretOnIndentColor =
-        theme.colorScheme.primary.withOpacity(0.7);
 
     int firstVisibleLine = max((verticalOffset / lineHeight).floor(), 0);
     int lastVisibleLine = min(
@@ -863,6 +861,8 @@ class EditorPainter extends CustomPainter {
       indentationLevels = calculateIndentationLevels();
       for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
         if (i < lines.length) {
+          drawCodeBlockLines(canvas, firstVisibleLine, lastVisibleLine, size);
+
           List<TextSpan> highlightedSpans =
               _highlightingService.highlightSyntax(lines[i], isDarkMode);
           TextSpan span = TextSpan(
@@ -905,16 +905,6 @@ class EditorPainter extends CustomPainter {
           ..color = caretColor
           ..style = PaintingStyle.fill,
       );
-    }
-
-    if (lines.isNotEmpty) {
-      indentationLevels = calculateIndentationLevels();
-      for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
-        if (i < lines.length) {
-          drawCodeBlockLines(canvas, firstVisibleLine, lastVisibleLine, size,
-              selectionColor, caretLine, highlightCaretOnIndentColor);
-        }
-      }
     }
 
     // Draw bracket highlighting
@@ -993,13 +983,7 @@ class EditorPainter extends CustomPainter {
   }
 
   void drawCodeBlockLines(
-      Canvas canvas,
-      int firstVisibleLine,
-      int lastVisibleLine,
-      Size size,
-      Color highlightColor,
-      int caretLine,
-      Color highlightCaretOnIndentColor) {
+      Canvas canvas, int firstVisibleLine, int lastVisibleLine, Size size) {
     List<int> activeIndents = [];
     for (int i = 0; i < firstVisibleLine && i < lines.length; i++) {
       updateActiveIndents(activeIndents, getIndentation(lines[i]));
@@ -1018,24 +1002,11 @@ class EditorPainter extends CustomPainter {
       // Draw lines for all active indents
       for (int indent in activeIndents) {
         double x = indent * charWidth;
-        bool isCaretLine = i == caretLine;
-        bool isCaretOnIndent = isCaretLine && (indent - 2 == caretPosition);
-
-        Color lineColor;
-        if (isCaretOnIndent) {
-          // Invert the color when the caret is on the indent line
-          lineColor = Color(0xFFFFFFFF - highlightCaretOnIndentColor.value);
-        } else if (isCaretLine) {
-          lineColor = highlightColor;
-        } else {
-          lineColor = codeBlockLineColor;
-        }
-
         canvas.drawLine(
             Offset(x - 15, y),
             Offset(x - 15, y + lineHeight),
             Paint()
-              ..color = lineColor
+              ..color = codeBlockLineColor
               ..strokeWidth = codeBlockLineWidth);
       }
     }
