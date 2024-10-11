@@ -1020,27 +1020,26 @@ class EditorPainter extends CustomPainter {
   List<List<int>> calculateIndentationLevels() {
     List<List<int>> levels = [];
     List<int> indentStack = [0];
+    int previousIndent = 0;
 
     for (String line in lines) {
       int indent = getIndentation(line);
       List<int> currentLevels = [];
 
-      while (indentStack.last > indent) {
-        indentStack.removeLast();
-      }
-
-      for (int i = 0; i < indentStack.length - 1; i++) {
-        if (indentStack[i] < indent) {
-          currentLevels.add(indentStack[i]);
+      if (indent > previousIndent) {
+        indentStack.add(indent);
+      } else if (indent < previousIndent) {
+        while (indentStack.isNotEmpty && indentStack.last > indent) {
+          indentStack.removeLast();
         }
       }
 
-      if (indent > indentStack.last) {
-        indentStack.add(indent);
-        currentLevels.add(indent);
+      for (int i = 0; i < indentStack.length - 1; i++) {
+        currentLevels.add(indentStack[i]);
       }
 
       levels.add(currentLevels);
+      previousIndent = indent;
     }
 
     return levels;

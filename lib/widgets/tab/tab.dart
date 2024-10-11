@@ -182,7 +182,7 @@ class _TabState extends State<Tab> {
                   ),
                   SizedBox(
                     width: 20,
-                    child: _isHovering
+                    child: _isHovering || widget.isPinned
                         ? TextButton(
                             style: ButtonStyle(
                               shape: WidgetStateProperty.all<
