@@ -12,6 +12,7 @@ import 'package:starlight/features/editor/models/selection_mode.dart';
 import 'package:starlight/features/editor/services/editor_keyboard_handler.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
+import 'package:starlight/features/editor/services/syntax_highlighting_service.dart';
 import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
@@ -732,6 +733,8 @@ class EditorPainter extends CustomPainter {
   final int lastUpdatedLine;
   final int currentLineIndex;
   final BuildContext buildContext;
+  final SyntaxHighlightingService _highlightingService =
+      SyntaxHighlightingService();
 
   EditorPainter({
     required this.lines,
@@ -767,7 +770,6 @@ class EditorPainter extends CustomPainter {
         (themeManager.themeMode == ThemeMode.system &&
             MediaQuery.of(buildContext).platformBrightness == Brightness.dark);
 
-    final textColor = isDarkMode ? Colors.white : Colors.black;
     final selectionColor = theme.colorScheme.primary.withOpacity(0.3);
     final caretColor = theme.colorScheme.primary;
     final currentLineColor = theme.colorScheme.primary.withOpacity(0.1);
@@ -779,11 +781,12 @@ class EditorPainter extends CustomPainter {
     if (lines.isNotEmpty) {
       for (int i = firstVisibleLine; i < lastVisibleLine; i++) {
         if (i < lines.length) {
+          List<TextSpan> highlightedSpans =
+              _highlightingService.highlightSyntax(lines[i], isDarkMode);
           TextSpan span = TextSpan(
-            text: lines[i],
+            children: highlightedSpans,
             style: TextStyle(
               fontFamily: fontFamily,
-              color: textColor,
               fontSize: fontSize,
               height: 1,
             ),
