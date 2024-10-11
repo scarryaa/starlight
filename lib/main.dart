@@ -1,6 +1,7 @@
 import 'dart:io' show Platform;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
 import 'package:starlight/features/file_explorer/file_explorer.dart';
@@ -115,11 +116,23 @@ class MyHomePage extends StatefulWidget {
 
 class _MyHomePageState extends State<MyHomePage> {
   late HotkeyService hotkeyService;
+  final FocusNode _rootFocusNode = FocusNode();
+  final FocusNode _childFocusNode = FocusNode();
 
   @override
   void initState() {
     super.initState();
     hotkeyService = HotkeyService();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _registerHotkeys();
+    });
+  }
+
+  @override
+  void dispose() {
+    _rootFocusNode.dispose();
+    _childFocusNode.dispose();
+    super.dispose();
   }
 
   @override
@@ -127,31 +140,84 @@ class _MyHomePageState extends State<MyHomePage> {
     final bool isDesktop =
         !kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS);
 
-    return Scaffold(
-      appBar: isDesktop ? null : AppBar(title: Text(widget.title)),
-      drawer: isDesktop
-          ? null
-          : Drawer(
-              child: FileExplorer(
-                fileService: widget.fileService,
-                initialDirectory:
-                    widget.configService.config['initialDirectory'] ?? '',
-                tabService: widget.tabService,
-              ),
-            ),
-      body: isDesktop
-          ? DesktopLayout(
-              configService: widget.configService,
-              fileService: widget.fileService,
-              tabService: widget.tabService,
-              hotkeyService: hotkeyService,
-            )
-          : MobileLayout(
-              configService: widget.configService,
-              fileService: widget.fileService,
-              tabService: widget.tabService,
-              hotkeyService: hotkeyService,
-            ),
+    return FocusableActionDetector(
+      focusNode: _rootFocusNode,
+      autofocus: true,
+      actions: {},
+      child: Focus(
+        focusNode: _childFocusNode,
+        onKeyEvent: (node, event) {
+          final result = hotkeyService.handleKeyEvent(event);
+          return result == KeyEventResult.handled
+              ? KeyEventResult.handled
+              : KeyEventResult.ignored;
+        },
+        child: Scaffold(
+          appBar: isDesktop ? null : AppBar(title: Text(widget.title)),
+          drawer: isDesktop
+              ? null
+              : Drawer(
+                  child: FileExplorer(
+                    fileService: widget.fileService,
+                    initialDirectory:
+                        widget.configService.config['initialDirectory'] ?? '',
+                    tabService: widget.tabService,
+                  ),
+                ),
+          body: isDesktop
+              ? DesktopLayout(
+                  configService: widget.configService,
+                  fileService: widget.fileService,
+                  tabService: widget.tabService,
+                  hotkeyService: hotkeyService,
+                )
+              : MobileLayout(
+                  configService: widget.configService,
+                  fileService: widget.fileService,
+                  tabService: widget.tabService,
+                  hotkeyService: hotkeyService,
+                ),
+        ),
+      ),
+    );
+  }
+
+  void _registerHotkeys() {
+    final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+    hotkeyService.registerGlobalHotkey(
+      SingleActivator(LogicalKeyboardKey.keyS,
+          meta: isMacOS, control: !isMacOS),
+      () {
+        if (widget.tabService.currentTabIndexNotifier.value != null) {
+          widget.tabService.updateTabContent(
+              widget.tabService.currentTab!.path,
+              widget
+                  .tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
+                  .content,
+              isModified: false);
+          widget.fileService.writeFile(
+              widget.tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!].path,
+              widget
+                  .tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
+                  .content);
+        } else {
+          print("Could not save: currentTabIndexNotifier.value is null.");
+        }
+      },
+    );
+    hotkeyService.registerGlobalHotkey(
+        SingleActivator(LogicalKeyboardKey.keyN,
+            meta: isMacOS, control: !isMacOS),
+        () {});
+    hotkeyService.registerGlobalHotkey(
+      SingleActivator(LogicalKeyboardKey.comma,
+          meta: isMacOS, control: !isMacOS),
+      () {
+        widget.configService.openConfig();
+      },
     );
   }
 }

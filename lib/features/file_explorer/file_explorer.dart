@@ -122,6 +122,7 @@ class _FileExplorerState extends State<FileExplorer> {
       focusNode: _explorerChildFocusNode,
       onKeyEvent: _handleKeyEvent,
       child: GestureDetector(
+        behavior: HitTestBehavior.translucent,
         onTap: _handleEmptySpaceClick,
         onSecondaryTapDown: (details) =>
             _showEmptySpaceContextMenu(context, details),
@@ -460,7 +461,7 @@ class _FileExplorerState extends State<FileExplorer> {
     final String path = node.entity.path;
     final bool isDirectory = node.entity is Directory;
 
-    return [
+    List<ContextMenuItem> menuItems = [
       ContextMenuItem(
           label: 'New File', onTap: () => _createNew(path, isFile: true)),
       ContextMenuItem(
@@ -482,6 +483,62 @@ class _FileExplorerState extends State<FileExplorer> {
       ContextMenuItem(label: 'Rename', onTap: () => _renameFile(node)),
       ContextMenuItem(label: 'Delete', onTap: () => _deleteFile(path)),
     ];
+
+    if (isDirectory) {
+      menuItems.insert(3, const ContextMenuItem(isDivider: true, label: ''));
+      menuItems.insert(
+          3,
+          ContextMenuItem(
+              label: 'Expand All',
+              onTap: () => _expandAllSubdirectories(node)));
+      menuItems.insert(
+          3,
+          ContextMenuItem(
+              label: 'Collapse All',
+              onTap: () => _collapseAllSubdirectories(node)));
+    }
+
+    return menuItems;
+  }
+
+  void _expandAllSubdirectories(FileSystemNode node) {
+    setState(() {
+      _expandNodesRecursively(node);
+    });
+  }
+
+  void _expandNodesRecursively(FileSystemNode node) {
+    if (node.entity is Directory) {
+      node.isExpanded = true;
+      expandedDirectories.add(node.entity.path);
+      if (node.children.isEmpty) {
+        node.children = widget.fileService
+            .listDirectory(node.entity.path)
+            .map((entity) => FileSystemNode(entity))
+            .toList();
+        _sortNodes(node.children);
+      }
+      for (var child in node.children) {
+        _expandNodesRecursively(child);
+      }
+    }
+  }
+
+  void _collapseAllSubdirectories(FileSystemNode node) {
+    setState(() {
+      _collapseNodesRecursively(node);
+    });
+  }
+
+  void _collapseNodesRecursively(FileSystemNode node) {
+    if (node.entity is Directory) {
+      node.isExpanded = false;
+      expandedDirectories.remove(node.entity.path);
+      for (var child in node.children) {
+        _collapseNodesRecursively(child);
+      }
+      node.children.clear();
+    }
   }
 
   List<ContextMenuItem> _buildMultiSelectionMenu(FileSystemNode node) {

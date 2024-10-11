@@ -152,9 +152,12 @@ class _EditorMinimapState extends State<EditorMinimap> {
             painter: MinimapPainter(
               minimapCache: _minimapCache,
               scale: miniMapScale,
-              scrollOffset: widget.verticalController.offset,
-              viewportHeight:
-                  widget.verticalController.position.viewportDimension,
+              scrollOffset: widget.verticalController.hasClients
+                  ? widget.verticalController.offset
+                  : 0,
+              viewportHeight: widget.verticalController.hasClients
+                  ? widget.verticalController.position.viewportDimension
+                  : 0,
               editorHeight: widget.editorHeight,
               currentLine: widget.currentLine,
             ),
@@ -269,7 +272,7 @@ class MinimapPainter extends CustomPainter {
       Rect.fromLTWH(
           0, currentLineY, size.width, minimapCache.lineHeight * scaleFactor),
       Paint()
-        ..color = Colors.yellow.withOpacity(0.5)
+        ..color = Colors.lightBlue.withOpacity(0.2)
         ..style = PaintingStyle.fill,
     );
   }
