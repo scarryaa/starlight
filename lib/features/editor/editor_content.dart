@@ -410,6 +410,7 @@ class _EditorContentState extends State<EditorContent> {
                                       child: CustomPaint(
                                         key: _painterKey,
                                         painter: EditorPainter(
+                                          isDragging: _isDragging,
                                           rope: rope,
                                           buildContext: context,
                                           currentLineIndex:
@@ -547,6 +548,8 @@ class _EditorContentState extends State<EditorContent> {
       keyboardHandler.updateAndNotifyCursorPosition();
       widget.caretPositionNotifier.updatePosition(
           keyboardHandler.caretLine, keyboardHandler.caretPosition);
+      _matchingBrackets =
+          findMatchingBracket(keyboardHandler.absoluteCaretPosition);
     });
   }
 
@@ -593,6 +596,8 @@ class _EditorContentState extends State<EditorContent> {
         keyboardHandler.updateAndNotifyCursorPosition();
         widget.caretPositionNotifier.updatePosition(
             keyboardHandler.caretLine, keyboardHandler.caretPosition);
+        _matchingBrackets =
+            findMatchingBracket(keyboardHandler.absoluteCaretPosition);
 
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _ensureCursorVisible();
@@ -609,6 +614,8 @@ class _EditorContentState extends State<EditorContent> {
       keyboardHandler.updateAndNotifyCursorPosition();
       widget.caretPositionNotifier.updatePosition(
           keyboardHandler.caretLine, keyboardHandler.caretPosition);
+      _matchingBrackets =
+          findMatchingBracket(keyboardHandler.absoluteCaretPosition);
     });
   }
 
@@ -812,6 +819,7 @@ class EditorPainter extends CustomPainter {
   late List<List<int>> indentationLevels;
   final List<int>? matchingBrackets;
   Rope rope;
+  bool isDragging = false;
 
   EditorPainter({
     required this.lines,
@@ -833,6 +841,7 @@ class EditorPainter extends CustomPainter {
     required this.buildContext,
     required this.matchingBrackets,
     required this.rope,
+    required this.isDragging,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -908,7 +917,9 @@ class EditorPainter extends CustomPainter {
     }
 
     // Draw bracket highlighting
-    if (matchingBrackets != null) {
+    if (matchingBrackets != null &&
+        !isDragging &&
+        !(selectionStart != selectionEnd)) {
       final bracketHighlightColor = theme.colorScheme.primary.withOpacity(0.4);
 
       for (int position in matchingBrackets!) {
