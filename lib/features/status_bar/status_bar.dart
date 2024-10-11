@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart' hide Tab;
 import 'package:provider/provider.dart';
-import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/widgets/tab/tab.dart';
@@ -18,86 +17,95 @@ class StatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final caretPositionNotifier = Provider.of<CaretPositionNotifier>(context);
-
     final theme = Theme.of(context);
-    return Container(
-      height: 24,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: BoxDecoration(
-        color: theme.colorScheme.surface,
-        border: Border(
-          top: BorderSide(
-            color: Colors.lightBlue[200]!,
-            width: 1,
-          ),
-        ),
-      ),
-      child: Row(
-        children: [
-          // File Explorer Toggle
-          ValueListenableBuilder<bool>(
-            valueListenable: configService.fileExplorerVisibilityNotifier,
-            builder: (context, isVisible, child) {
-              return IconButton(
-                icon: Icon(
-                  isVisible ? Icons.folder : Icons.folder_outlined,
-                  size: 16,
-                ),
-                onPressed: configService.toggleFileExplorerVisibility,
-                tooltip:
-                    isVisible ? 'Hide File Explorer' : 'Show File Explorer',
-                padding: EdgeInsets.zero,
-                constraints:
-                    const BoxConstraints.tightFor(width: 24, height: 24),
-              );
-            },
-          ),
-          const SizedBox(width: 8),
-          // Current File Path
-          Expanded(
-            child: ValueListenableBuilder<int?>(
-              valueListenable: tabService.currentTabIndexNotifier,
-              builder: (context, currentTabIndex, child) {
-                final Tab? currentTab = currentTabIndex != null
-                    ? tabService.tabs[currentTabIndex]
-                    : null;
-                return Text(
-                  currentTab?.path ?? '',
-                  style: Theme.of(context).textTheme.bodySmall,
-                  overflow: TextOverflow.ellipsis,
-                );
-              },
+    return Consumer<TabService>(
+      builder: (context, tabService, child) {
+        return Container(
+          height: 24,
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surface,
+            border: Border(
+              top: BorderSide(
+                color: Colors.lightBlue[200]!,
+                width: 1,
+              ),
             ),
           ),
-          // Cursor Position and Tab Size
-          ValueListenableBuilder<CursorPosition>(
-            valueListenable: tabService.cursorPositionNotifier,
-            builder: (context, cursorPosition, child) {
-              return Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTap: () => _showJumpToLineDialog(context, cursorPosition),
-                    child: Text(
-                      '${cursorPosition.line + 1}:${cursorPosition.column + 1}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(),
+          child: Row(
+            children: [
+              // File Explorer Toggle
+              ValueListenableBuilder<bool>(
+                valueListenable: configService.fileExplorerVisibilityNotifier,
+                builder: (context, isVisible, child) {
+                  return IconButton(
+                    icon: Icon(
+                      isVisible ? Icons.folder : Icons.folder_outlined,
+                      size: 16,
                     ),
-                  ),
-                  const SizedBox(width: 16),
-                  GestureDetector(
-                    onTap: () => _showChangeTabSizeDialog(context),
-                    child: Text(
-                      'Tabs: ${configService.config['tabSize'] ?? 4}',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(),
-                    ),
-                  ),
-                ],
-              );
-            },
+                    onPressed: configService.toggleFileExplorerVisibility,
+                    tooltip:
+                        isVisible ? 'Hide File Explorer' : 'Show File Explorer',
+                    padding: EdgeInsets.zero,
+                    constraints:
+                        const BoxConstraints.tightFor(width: 24, height: 24),
+                  );
+                },
+              ),
+              const SizedBox(width: 8),
+              // Current File Path
+              Expanded(
+                child: ValueListenableBuilder<int?>(
+                  valueListenable: tabService.currentTabIndexNotifier,
+                  builder: (context, currentTabIndex, child) {
+                    final Tab? currentTab = currentTabIndex != null &&
+                            currentTabIndex < tabService.tabs.length
+                        ? tabService.tabs[currentTabIndex]
+                        : null;
+                    return Text(
+                      currentTab?.path ?? '',
+                      style: Theme.of(context).textTheme.bodySmall,
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  },
+                ),
+              ),
+              // Cursor Position and Tab Size
+              ValueListenableBuilder<CursorPosition>(
+                valueListenable: tabService.cursorPositionNotifier,
+                builder: (context, cursorPosition, child) {
+                  return Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (tabService.tabs.isNotEmpty)
+                        GestureDetector(
+                          onTap: () =>
+                              _showJumpToLineDialog(context, cursorPosition),
+                          child: Text(
+                            '${cursorPosition.line + 1}:${cursorPosition.column + 1}',
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(),
+                          ),
+                        ),
+                      const SizedBox(width: 16),
+                      GestureDetector(
+                        onTap: () => _showChangeTabSizeDialog(context),
+                        child: Text(
+                          'Tabs: ${configService.config['tabSize'] ?? 4}',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(),
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -177,4 +185,3 @@ class StatusBar extends StatelessWidget {
     );
   }
 }
-

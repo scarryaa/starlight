@@ -135,66 +135,63 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Column(
-        children: [
-          SizedBox(
-            height: 35,
-            child: ReorderableListView(
-              scrollDirection: Axis.horizontal,
-              buildDefaultDragHandles: false,
-              onReorder: (oldIndex, newIndex) {
-                setState(() {
-                  widget.tabService.reorderTabs(oldIndex, newIndex);
-                  tabController.index =
-                      widget.tabService.currentTabIndexNotifier.value ?? 0;
-                });
-              },
-              children: widget.tabService.tabs.asMap().entries.map((entry) {
-                final index = entry.key;
-                final tab = entry.value;
-                return ReorderableDragStartListener(
-                  key: ValueKey(tab.path),
-                  index: index,
-                  child: CustomTab.Tab(
-                    onCloseRequest: widget.tabService.onCloseRequest,
-                    fullAbsolutePath: tab.fullAbsolutePath,
-                    fullPath: tab.fullPath,
-                    path: tab.path,
-                    content: tab.content,
-                    isSelected: tab == widget.tabService.currentTab,
-                    onCloseTap: () => widget.tabService.removeTab(tab.path),
-                    onCloseOthers: () =>
-                        widget.tabService.closeOtherTabs(context, index),
-                    closeLeft: () =>
-                        widget.tabService.closeLeft(context, index),
-                    closeRight: () =>
-                        widget.tabService.closeRight(context, index),
-                    onCloseAll: () => widget.tabService.closeAllTabs(context),
-                    onTap: () {
-                      widget.tabService.setCurrentTab(index);
-                    },
-                    onCopyPath: () => widget.tabService.copyPath(index),
-                    onCopyRelativePath: () =>
-                        widget.tabService.copyRelativePath(index),
-                    isModified: tab.isModified,
-                    isPinned: tab.isPinned,
-                    onPinTap: () => widget.tabService.pinTab(index),
-                    onUnpinTap: () => widget.tabService.unpinTab(index),
-                  ),
-                );
-              }).toList(),
-            ),
+    return Column(
+      children: [
+        SizedBox(
+          height: 35,
+          child: ReorderableListView(
+            scrollDirection: Axis.horizontal,
+            buildDefaultDragHandles: false,
+            onReorder: (oldIndex, newIndex) {
+              setState(() {
+                widget.tabService.reorderTabs(oldIndex, newIndex);
+                tabController.index =
+                    widget.tabService.currentTabIndexNotifier.value ?? 0;
+              });
+            },
+            children: widget.tabService.tabs.asMap().entries.map((entry) {
+              final index = entry.key;
+              final tab = entry.value;
+              return ReorderableDragStartListener(
+                key: ValueKey(tab.path),
+                index: index,
+                child: CustomTab.Tab(
+                  onCloseRequest: widget.tabService.onCloseRequest,
+                  fullAbsolutePath: tab.fullAbsolutePath,
+                  fullPath: tab.fullPath,
+                  path: tab.path,
+                  content: tab.content,
+                  isSelected: tab == widget.tabService.currentTab,
+                  onCloseTap: () => widget.tabService.removeTab(tab.path),
+                  onCloseOthers: () =>
+                      widget.tabService.closeOtherTabs(context, index),
+                  closeLeft: () => widget.tabService.closeLeft(context, index),
+                  closeRight: () =>
+                      widget.tabService.closeRight(context, index),
+                  onCloseAll: () => widget.tabService.closeAllTabs(context),
+                  onTap: () {
+                    widget.tabService.setCurrentTab(index);
+                  },
+                  onCopyPath: () => widget.tabService.copyPath(index),
+                  onCopyRelativePath: () =>
+                      widget.tabService.copyRelativePath(index),
+                  isModified: tab.isModified,
+                  isPinned: tab.isPinned,
+                  onPinTap: () => widget.tabService.pinTab(index),
+                  onUnpinTap: () => widget.tabService.unpinTab(index),
+                ),
+              );
+            }).toList(),
           ),
-          Expanded(
-            child: TabBarView(
-              physics: const NeverScrollableScrollPhysics(),
-              controller: tabController,
-              children: _editorInstances,
-            ),
+        ),
+        Expanded(
+          child: TabBarView(
+            physics: const NeverScrollableScrollPhysics(),
+            controller: tabController,
+            children: _editorInstances,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 

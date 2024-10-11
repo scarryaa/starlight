@@ -143,7 +143,7 @@ class _MyHomePageState extends State<MyHomePage> {
     return FocusableActionDetector(
       focusNode: _rootFocusNode,
       autofocus: true,
-      actions: {},
+      actions: const {},
       child: Focus(
         focusNode: _childFocusNode,
         onKeyEvent: (node, event) {

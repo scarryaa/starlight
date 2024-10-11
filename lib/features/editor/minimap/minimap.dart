@@ -37,8 +37,19 @@ class _EditorMinimapState extends State<EditorMinimap> {
   @override
   void initState() {
     super.initState();
-    widget.verticalController.addListener(_handleScroll);
-    _updateMinimapCache();
+    _minimapCache = MinimapCache(
+      rope: widget.rope,
+      syntaxHighlighter: widget.syntaxHighlighter,
+      editorHeight: widget.editorHeight,
+      lineHeight: widget.lineHeight,
+    );
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (widget.verticalController.hasClients) {
+        setState(() {});
+      }
+      widget.verticalController.addListener(_handleScroll);
+    });
   }
 
   @override
@@ -97,9 +108,9 @@ class _EditorMinimapState extends State<EditorMinimap> {
   void _handleMouseWheel(PointerSignalEvent event) {
     if (event is PointerScrollEvent && widget.verticalController.hasClients) {
       final scrollDelta = event.scrollDelta.dy;
-      final viewportDimension =
-          widget.verticalController.position.viewportDimension;
-
+      final viewportDimension = widget.verticalController.hasClients
+          ? widget.verticalController.position.viewportDimension
+          : 0.0;
       final scaleFactor = widget.editorHeight / viewportDimension;
       var scrollAmount = scrollDelta * scaleFactor * _scrollMultiplier;
 
@@ -122,7 +133,7 @@ class _EditorMinimapState extends State<EditorMinimap> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.verticalController.hasClients) {
+    if (!widget.verticalController.hasClients || _minimapCache == null) {
       return const SizedBox.shrink();
     }
 
