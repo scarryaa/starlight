@@ -79,6 +79,7 @@ class _EditorContentState extends State<EditorContent> {
   int _lastClickTime = 0;
   static const int _doubleClickTime = 300; // milliseconds
   late EditorKeyboardHandler keyboardHandler;
+  List<int>? _matchingBrackets;
 
   @override
   void initState() {
@@ -159,6 +160,61 @@ class _EditorContentState extends State<EditorContent> {
     setState(() {
       _verticalOffset = widget.verticalController.offset;
     });
+  }
+
+  List<int>? findMatchingBracket(int position) {
+    final brackets = {
+      '(': ')',
+      '[': ']',
+      '{': '}',
+      ')': '(',
+      ']': '[',
+      '}': '{'
+    };
+    final openBrackets = ['(', '[', '{'];
+
+    // Check the character at the current position
+    if (position < rope.length) {
+      String currentChar = rope.charAt(position);
+      if (brackets.containsKey(currentChar)) {
+        return findMatchingBracketHelper(
+            position, currentChar, brackets, openBrackets);
+      }
+    }
+
+    // Check the character before the current position
+    if (position > 0) {
+      String prevChar = rope.charAt(position - 1);
+      if (brackets.containsKey(prevChar)) {
+        return findMatchingBracketHelper(
+            position - 1, prevChar, brackets, openBrackets);
+      }
+    }
+
+    return null;
+  }
+
+  List<int>? findMatchingBracketHelper(int position, String currentChar,
+      Map<String, String> brackets, List<String> openBrackets) {
+    bool isOpenBracket = openBrackets.contains(currentChar);
+    int direction = isOpenBracket ? 1 : -1;
+    int matchPosition = position;
+    int nestingLevel = 0;
+
+    while (matchPosition >= 0 && matchPosition < rope.length) {
+      String char = rope.charAt(matchPosition);
+      if (char == currentChar) {
+        nestingLevel++;
+      } else if (char == brackets[currentChar]) {
+        nestingLevel--;
+        if (nestingLevel == 0) {
+          return [position, matchPosition];
+        }
+      }
+      matchPosition += direction;
+    }
+
+    return null;
   }
 
   void _handleHorizontalScroll() {
@@ -300,6 +356,8 @@ class _EditorContentState extends State<EditorContent> {
                   var result = keyboardHandler.handleInput(event);
                   setState(() {
                     _lastUpdatedLine = keyboardHandler.lastUpdatedLine;
+                    _matchingBrackets = findMatchingBracket(
+                        keyboardHandler.absoluteCaretPosition);
                   });
                   return result;
                 },
@@ -310,73 +368,77 @@ class _EditorContentState extends State<EditorContent> {
                     return Stack(
                       children: [
                         Positioned.fill(
-                            child: RawScrollbar(
-                          controller: widget.verticalController,
-                          thumbVisibility: false,
-                          thickness: 8,
-                          radius: Radius.zero,
-                          thumbColor: Colors.grey.withOpacity(0.5),
-                          fadeDuration: const Duration(milliseconds: 300),
-                          timeToFade: const Duration(milliseconds: 1000),
                           child: RawScrollbar(
-                            controller: widget.horizontalController,
+                            controller: widget.verticalController,
                             thumbVisibility: false,
                             thickness: 8,
                             radius: Radius.zero,
                             thumbColor: Colors.grey.withOpacity(0.5),
                             fadeDuration: const Duration(milliseconds: 300),
                             timeToFade: const Duration(milliseconds: 1000),
-                            notificationPredicate: (notification) =>
-                                notification.depth == 1,
-                            child: ScrollConfiguration(
-                              behavior: const ScrollBehavior()
-                                  .copyWith(scrollbars: false),
-                              child: SingleChildScrollView(
-                                physics:
-                                    widget.scrollManager.clampingScrollPhysics,
-                                controller: widget.verticalController,
-                                scrollDirection: Axis.vertical,
+                            child: RawScrollbar(
+                              controller: widget.horizontalController,
+                              thumbVisibility: false,
+                              thickness: 8,
+                              radius: Radius.zero,
+                              thumbColor: Colors.grey.withOpacity(0.5),
+                              fadeDuration: const Duration(milliseconds: 300),
+                              timeToFade: const Duration(milliseconds: 1000),
+                              notificationPredicate: (notification) =>
+                                  notification.depth == 1,
+                              child: ScrollConfiguration(
+                                behavior: const ScrollBehavior()
+                                    .copyWith(scrollbars: false),
                                 child: SingleChildScrollView(
                                   physics: widget
                                       .scrollManager.clampingScrollPhysics,
-                                  controller: widget.horizontalController,
-                                  scrollDirection: Axis.horizontal,
-                                  child: SizedBox(
-                                    width: max(
-                                      getMaxLineCount() * charWidth +
-                                          charWidth +
-                                          viewPadding,
-                                      constraints.maxWidth,
-                                    ),
-                                    height: contentHeight,
-                                    child: CustomPaint(
-                                      key: _painterKey,
-                                      painter: EditorPainter(
-                                        buildContext: context,
-                                        currentLineIndex:
-                                            keyboardHandler.caretLine,
-                                        fontSize: widget.fontSize,
-                                        fontFamily: widget.fontFamily,
-                                        lineHeight: widget.lineHeight,
-                                        viewportHeight:
-                                            MediaQuery.of(context).size.height,
-                                        viewportWidth:
-                                            MediaQuery.of(context).size.width,
-                                        verticalOffset: _verticalOffset,
-                                        horizontalOffset: _horizontalOffset,
-                                        lines: rope.text.split('\n'),
-                                        caretPosition:
-                                            keyboardHandler.caretPosition,
-                                        caretLine: keyboardHandler.caretLine,
-                                        selectionStart: widget
-                                            .editorSelectionManager
-                                            .selectionStart,
-                                        selectionEnd: widget
-                                            .editorSelectionManager
-                                            .selectionEnd,
-                                        lineStarts: rope.lineStarts,
-                                        text: rope.text,
-                                        lastUpdatedLine: _lastUpdatedLine,
+                                  controller: widget.verticalController,
+                                  scrollDirection: Axis.vertical,
+                                  child: SingleChildScrollView(
+                                    physics: widget
+                                        .scrollManager.clampingScrollPhysics,
+                                    controller: widget.horizontalController,
+                                    scrollDirection: Axis.horizontal,
+                                    child: SizedBox(
+                                      width: max(
+                                        getMaxLineCount() * charWidth +
+                                            charWidth +
+                                            viewPadding,
+                                        constraints.maxWidth,
+                                      ),
+                                      height: contentHeight,
+                                      child: CustomPaint(
+                                        key: _painterKey,
+                                        painter: EditorPainter(
+                                          rope: rope,
+                                          buildContext: context,
+                                          currentLineIndex:
+                                              keyboardHandler.caretLine,
+                                          fontSize: widget.fontSize,
+                                          fontFamily: widget.fontFamily,
+                                          lineHeight: widget.lineHeight,
+                                          viewportHeight: MediaQuery.of(context)
+                                              .size
+                                              .height,
+                                          viewportWidth:
+                                              MediaQuery.of(context).size.width,
+                                          verticalOffset: _verticalOffset,
+                                          horizontalOffset: _horizontalOffset,
+                                          lines: rope.text.split('\n'),
+                                          caretPosition:
+                                              keyboardHandler.caretPosition,
+                                          caretLine: keyboardHandler.caretLine,
+                                          selectionStart: widget
+                                              .editorSelectionManager
+                                              .selectionStart,
+                                          selectionEnd: widget
+                                              .editorSelectionManager
+                                              .selectionEnd,
+                                          lineStarts: rope.lineStarts,
+                                          text: rope.text,
+                                          lastUpdatedLine: _lastUpdatedLine,
+                                          matchingBrackets: _matchingBrackets,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -384,7 +446,7 @@ class _EditorContentState extends State<EditorContent> {
                               ),
                             ),
                           ),
-                        ))
+                        )
                       ],
                     );
                   },
@@ -420,6 +482,10 @@ class _EditorContentState extends State<EditorContent> {
         handleTripleClick(tapPosition);
         _clickCount = 0; // Reset after triple click
       }
+
+      // Update matching brackets after changing the caret position
+      _matchingBrackets =
+          findMatchingBracket(keyboardHandler.absoluteCaretPosition);
     });
   }
 
@@ -429,6 +495,8 @@ class _EditorContentState extends State<EditorContent> {
     widget.caretPositionNotifier.updatePosition(
         keyboardHandler.caretLine, keyboardHandler.caretPosition);
     widget.editorSelectionManager.clearSelection();
+    _matchingBrackets =
+        findMatchingBracket(keyboardHandler.absoluteCaretPosition);
   }
 
   void handleDoubleClick(int position) {
@@ -443,6 +511,8 @@ class _EditorContentState extends State<EditorContent> {
     keyboardHandler.updateAndNotifyCursorPosition();
     widget.caretPositionNotifier.updatePosition(
         keyboardHandler.caretLine, keyboardHandler.caretPosition);
+    _matchingBrackets =
+        findMatchingBracket(keyboardHandler.absoluteCaretPosition);
   }
 
   void handleTripleClick(int position) {
@@ -460,6 +530,8 @@ class _EditorContentState extends State<EditorContent> {
     keyboardHandler.updateAndNotifyCursorPosition();
     widget.caretPositionNotifier.updatePosition(
         keyboardHandler.caretLine, keyboardHandler.caretPosition);
+    _matchingBrackets =
+        findMatchingBracket(keyboardHandler.absoluteCaretPosition);
   }
 
   void handleDragStart(Offset localPosition) {
@@ -738,6 +810,8 @@ class EditorPainter extends CustomPainter {
   final Color codeBlockLineColor = Colors.grey.withOpacity(0.15);
   final double codeBlockLineWidth = 1.0;
   late List<List<int>> indentationLevels;
+  final List<int>? matchingBrackets;
+  Rope rope;
 
   EditorPainter({
     required this.lines,
@@ -757,6 +831,8 @@ class EditorPainter extends CustomPainter {
     required this.lastUpdatedLine,
     required this.currentLineIndex,
     required this.buildContext,
+    required this.matchingBrackets,
+    required this.rope,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -838,6 +914,51 @@ class EditorPainter extends CustomPainter {
           drawCodeBlockLines(canvas, firstVisibleLine, lastVisibleLine, size,
               selectionColor, caretLine, highlightCaretOnIndentColor);
         }
+      }
+    }
+
+    // Draw bracket highlighting
+    if (matchingBrackets != null) {
+      final bracketHighlightColor = theme.colorScheme.primary.withOpacity(0.4);
+
+      for (int position in matchingBrackets!) {
+        int line = rope.findLineForPosition(position);
+        int column = position - rope.findClosestLineStart(line);
+        String bracketChar = rope.charAt(position);
+
+        // Draw highlight rectangle
+        canvas.drawRect(
+          Rect.fromLTWH(
+            column * charWidth,
+            line * lineHeight,
+            charWidth,
+            lineHeight,
+          ),
+          Paint()
+            ..color = bracketHighlightColor
+            ..style = PaintingStyle.fill,
+        );
+
+        // Draw the bracket character
+        TextPainter bracketPainter = TextPainter(
+          text: TextSpan(
+            text: bracketChar,
+            style: TextStyle(
+              color: bracketHighlightColor,
+              fontSize: fontSize,
+              fontFamily: fontFamily,
+            ),
+          ),
+          textDirection: TextDirection.ltr,
+        );
+        bracketPainter.layout();
+        bracketPainter.paint(
+          canvas,
+          Offset(
+            column * charWidth + (charWidth - bracketPainter.width) / 2,
+            line * lineHeight + (lineHeight - bracketPainter.height) / 2,
+          ),
+        );
       }
     }
   }
@@ -961,7 +1082,8 @@ class EditorPainter extends CustomPainter {
         oldDelegate.fontSize != fontSize ||
         oldDelegate.lastUpdatedLine != lastUpdatedLine ||
         oldDelegate.lineStarts != lineStarts ||
-        oldDelegate.text != text;
+        oldDelegate.text != text ||
+        oldDelegate.matchingBrackets != matchingBrackets;
   }
 
   double _measureCharWidth(String s) {
