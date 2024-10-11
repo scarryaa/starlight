@@ -336,205 +336,183 @@ class _EditorContentState extends State<EditorContent> {
         position < widget.editorSelectionManager.selectionEnd;
   }
 
+
   @override
-  Widget build(BuildContext context) {
-    final contentHeight = max(
-          (lineHeight * rope.lineCount) + viewPadding,
-          MediaQuery.of(context).size.height - 35,
-        ) -
-        70;
+Widget build(BuildContext context) {
+  final contentHeight = max(
+        (lineHeight * rope.lineCount) + viewPadding,
+        MediaQuery.of(context).size.height - 35,
+      ) -
+      70;
 
-    return Row(
-      children: [
-        EditorGutter(
-          currentLine: keyboardHandler.caretLine,
-          fontSize: widget.fontSize,
-          fontFamily: widget.fontFamily,
-          height: contentHeight,
-          lineHeight: lineHeight,
-          editorVerticalScrollController: widget.verticalController,
-          lineCount: rope.lineCount,
-          editorPadding: editorPadding,
-          viewPadding: viewPadding,
-        ),
-        Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: (ScrollNotification scrollInfo) {
-              if (scrollInfo is ScrollUpdateNotification) {
-                _handleScroll();
-              }
-              return true;
-            },
-            child: Stack(
+  return Row(
+    children: [
+      EditorGutter(
+        currentLine: keyboardHandler.caretLine,
+        fontSize: widget.fontSize,
+        fontFamily: widget.fontFamily,
+        height: contentHeight,
+        lineHeight: lineHeight,
+        editorVerticalScrollController: widget.verticalController,
+        lineCount: rope.lineCount,
+        editorPadding: editorPadding,
+        viewPadding: viewPadding,
+      ),
+      Expanded(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final editorWidth = constraints.maxWidth - (widget.showMinimap ? 100 : 0);
+            return Stack(
               children: [
-                GestureDetector(
-                  onTapDown: (TapDownDetails details) {
-                    f.requestFocus();
-                    _handleTap(details);
-                  },
-                  onSecondaryTapUp: (TapUpDetails details) {
-                    f.requestFocus();
-                    _showContextMenu(context, details);
-                  },
-                  onLongPressStart: (LongPressStartDetails details) {
-                    f.requestFocus();
-                    handleDragStart(details.localPosition);
-                  },
-                  onLongPressMoveUpdate: (LongPressMoveUpdateDetails details) {
-                    f.requestFocus();
-                    handleDragUpdate(details.localPosition);
-                  },
-                  onLongPressEnd: (LongPressEndDetails details) {
-                    f.requestFocus();
-                    handleDragEnd();
-                  },
-                  onPanStart: (DragStartDetails details) {
-                    f.requestFocus();
-                    handleDragStart(details.localPosition);
-                  },
-                  onPanUpdate: (DragUpdateDetails details) {
-                    f.requestFocus();
-                    handleDragUpdate(details.localPosition);
-                  },
-                  onPanEnd: (DragEndDetails details) {
-                    f.requestFocus();
-                    handleDragEnd();
-                  },
-                  behavior: HitTestBehavior.translucent,
-                  child: Focus(
-                    focusNode: f,
-                    onKeyEvent: (node, event) {
-                      var result = keyboardHandler.handleInput(event);
-                      setState(() {
-                        _lastUpdatedLine = keyboardHandler.lastUpdatedLine;
-                        _matchingBrackets = findMatchingBracket(
-                            keyboardHandler.absoluteCaretPosition);
-                      });
-                      return result;
+                SizedBox(
+                  width: editorWidth,
+                  child: NotificationListener<ScrollNotification>(
+                    onNotification: (ScrollNotification scrollInfo) {
+                      if (scrollInfo is ScrollUpdateNotification) {
+                        _handleScroll();
+                      }
+                      return true;
                     },
-                    child: LayoutBuilder(
-                      builder: (context, constraints) {
-                        _editorSize = Size(constraints.maxWidth, contentHeight);
-
-                        return Stack(
-                          children: [
-                            Positioned.fill(
-                              child: RawScrollbar(
+                    child: GestureDetector(
+                      onTapDown: (TapDownDetails details) {
+                        f.requestFocus();
+                        _handleTap(details);
+                      },
+                      onSecondaryTapUp: (TapUpDetails details) {
+                        f.requestFocus();
+                        _showContextMenu(context, details);
+                      },
+                      onLongPressStart: (LongPressStartDetails details) {
+                        f.requestFocus();
+                        handleDragStart(details.localPosition);
+                      },
+                      onLongPressMoveUpdate: (LongPressMoveUpdateDetails details) {
+                        f.requestFocus();
+                        handleDragUpdate(details.localPosition);
+                      },
+                      onLongPressEnd: (LongPressEndDetails details) {
+                        f.requestFocus();
+                        handleDragEnd();
+                      },
+                      onPanStart: (DragStartDetails details) {
+                        f.requestFocus();
+                        handleDragStart(details.localPosition);
+                      },
+                      onPanUpdate: (DragUpdateDetails details) {
+                        f.requestFocus();
+                        handleDragUpdate(details.localPosition);
+                      },
+                      onPanEnd: (DragEndDetails details) {
+                        f.requestFocus();
+                        handleDragEnd();
+                      },
+                      behavior: HitTestBehavior.translucent,
+                      child: Focus(
+                        focusNode: f,
+                        onKeyEvent: (node, event) {
+                          var result = keyboardHandler.handleInput(event);
+                          setState(() {
+                            _lastUpdatedLine = keyboardHandler.lastUpdatedLine;
+                            _matchingBrackets = findMatchingBracket(
+                                keyboardHandler.absoluteCaretPosition);
+                          });
+                          return result;
+                        },
+                        child: RawScrollbar(
+                          controller: widget.verticalController,
+                          thumbVisibility: false,
+                          thickness: 8,
+                          radius: Radius.zero,
+                          thumbColor: Colors.grey.withOpacity(0.5),
+                          fadeDuration: const Duration(milliseconds: 300),
+                          timeToFade: const Duration(milliseconds: 1000),
+                          child: RawScrollbar(
+                            controller: widget.horizontalController,
+                            thumbVisibility: false,
+                            thickness: 8,
+                            radius: Radius.zero,
+                            thumbColor: Colors.grey.withOpacity(0.5),
+                            fadeDuration: const Duration(milliseconds: 300),
+                            timeToFade: const Duration(milliseconds: 1000),
+                            notificationPredicate: (notification) =>
+                                notification.depth == 1,
+                            child: ScrollConfiguration(
+                              behavior: const ScrollBehavior().copyWith(scrollbars: false),
+                              child: SingleChildScrollView(
+                                physics: widget.scrollManager.clampingScrollPhysics,
                                 controller: widget.verticalController,
-                                thumbVisibility: false,
-                                thickness: 8,
-                                radius: Radius.zero,
-                                thumbColor: Colors.grey.withOpacity(0.5),
-                                fadeDuration: const Duration(milliseconds: 300),
-                                timeToFade: const Duration(milliseconds: 1000),
-                                child: RawScrollbar(
+                                scrollDirection: Axis.vertical,
+                                child: SingleChildScrollView(
+                                  physics: widget.scrollManager.clampingScrollPhysics,
                                   controller: widget.horizontalController,
-                                  thumbVisibility: false,
-                                  thickness: 8,
-                                  radius: Radius.zero,
-                                  thumbColor: Colors.grey.withOpacity(0.5),
-                                  fadeDuration:
-                                      const Duration(milliseconds: 300),
-                                  timeToFade:
-                                      const Duration(milliseconds: 1000),
-                                  notificationPredicate: (notification) =>
-                                      notification.depth == 1,
-                                  child: ScrollConfiguration(
-                                    behavior: const ScrollBehavior()
-                                        .copyWith(scrollbars: false),
-                                    child: SingleChildScrollView(
-                                      physics: widget
-                                          .scrollManager.clampingScrollPhysics,
-                                      controller: widget.verticalController,
-                                      scrollDirection: Axis.vertical,
-                                      child: SingleChildScrollView(
-                                        physics: widget.scrollManager
-                                            .clampingScrollPhysics,
-                                        controller: widget.horizontalController,
-                                        scrollDirection: Axis.horizontal,
-                                        child: SizedBox(
-                                          width: max(
-                                            getMaxLineCount() * charWidth +
-                                                charWidth +
-                                                viewPadding,
-                                            constraints.maxWidth,
-                                          ),
-                                          height: contentHeight,
-                                          child: CustomPaint(
-                                            key: _painterKey,
-                                            painter: EditorPainter(
-                                              syntaxHighlighter:
-                                                  SyntaxHighlightingService(),
-                                              isDragging: _isDragging,
-                                              rope: rope,
-                                              buildContext: context,
-                                              currentLineIndex:
-                                                  keyboardHandler.caretLine,
-                                              fontSize: widget.fontSize,
-                                              fontFamily: widget.fontFamily,
-                                              lineHeight: widget.lineHeight,
-                                              viewportHeight:
-                                                  MediaQuery.of(context)
-                                                      .size
-                                                      .height,
-                                              viewportWidth:
-                                                  MediaQuery.of(context)
-                                                      .size
-                                                      .width,
-                                              verticalOffset: _verticalOffset,
-                                              horizontalOffset:
-                                                  _horizontalOffset,
-                                              lines: rope.text.split('\n'),
-                                              caretPosition:
-                                                  keyboardHandler.caretPosition,
-                                              caretLine:
-                                                  keyboardHandler.caretLine,
-                                              selectionStart: widget
-                                                  .editorSelectionManager
-                                                  .selectionStart,
-                                              selectionEnd: widget
-                                                  .editorSelectionManager
-                                                  .selectionEnd,
-                                              lineStarts: rope.lineStarts,
-                                              text: rope.text,
-                                              lastUpdatedLine: _lastUpdatedLine,
-                                              matchingBrackets:
-                                                  _matchingBrackets,
-                                            ),
-                                          ),
-                                        ),
+                                  scrollDirection: Axis.horizontal,
+                                  child: SizedBox(
+                                    width: max(
+                                      getMaxLineCount() * charWidth + charWidth + viewPadding,
+                                      editorWidth,
+                                    ),
+                                    height: contentHeight,
+                                    child: CustomPaint(
+                                      key: _painterKey,
+                                      painter: EditorPainter(
+                                        syntaxHighlighter: SyntaxHighlightingService(),
+                                        isDragging: _isDragging,
+                                        rope: rope,
+                                        buildContext: context,
+                                        currentLineIndex: keyboardHandler.caretLine,
+                                        fontSize: widget.fontSize,
+                                        fontFamily: widget.fontFamily,
+                                        lineHeight: widget.lineHeight,
+                                        viewportHeight: MediaQuery.of(context).size.height,
+                                        viewportWidth: editorWidth,
+                                        verticalOffset: _verticalOffset,
+                                        horizontalOffset: _horizontalOffset,
+                                        lines: rope.text.split('\n'),
+                                        caretPosition: keyboardHandler.caretPosition,
+                                        caretLine: keyboardHandler.caretLine,
+                                        selectionStart: widget.editorSelectionManager.selectionStart,
+                                        selectionEnd: widget.editorSelectionManager.selectionEnd,
+                                        lineStarts: rope.lineStarts,
+                                        text: rope.text,
+                                        lastUpdatedLine: _lastUpdatedLine,
+                                        matchingBrackets: _matchingBrackets,
                                       ),
                                     ),
                                   ),
                                 ),
                               ),
-                            )
-                          ],
-                        );
-                      },
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-                Positioned(
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  child: EditorMinimap(
-                    syntaxHighlighter: SyntaxHighlightingService(),
-                    rope: rope,
-                    verticalController: widget.verticalController,
-                    editorHeight: contentHeight,
-                    lineHeight: lineHeight,
-                    currentLine: keyboardHandler.caretLine,
+                if (widget.showMinimap)
+                  Positioned(
+                    right: 0,
+                    top: 0,
+                    bottom: 0,
+                    child: SizedBox(
+                      width: 100,
+                      child: EditorMinimap(
+                        syntaxHighlighter: SyntaxHighlightingService(),
+                        rope: rope,
+                        verticalController: widget.verticalController,
+                        editorHeight: contentHeight,
+                        lineHeight: lineHeight,
+                        currentLine: keyboardHandler.caretLine,
+                      ),
+                    ),
                   ),
-                ),
               ],
-            ),
-          ),
+            );
+          },
         ),
-      ],
-    );
-  }
+      ),
+    ],
+  );
+}
 
   void _handleTap(TapDownDetails details) {
     int currentTime = DateTime.now().millisecondsSinceEpoch;

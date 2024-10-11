@@ -30,6 +30,8 @@ class _EditorMinimapState extends State<EditorMinimap> {
   static const double _scrollMultiplier = 0.5;
   static const double _minScrollAmount = 1.0;
   late MinimapCache _minimapCache;
+  double? _dragStartScrollOffset;
+  double? _dragStartY;
 
   @override
   void initState() {
@@ -70,20 +72,36 @@ class _EditorMinimapState extends State<EditorMinimap> {
     }
   }
 
-  void _handleMinimapDrag(DragUpdateDetails details) {
-    if (!widget.verticalController.hasClients) return;
+  void _handleMinimapDragStart(DragStartDetails details) {
+    _dragStartScrollOffset = widget.verticalController.offset;
+    _dragStartY = details.localPosition.dy;
+  }
+
+  void _handleMinimapDragUpdate(DragUpdateDetails details) {
+    if (!widget.verticalController.hasClients || _dragStartScrollOffset == null || _dragStartY == null) return;
 
     final miniMapScale = min(0.1, 300 / widget.editorHeight);
     final miniMapHeight = widget.editorHeight * miniMapScale;
 
-    final editorPosition = details.localPosition.dy / miniMapScale;
+    // Calculate the drag distance in the full-size editor scale
+    final dragDistance = (details.localPosition.dy - _dragStartY!) / miniMapScale;
 
-    final clampedPosition = editorPosition.clamp(
+    // Calculate the new scroll position
+    final newScrollPosition = _dragStartScrollOffset! + dragDistance;
+
+    // Clamp the new position to the valid range
+    final clampedPosition = newScrollPosition.clamp(
       0.0,
       widget.verticalController.position.maxScrollExtent,
     );
 
+    // Jump to the new position
     widget.verticalController.jumpTo(clampedPosition);
+  }
+
+  void _handleMinimapDragEnd(DragEndDetails details) {
+    _dragStartScrollOffset = null;
+    _dragStartY = null;
   }
 
   void _handleMouseWheel(PointerSignalEvent event) {
@@ -118,12 +136,16 @@ class _EditorMinimapState extends State<EditorMinimap> {
       child: Listener(
         onPointerSignal: _handleMouseWheel,
         child: GestureDetector(
-          onVerticalDragUpdate: _handleMinimapDrag,
+          onVerticalDragStart: _handleMinimapDragStart,
+          onVerticalDragUpdate: _handleMinimapDragUpdate,
+          onVerticalDragEnd: _handleMinimapDragEnd,
           onTapDown: (TapDownDetails details) {
-            _handleMinimapDrag(DragUpdateDetails(
+            _handleMinimapDragStart(DragStartDetails(localPosition: details.localPosition));
+            _handleMinimapDragUpdate(DragUpdateDetails(
               globalPosition: details.globalPosition,
               localPosition: details.localPosition,
             ));
+            _handleMinimapDragEnd(DragEndDetails());
           },
           child: CustomPaint(
             size: Size(miniMapWidth, miniMapHeight),
@@ -145,7 +167,6 @@ class _EditorMinimapState extends State<EditorMinimap> {
     );
   }
 }
-
 class MinimapCache {
   final Rope rope;
   final SyntaxHighlightingService syntaxHighlighter;
