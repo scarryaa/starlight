@@ -277,6 +277,7 @@ class _EditorContentState extends State<EditorContent> {
       // Update the content size and scroll extent
       WidgetsBinding.instance.addPostFrameCallback(
         (timeStamp) {
+          _editorSize = context.size ?? Size.zero;
           widget.verticalController.jumpTo(widget.verticalController.offset);
           widget.horizontalController
               .jumpTo(widget.horizontalController.offset);
