@@ -1,5 +1,8 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart' hide VerticalDirection, Tab;
 import 'package:provider/provider.dart';
+import 'package:starlight/features/editor/editor_hotbar.dart';
 import 'package:starlight/features/editor/models/cursor_position.dart';
 import 'package:starlight/features/editor/services/editor_scroll_manager.dart';
 import 'package:starlight/features/editor/services/editor_selection_manager.dart';
@@ -47,6 +50,20 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   List<Widget> _editorInstances = [];
   late TabController tabController;
   late CaretPositionNotifier _caretPositionNotifier;
+  late EditorContent currentEditorContent;
+
+  // Search-related state
+  bool isSearchVisible = false;
+  String searchQuery = '';
+  String replaceQuery = '';
+  int currentMatch = 0;
+  int totalMatches = 0;
+  List<int> matchPositions = [];
+  List<int> selectedMatches = [];
+  bool showReplace = false;
+  bool matchCase = false;
+  bool matchWholeWord = false;
+  bool useRegex = false;
 
   @override
   void initState() {
@@ -109,7 +126,12 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   }
 
   Widget _buildEditor(Tab tab) {
-    return EditorContent(
+    currentEditorContent = EditorContent(
+      searchQuery: searchQuery,
+      matchPositions: matchPositions,
+      currentMatch: currentMatch,
+      isSearchVisible: isSearchVisible,
+      selectedMatches: selectedMatches,
       caretPositionNotifier: _caretPositionNotifier,
       key: ValueKey(tab.path),
       editorSelectionManager: widget.editorSelectionManager,
@@ -126,11 +148,242 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       fontSize: widget.fontSize,
       tabSize: widget.tabSize,
     );
+
+    return currentEditorContent;
   }
 
   void _updateEditorInstances() {
     _editorInstances =
         widget.tabService.tabs.map((tab) => _buildEditor(tab)).toList();
+  }
+
+  void _toggleSearch() {
+    setState(() {
+      isSearchVisible = !isSearchVisible;
+      if (!isSearchVisible) {
+        _clearSearch();
+      }
+      _updateEditorInstances();
+    });
+  }
+
+  void _closeSearch() {
+    _clearSearch();
+  }
+
+  void _handleSearchChanged(String query) {
+    setState(() {
+      searchQuery = query;
+      _performSearch();
+      _updateEditorInstances();
+    });
+  }
+
+  void _handleReplaceChanged(String query) {
+    setState(() {
+      replaceQuery = query;
+    });
+  }
+
+  void _toggleReplace() {
+    setState(() {
+      showReplace = !showReplace;
+    });
+  }
+
+  void _replace() {
+    if (widget.tabService.currentTab == null || currentMatch == 0) return;
+
+    setState(() {
+      int position = matchPositions[currentMatch - 1];
+      String content = widget.tabService.currentTab!.content;
+      String newContent = content.replaceRange(
+          position, position + searchQuery.length, replaceQuery);
+      widget.tabService.updateTabContent(
+          widget.tabService.currentTab!.path, newContent,
+          isModified: true);
+      _performSearch(); // Re-run search to update matches
+    });
+  }
+
+  void _replaceAll() {
+    if (widget.tabService.currentTab == null || totalMatches == 0) return;
+
+    setState(() {
+      String content = widget.tabService.currentTab!.content;
+      RegExp regExp = _createSearchRegExp();
+      String newContent = content.replaceAll(regExp, replaceQuery);
+      widget.tabService.updateTabContent(
+          widget.tabService.currentTab!.path, newContent,
+          isModified: true);
+      _performSearch(); // Re-run search to update matches
+    });
+  }
+
+  void _selectAllMatches() {
+    if (widget.tabService.currentTab == null || totalMatches == 0) return;
+
+    setState(() {
+      selectedMatches = List.from(matchPositions);
+      widget.editorSelectionManager.clearSelection();
+      for (int position in matchPositions) {
+        widget.editorSelectionManager
+            .addToSelection(position, position + searchQuery.length);
+      }
+      _updateEditorInstances();
+    });
+  }
+
+  void _nextMatch() {
+    if (totalMatches > 0) {
+      setState(() {
+        currentMatch = (currentMatch % totalMatches) + 1;
+        _updateEditorInstances();
+      });
+      _scrollToCurrentMatch();
+    }
+  }
+
+  void _previousMatch() {
+    if (totalMatches > 0) {
+      setState(() {
+        currentMatch = (currentMatch - 2 + totalMatches) % totalMatches + 1;
+        _updateEditorInstances();
+      });
+      _scrollToCurrentMatch();
+    }
+  }
+
+  void _toggleMatchCase(bool value) {
+    setState(() {
+      matchCase = value;
+      _performSearch();
+    });
+  }
+
+  void _toggleMatchWholeWord(bool value) {
+    setState(() {
+      matchWholeWord = value;
+      _performSearch();
+    });
+  }
+
+  void _toggleUseRegex(bool value) {
+    setState(() {
+      useRegex = value;
+      _performSearch();
+    });
+  }
+
+  RegExp _createSearchRegExp() {
+    if (useRegex) {
+      return RegExp(searchQuery, caseSensitive: matchCase, multiLine: true);
+    } else {
+      String escapedQuery = RegExp.escape(searchQuery);
+      if (matchWholeWord) {
+        escapedQuery = '\\b$escapedQuery\\b';
+      }
+      return RegExp(escapedQuery, caseSensitive: matchCase, multiLine: true);
+    }
+  }
+
+  void _performSearch() {
+    if (widget.tabService.currentTab == null || searchQuery.isEmpty) {
+      setState(() {
+        totalMatches = 0;
+        currentMatch = 0;
+        matchPositions.clear();
+        selectedMatches.clear();
+      });
+      return;
+    }
+
+    String content = widget.tabService.currentTab!.content;
+    RegExp regExp = _createSearchRegExp();
+    Iterable<Match> matches = regExp.allMatches(content);
+
+    setState(() {
+      matchPositions = matches.map((m) => m.start).toList();
+      totalMatches = matchPositions.length;
+      currentMatch = totalMatches > 0 ? 1 : 0;
+      selectedMatches.clear();
+      _updateEditorInstances();
+    });
+
+    if (totalMatches > 0) {
+      _scrollToCurrentMatch();
+    }
+  }
+
+  void _scrollToCurrentMatch() {
+    if (currentMatch > 0 && currentMatch <= matchPositions.length) {
+      int position = matchPositions[currentMatch - 1];
+      String content = widget.tabService.currentTab!.content;
+
+      // Calculate line and column of the match
+      int line = content.substring(0, position).split('\n').length - 1;
+      int column = position - content.lastIndexOf('\n', position) - 1;
+
+      // Calculate scroll offsets
+      double verticalScrollOffset =
+          line * currentEditorContent.actualLineHeight;
+      double horizontalScrollOffset = column * currentEditorContent.charWidth;
+
+      // Get the current scroll controllers
+      ScrollController? verticalController =
+          _verticalControllers[widget.tabService.currentTab!.path];
+      ScrollController? horizontalController =
+          _horizontalControllers[widget.tabService.currentTab!.path];
+
+      if (verticalController != null && horizontalController != null) {
+        // Ensure we're not scrolling beyond the content
+        verticalScrollOffset = min(
+            verticalScrollOffset, verticalController.position.maxScrollExtent);
+        horizontalScrollOffset = min(horizontalScrollOffset,
+            horizontalController.position.maxScrollExtent);
+
+        // Animate to the new vertical position
+        verticalController.animateTo(
+          verticalScrollOffset,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+
+        // Animate to the new horizontal position
+        horizontalController.animateTo(
+          horizontalScrollOffset,
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeInOut,
+        );
+      }
+    } else {
+      print('Invalid currentMatch: $currentMatch');
+    }
+  }
+
+  void _clearSearch() {
+    setState(() {
+      isSearchVisible = false;
+      searchQuery = '';
+      replaceQuery = '';
+      currentMatch = 0;
+      totalMatches = 0;
+      matchPositions.clear();
+      selectedMatches.clear();
+      _updateEditorInstances();
+    });
+  }
+
+  void _handleCaretPositionChange() {
+    if (widget.tabService.currentTab != null) {
+      final newPosition = _caretPositionNotifier.position;
+      widget.tabService.updateCursorPosition(
+        widget.tabService.currentTab!.path,
+        CursorPosition(line: newPosition.line, column: newPosition.column),
+      );
+      // Force a rebuild of the current editor instance
+      setState(() {});
+    }
   }
 
   @override
@@ -184,6 +437,30 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
             }).toList(),
           ),
         ),
+        if (widget.tabService.tabs.isNotEmpty)
+          EditorHotbar(
+            currentTab: widget.tabService.currentTab,
+            isSearchVisible: isSearchVisible,
+            onSearch: _toggleSearch,
+            onCloseSearch: _closeSearch,
+            onSearchChanged: _handleSearchChanged,
+            onReplaceChanged: _handleReplaceChanged,
+            onNextMatch: _nextMatch,
+            onPreviousMatch: _previousMatch,
+            onReplace: _replace,
+            onReplaceAll: _replaceAll,
+            onSelectAllMatches: _selectAllMatches,
+            currentMatch: currentMatch,
+            totalMatches: totalMatches,
+            showReplace: showReplace,
+            onToggleReplace: _toggleReplace,
+            matchCase: matchCase,
+            matchWholeWord: matchWholeWord,
+            useRegex: useRegex,
+            onMatchCaseChanged: _toggleMatchCase,
+            onMatchWholeWordChanged: _toggleMatchWholeWord,
+            onUseRegexChanged: _toggleUseRegex,
+          ),
         Expanded(
           child: TabBarView(
             physics: const NeverScrollableScrollPhysics(),
@@ -193,18 +470,6 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
         ),
       ],
     );
-  }
-
-  void _handleCaretPositionChange() {
-    if (widget.tabService.currentTab != null) {
-      final newPosition = _caretPositionNotifier.position;
-      widget.tabService.updateCursorPosition(
-        widget.tabService.currentTab!.path,
-        CursorPosition(line: newPosition.line, column: newPosition.column),
-      );
-      // Force a rebuild of the current editor instance
-      setState(() {});
-    }
   }
 
   @override

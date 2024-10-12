@@ -2,10 +2,16 @@ import 'dart:math';
 import 'package:starlight/features/editor/models/selection_mode.dart';
 import 'package:starlight/features/editor/models/rope.dart';
 
+class Selection {
+  int start;
+  int end;
+
+  Selection(this.start, this.end);
+}
+
 class EditorSelectionManager {
   SelectionMode _selectionMode = SelectionMode.normal;
-  int selectionStart = -1;
-  int selectionEnd = -1;
+  List<Selection> selections = [];
   int selectionAnchor = -1;
   int selectionFocus = -1;
   Rope rope;
@@ -25,51 +31,85 @@ class EditorSelectionManager {
   void clearSelection() {
     selectionAnchor = -1;
     selectionFocus = -1;
-    selectionStart = -1;
-    selectionEnd = -1;
+    selections.clear();
   }
 
   void updateSelection() {
     if (selectionAnchor != -1 && selectionFocus != -1) {
-      selectionStart = min(selectionAnchor, selectionFocus);
-      selectionEnd = max(selectionAnchor, selectionFocus);
+      int start = min(selectionAnchor, selectionFocus);
+      int end = max(selectionAnchor, selectionFocus);
+      if (selections.isEmpty) {
+        selections.add(Selection(start, end));
+      } else {
+        selections[0] = Selection(start, end);
+      }
     } else {
-      selectionStart = selectionEnd = -1;
+      selections.clear();
     }
   }
 
+  void addToSelection(int start, int end) {
+    selections.add(Selection(start, end));
+  }
+
   bool hasSelection() {
-    return selectionStart != -1 &&
-        selectionEnd != -1 &&
-        selectionStart != selectionEnd;
+    return selections.isNotEmpty;
+  }
+
+  int get selectionStart => selections.isNotEmpty ? selections[0].start : -1;
+  int get selectionEnd => selections.isNotEmpty ? selections[0].end : -1;
+
+  set selectionStart(int value) {
+    if (selections.isEmpty) {
+      selections.add(Selection(value, value));
+    } else {
+      selections[0].start = value;
+    }
+  }
+
+  set selectionEnd(int value) {
+    if (selections.isEmpty) {
+      selections.add(Selection(value, value));
+    } else {
+      selections[0].end = value;
+    }
   }
 
   void moveSelectionHorizontally(int target) {
-    if (target > 0) {
-      selectionEnd = target;
-      if (selectionStart == -1) {
-        selectionStart = target;
-      }
+    if (selections.isEmpty) {
+      selections.add(Selection(target, target));
     } else {
-      selectionStart = target;
+      Selection primary = selections[0];
+      if (target > primary.end) {
+        primary.end = target;
+      } else {
+        primary.start = target;
+      }
     }
     normalizeSelection();
   }
 
   void moveSelectionVertically(int target) {
-    if (target > 0) {
-      selectionEnd = target;
+    if (selections.isEmpty) {
+      selections.add(Selection(target, target));
     } else {
-      selectionStart = target;
+      Selection primary = selections[0];
+      if (target > primary.end) {
+        primary.end = target;
+      } else {
+        primary.start = target;
+      }
     }
     normalizeSelection();
   }
 
   void normalizeSelection() {
-    if (selectionStart > selectionEnd) {
-      int temp = selectionStart;
-      selectionStart = selectionEnd;
-      selectionEnd = temp;
+    for (var selection in selections) {
+      if (selection.start > selection.end) {
+        int temp = selection.start;
+        selection.start = selection.end;
+        selection.end = temp;
+      }
     }
   }
 
@@ -147,7 +187,8 @@ class EditorSelectionManager {
     switch (_selectionMode) {
       case SelectionMode.normal:
         clearSelection();
-        selectionStart = selectionEnd = tapPosition;
+        selectionStart = tapPosition;
+        selectionEnd = tapPosition;
         break;
       case SelectionMode.word:
         selectWord(tapPosition);
@@ -173,4 +214,3 @@ class EditorSelectionManager {
     updateSelection();
   }
 }
-

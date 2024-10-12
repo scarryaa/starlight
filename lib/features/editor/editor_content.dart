@@ -38,6 +38,14 @@ class EditorContent extends StatefulWidget {
   final int tabSize;
   final CaretPositionNotifier caretPositionNotifier;
   final bool showMinimap;
+  final bool isSearchVisible;
+  final String searchQuery;
+  final List<int> matchPositions;
+  final int currentMatch;
+  final List<int> selectedMatches;
+
+  double get actualLineHeight => _EditorContentState.lineHeight;
+  double get charWidth => _EditorContentState.charWidth;
 
   const EditorContent({
     super.key,
@@ -56,6 +64,11 @@ class EditorContent extends StatefulWidget {
     required this.tabSize,
     required this.caretPositionNotifier,
     this.showMinimap = true,
+    required this.isSearchVisible,
+    required this.searchQuery,
+    required this.matchPositions,
+    required this.currentMatch,
+    required this.selectedMatches,
   });
 
   @override
@@ -343,7 +356,7 @@ class _EditorContentState extends State<EditorContent> {
           (lineHeight * rope.lineCount) + viewPadding,
           MediaQuery.of(context).size.height - 35,
         ) -
-        52;
+        92;
 
     return Row(
       children: [
@@ -463,6 +476,8 @@ class _EditorContentState extends State<EditorContent> {
                                       child: CustomPaint(
                                         key: _painterKey,
                                         painter: EditorPainter(
+                                          selectedMatches:
+                                              widget.selectedMatches,
                                           syntaxHighlighter:
                                               SyntaxHighlightingService(),
                                           isDragging: _isDragging,
@@ -493,6 +508,11 @@ class _EditorContentState extends State<EditorContent> {
                                           text: rope.text,
                                           lastUpdatedLine: _lastUpdatedLine,
                                           matchingBrackets: _matchingBrackets,
+                                          isSearchVisible:
+                                              widget.isSearchVisible,
+                                          searchQuery: widget.searchQuery,
+                                          matchPositions: widget.matchPositions,
+                                          currentMatch: widget.currentMatch,
                                         ),
                                       ),
                                     ),
@@ -892,6 +912,11 @@ class EditorPainter extends CustomPainter {
   Rope rope;
   SyntaxHighlightingService syntaxHighlighter;
   bool isDragging = false;
+  final bool isSearchVisible;
+  final String searchQuery;
+  final List<int> matchPositions;
+  final int currentMatch;
+  final List<int> selectedMatches;
 
   EditorPainter({
     required this.lines,
@@ -915,6 +940,11 @@ class EditorPainter extends CustomPainter {
     required this.rope,
     required this.isDragging,
     required this.syntaxHighlighter,
+    required this.isSearchVisible,
+    required this.searchQuery,
+    required this.matchPositions,
+    required this.currentMatch,
+    required this.selectedMatches,
   }) {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
@@ -989,6 +1019,11 @@ class EditorPainter extends CustomPainter {
       );
     }
 
+    // Draw search highlights
+    if (isSearchVisible && searchQuery.isNotEmpty) {
+      drawSearchHighlights(canvas, size);
+    }
+
     // Draw bracket and quote highlighting
     if (matchingBrackets != null &&
         !isDragging &&
@@ -1034,6 +1069,45 @@ class EditorPainter extends CustomPainter {
           ),
         );
       }
+    }
+  }
+
+  void drawSearchHighlights(Canvas canvas, Size size) {
+    final searchHighlightColor = Colors.yellow.withOpacity(0.3);
+    final currentMatchColor = Colors.orange.withOpacity(0.5);
+    final selectedMatchColor = Colors.green.withOpacity(0.3);
+
+    int firstVisibleLine = (verticalOffset / lineHeight).floor();
+    int lastVisibleLine =
+        ((verticalOffset + viewportHeight) / lineHeight).ceil();
+
+    for (int i = 0; i < matchPositions.length; i++) {
+      int position = matchPositions[i];
+      int line = rope.findLineForPosition(position);
+
+      // Only draw highlights for visible lines
+      if (line < firstVisibleLine || line > lastVisibleLine) {
+        continue;
+      }
+
+      int column = position - rope.findClosestLineStart(line);
+
+      Color highlightColor = searchHighlightColor;
+      if (i == currentMatch - 1) {
+        highlightColor = currentMatchColor;
+      } else if (selectedMatches.contains(position)) {
+        highlightColor = selectedMatchColor;
+      }
+
+      canvas.drawRect(
+        Rect.fromLTWH(
+          column * charWidth,
+          (line * lineHeight),
+          searchQuery.length * charWidth,
+          lineHeight,
+        ),
+        Paint()..color = highlightColor,
+      );
     }
   }
 
@@ -1175,7 +1249,11 @@ class EditorPainter extends CustomPainter {
         oldDelegate.lastUpdatedLine != lastUpdatedLine ||
         oldDelegate.lineStarts != lineStarts ||
         oldDelegate.text != text ||
-        oldDelegate.matchingBrackets != matchingBrackets;
+        oldDelegate.matchingBrackets != matchingBrackets ||
+        oldDelegate.isSearchVisible != isSearchVisible ||
+        oldDelegate.searchQuery != searchQuery ||
+        oldDelegate.matchPositions != matchPositions ||
+        oldDelegate.currentMatch != currentMatch;
   }
 
   double _measureCharWidth(String s) {
