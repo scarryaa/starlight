@@ -23,7 +23,7 @@ class QuickAccessBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 40,
+      height: 36,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: BoxDecoration(
         border: Border(
@@ -67,4 +67,3 @@ class QuickAccessBar extends StatelessWidget {
     );
   }
 }
-

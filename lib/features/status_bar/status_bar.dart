@@ -2,7 +2,6 @@ import 'package:flutter/material.dart' hide Tab;
 import 'package:provider/provider.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/config_service.dart';
-import 'package:starlight/widgets/tab/tab.dart';
 import 'package:starlight/features/editor/models/cursor_position.dart';
 
 class StatusBar extends StatelessWidget {
@@ -52,7 +51,7 @@ class StatusBar extends StatelessWidget {
                   );
                 },
               ),
-              const SizedBox(width: 8),
+              const Spacer(), // This pushes the following items to the right
               // Cursor Position and Tab Size
               ValueListenableBuilder<CursorPosition>(
                 valueListenable: tabService.cursorPositionNotifier,
@@ -60,6 +59,15 @@ class StatusBar extends StatelessWidget {
                   return Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
+                      GestureDetector(
+                        onTap: () => _showChangeTabSizeDialog(context),
+                        child: Text(
+                          'Tabs: ${configService.config['tabSize'] ?? 4}',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
                       if (tabService.tabs.isNotEmpty)
                         GestureDetector(
                           onTap: () =>
@@ -72,15 +80,6 @@ class StatusBar extends StatelessWidget {
                                 ?.copyWith(),
                           ),
                         ),
-                      const SizedBox(width: 16),
-                      GestureDetector(
-                        onTap: () => _showChangeTabSizeDialog(context),
-                        child: Text(
-                          'Tabs: ${configService.config['tabSize'] ?? 4}',
-                          style:
-                              Theme.of(context).textTheme.bodySmall?.copyWith(),
-                        ),
-                      ),
                     ],
                   );
                 },
