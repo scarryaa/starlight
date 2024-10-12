@@ -44,8 +44,8 @@ class EditorContent extends StatefulWidget {
   final int currentMatch;
   final List<int> selectedMatches;
 
-  double get actualLineHeight => _EditorContentState.lineHeight;
-  double get charWidth => _EditorContentState.charWidth;
+  double get actualLineHeight => EditorContentState.lineHeight;
+  double get charWidth => EditorContentState.charWidth;
 
   const EditorContent({
     super.key,
@@ -71,11 +71,19 @@ class EditorContent extends StatefulWidget {
     required this.selectedMatches,
   });
 
+  void updateContent(String newContent) {
+    if (key is GlobalKey<EditorContentState>) {
+      (key as GlobalKey<EditorContentState>)
+          .currentState
+          ?.updateContent(newContent);
+    }
+  }
+
   @override
-  State<EditorContent> createState() => _EditorContentState();
+  State<EditorContent> createState() => EditorContentState();
 }
 
-class _EditorContentState extends State<EditorContent> {
+class EditorContentState extends State<EditorContent> {
   int _lastUpdatedLine = 0;
   final FocusNode f = FocusNode();
   late Rope rope;
@@ -254,6 +262,15 @@ class _EditorContentState extends State<EditorContent> {
     }
 
     return null;
+  }
+
+  void updateContent(String newContent) {
+    setState(() {
+      rope = Rope(newContent);
+      updateLineCounts();
+      widget.editorSelectionManager.updateRope(rope);
+      keyboardHandler.rope = rope;
+    });
   }
 
   List<int>? findMatchingBracketHelper(int position, String currentChar,
@@ -949,8 +966,8 @@ class EditorPainter extends CustomPainter {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
 
-    _EditorContentState.lineHeight = lineHeight;
-    _EditorContentState.charWidth = charWidth;
+    EditorContentState.lineHeight = lineHeight;
+    EditorContentState.charWidth = charWidth;
   }
 
   @override

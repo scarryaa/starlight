@@ -127,13 +127,13 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
 
   Widget _buildEditor(Tab tab) {
     currentEditorContent = EditorContent(
+      key: GlobalKey<EditorContentState>(),
       searchQuery: searchQuery,
       matchPositions: matchPositions,
       currentMatch: currentMatch,
       isSearchVisible: isSearchVisible,
       selectedMatches: selectedMatches,
       caretPositionNotifier: _caretPositionNotifier,
-      key: ValueKey(tab.path),
       editorSelectionManager: widget.editorSelectionManager,
       configService: widget.configService,
       hotkeyService: widget.hotkeyService,
@@ -197,12 +197,26 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     setState(() {
       int position = matchPositions[currentMatch - 1];
       String content = widget.tabService.currentTab!.content;
-      String newContent = content.replaceRange(
-          position, position + searchQuery.length, replaceQuery);
+
+      RegExp regExp = _createSearchRegExp();
+      String newContent = content.replaceAllMapped(regExp, (match) {
+        if (match.start == position) {
+          return replaceQuery;
+        }
+        return match.group(0)!;
+      });
+
       widget.tabService.updateTabContent(
           widget.tabService.currentTab!.path, newContent,
           isModified: true);
-      _performSearch(); // Re-run search to update matches
+
+      // Update the EditorContent
+      EditorContent editorContent =
+          _editorInstances[tabController.index] as EditorContent;
+      editorContent.updateContent(newContent);
+
+      // Re-run search to update matches
+      _performSearch();
     });
   }
 
@@ -216,6 +230,12 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       widget.tabService.updateTabContent(
           widget.tabService.currentTab!.path, newContent,
           isModified: true);
+
+      // Update the EditorContent
+      EditorContent editorContent =
+          _editorInstances[tabController.index] as EditorContent;
+      editorContent.updateContent(newContent);
+
       _performSearch(); // Re-run search to update matches
     });
   }
