@@ -167,6 +167,7 @@ class _EditorMinimapState extends State<EditorMinimap> {
                   widget.verticalController.position.viewportDimension,
               editorHeight: widget.editorHeight,
               currentLine: widget.currentLine,
+              context: context, // Added context here to access theme
             ),
           ),
         ),
@@ -228,6 +229,7 @@ class MinimapPainter extends CustomPainter {
   final double viewportHeight;
   final double editorHeight;
   final int currentLine;
+  final BuildContext context;
 
   const MinimapPainter({
     required this.minimapCache,
@@ -236,21 +238,26 @@ class MinimapPainter extends CustomPainter {
     required this.viewportHeight,
     required this.editorHeight,
     required this.currentLine,
+    required this.context,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     final contentHeight =
         minimapCache.rope.lineCount * minimapCache.lineHeight * scale;
     final scaleFactor =
         contentHeight < size.height ? 1.0 : size.height / contentHeight;
 
-    _drawMinimapContent(canvas, size, scaleFactor);
-    _drawViewportIndicator(canvas, size, scaleFactor);
-    _drawCurrentLineIndicator(canvas, size, scaleFactor);
+    _drawMinimapContent(canvas, size, scaleFactor, isDarkMode);
+    _drawViewportIndicator(canvas, size, scaleFactor, theme);
+    _drawCurrentLineIndicator(canvas, size, scaleFactor, theme);
   }
 
-  void _drawMinimapContent(Canvas canvas, Size size, double scaleFactor) {
+  void _drawMinimapContent(
+      Canvas canvas, Size size, double scaleFactor, bool isDarkMode) {
     final visibleLines =
         (size.height / (minimapCache.lineHeight * scale * scaleFactor)).ceil();
     final startLine = (scrollOffset / minimapCache.lineHeight).floor();
@@ -259,12 +266,13 @@ class MinimapPainter extends CustomPainter {
 
     for (int i = 0; i < endLine; i++) {
       final yPosition = (i) * minimapCache.lineHeight * scale * scaleFactor;
-      _drawHighlightedLine(
-          canvas, minimapCache.cachedLines[i], yPosition, size.width);
+      _drawHighlightedLine(canvas, minimapCache.cachedLines[i], yPosition,
+          size.width, isDarkMode);
     }
   }
 
-  void _drawViewportIndicator(Canvas canvas, Size size, double scaleFactor) {
+  void _drawViewportIndicator(
+      Canvas canvas, Size size, double scaleFactor, ThemeData theme) {
     final contentHeight =
         minimapCache.rope.lineCount * minimapCache.lineHeight * scale;
     final actualHeight = min<double>(contentHeight, size.height);
@@ -277,7 +285,7 @@ class MinimapPainter extends CustomPainter {
     final indicatorTop = scrollRatio * (actualHeight - indicatorHeight);
 
     final indicatorPaint = Paint()
-      ..color = Colors.blue.withOpacity(0.3)
+      ..color = theme.colorScheme.primary.withOpacity(0.3)
       ..style = PaintingStyle.fill;
 
     canvas.drawRect(
@@ -286,7 +294,8 @@ class MinimapPainter extends CustomPainter {
     );
   }
 
-  void _drawCurrentLineIndicator(Canvas canvas, Size size, double scaleFactor) {
+  void _drawCurrentLineIndicator(
+      Canvas canvas, Size size, double scaleFactor, ThemeData theme) {
     final startLine = (scrollOffset / minimapCache.lineHeight).floor();
     final currentLineY = (currentLine - startLine) *
         minimapCache.lineHeight *
@@ -298,14 +307,14 @@ class MinimapPainter extends CustomPainter {
         Rect.fromLTWH(0, currentLineY, size.width,
             minimapCache.lineHeight * scale * scaleFactor),
         Paint()
-          ..color = Colors.lightBlue.withOpacity(0.2)
+          ..color = theme.colorScheme.secondary.withOpacity(0.2)
           ..style = PaintingStyle.fill,
       );
     }
   }
 
   void _drawHighlightedLine(Canvas canvas, List<MinimapSpan> spans,
-      double yPosition, double maxWidth) {
+      double yPosition, double maxWidth, bool isDarkMode) {
     double xOffset = 0.0;
 
     for (final span in spans) {
@@ -315,7 +324,11 @@ class MinimapPainter extends CustomPainter {
       if (actualWidth <= 0) break;
 
       final paint = Paint()
-        ..color = span.color.withOpacity(0.5)
+        ..color = isDarkMode
+            ? (span.color == Colors.black
+                ? Colors.white.withOpacity(0.4)
+                : span.color.withOpacity(0.4))
+            : span.color.withOpacity(0.6)
         ..style = PaintingStyle.fill;
 
       canvas.drawRect(

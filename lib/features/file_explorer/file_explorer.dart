@@ -102,13 +102,8 @@ class _FileExplorerState extends State<FileExplorer> {
                 });
               },
               child: Container(
-                width: 2,
+                width: 1,
                 color: Colors.transparent,
-                child: Center(
-                  child: Container(
-                    width: 0,
-                  ),
-                ),
               ),
             ),
           ),

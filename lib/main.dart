@@ -34,6 +34,7 @@ void main() async {
 
   final themeManager = ThemeManager(
     initialThemeMode: configService.config['theme'] ?? 'system',
+    configService: configService,
   );
 
   // Conditionally initialize desktop-specific configuration
@@ -156,6 +157,11 @@ class _MyHomePageState extends State<MyHomePage> {
         category: 'File',
       ),
       CommandItem(
+        icon: Icons.folder_open,
+        label: 'Open File',
+        category: 'File',
+      ),
+      CommandItem(
         icon: Icons.settings,
         label: 'Open Settings',
         category: 'Editor',
@@ -165,7 +171,31 @@ class _MyHomePageState extends State<MyHomePage> {
         label: 'Toggle File Explorer',
         category: 'View',
       ),
-      // Add more commands as needed
+      CommandItem(
+        icon: Icons.color_lens,
+        label: 'Toggle Dark Mode',
+        category: 'View',
+      ),
+      CommandItem(
+        icon: Icons.zoom_in,
+        label: 'Increase Font Size',
+        category: 'Editor',
+      ),
+      CommandItem(
+        icon: Icons.zoom_out,
+        label: 'Decrease Font Size',
+        category: 'Editor',
+      ),
+      CommandItem(
+        icon: Icons.undo,
+        label: 'Undo',
+        category: 'Edit',
+      ),
+      CommandItem(
+        icon: Icons.redo,
+        label: 'Redo',
+        category: 'Edit',
+      ),
     ];
   }
 
@@ -177,13 +207,30 @@ class _MyHomePageState extends State<MyHomePage> {
       case 'New File':
         _createNewFile();
         break;
+      case 'Open File':
+        _openFile();
+        break;
       case 'Open Settings':
         _openSettings();
         break;
       case 'Toggle File Explorer':
         _toggleFileExplorer();
         break;
-      // Add more cases for other commands
+      case 'Toggle Dark Mode':
+        _toggleDarkMode();
+        break;
+      case 'Increase Font Size':
+        _increaseFontSize();
+        break;
+      case 'Decrease Font Size':
+        _decreaseFontSize();
+        break;
+      case 'Undo':
+        _undo();
+        break;
+      case 'Redo':
+        _redo();
+        break;
     }
     _toggleCommandPalette();
   }
@@ -205,6 +252,36 @@ class _MyHomePageState extends State<MyHomePage> {
     } else {
       print("Could not save: currentTabIndexNotifier.value is null.");
     }
+  }
+
+  void _openFile() {
+    // Implement file opening logic
+    print("Opening a file");
+  }
+
+  void _toggleDarkMode() {
+    final themeManager = Provider.of<ThemeManager>(context, listen: false);
+    themeManager.toggleTheme();
+  }
+
+  void _increaseFontSize() {
+    widget.configService.updateConfig(
+        'fontSize', (widget.configService.config['fontSize'] ?? 16) + 1);
+  }
+
+  void _decreaseFontSize() {
+    widget.configService.updateConfig(
+        'fontSize', (widget.configService.config['fontSize'] ?? 16) - 1);
+  }
+
+  void _undo() {
+    // Implement undo logic
+    print("Undoing last action");
+  }
+
+  void _redo() {
+    // Implement redo logic
+    print("Redoing last undone action");
   }
 
   void _createNewFile() {

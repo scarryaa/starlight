@@ -927,7 +927,8 @@ class EditorPainter extends CustomPainter {
   final BuildContext buildContext;
   final SyntaxHighlightingService highlightingService =
       SyntaxHighlightingService();
-  final Color codeBlockLineColor = Colors.grey.withOpacity(0.15);
+  final bool isDarkMode;
+  final Color codeBlockLineColor;
   final double codeBlockLineWidth = 1.0;
   late List<List<int>> indentationLevels;
   final List<int>? matchingBrackets;
@@ -967,7 +968,24 @@ class EditorPainter extends CustomPainter {
     required this.matchPositions,
     required this.currentMatch,
     required this.selectedMatches,
-  }) {
+  })  : isDarkMode = Provider.of<ThemeManager>(buildContext, listen: false)
+                    .themeMode ==
+                ThemeMode.dark ||
+            (Provider.of<ThemeManager>(buildContext, listen: false).themeMode ==
+                    ThemeMode.system &&
+                MediaQuery.of(buildContext).platformBrightness ==
+                    Brightness.dark),
+        codeBlockLineColor =
+            (Provider.of<ThemeManager>(buildContext, listen: false).themeMode ==
+                        ThemeMode.dark ||
+                    (Provider.of<ThemeManager>(buildContext, listen: false)
+                                .themeMode ==
+                            ThemeMode.system &&
+                        MediaQuery.of(buildContext).platformBrightness ==
+                            Brightness.dark))
+                ? Colors.grey[800]!.withOpacity(0.3) // Dark mode color
+                : Colors.grey.withOpacity(0.05), // Light mode color
+        super() {
     charWidth = _measureCharWidth("w");
     lineHeight = _measureLineHeight("y");
 

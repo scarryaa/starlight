@@ -10,7 +10,8 @@ class ConfigService {
   TabService tabService;
   late String configPath;
   Map<String, dynamic> config = {};
-  final ValueNotifier<bool> fileExplorerVisibilityNotifier = ValueNotifier(true);
+  final ValueNotifier<bool> fileExplorerVisibilityNotifier =
+      ValueNotifier(true);
 
   ConfigService({required this.fileService, required this.tabService}) {
     configPath = _resolveConfigPath();
@@ -21,7 +22,7 @@ class ConfigService {
     _saveConfig();
     if (key == 'fileExplorerVisible') {
       fileExplorerVisibilityNotifier.value = value;
-    }
+    } else if (key == "theme") {}
   }
 
   void _saveConfig() {
@@ -57,7 +58,8 @@ class ConfigService {
     try {
       final fileContent = File(configPath).readAsStringSync();
       config = json.decode(fileContent);
-      fileExplorerVisibilityNotifier.value = config['fileExplorerVisible'] ?? true;
+      fileExplorerVisibilityNotifier.value =
+          config['fileExplorerVisible'] ?? true;
     } catch (e) {
       print('Error loading config: $e');
       createDefaultConfig();
@@ -76,7 +78,8 @@ class ConfigService {
   }
 
   void toggleFileExplorerVisibility() {
-    fileExplorerVisibilityNotifier.value = !fileExplorerVisibilityNotifier.value;
+    fileExplorerVisibilityNotifier.value =
+        !fileExplorerVisibilityNotifier.value;
     updateConfig('fileExplorerVisible', fileExplorerVisibilityNotifier.value);
   }
 

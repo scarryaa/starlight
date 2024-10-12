@@ -1,19 +1,23 @@
 import 'package:flutter/material.dart';
+import 'package:starlight/services/config_service.dart';
 
 class ThemeManager extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.system;
   ThemeData _lightTheme;
   ThemeData _darkTheme;
+  final ConfigService _configService;
 
   ThemeManager({
+    required ConfigService configService,
     ThemeData? lightTheme,
     ThemeData? darkTheme,
     dynamic initialThemeMode,
-  })  : _lightTheme = lightTheme ?? _defaultLightTheme,
+  })  : _configService = configService,
+        _lightTheme = lightTheme ?? _defaultLightTheme,
         _darkTheme = darkTheme ?? _defaultDarkTheme {
-    setThemeMode(initialThemeMode ?? ThemeMode.system);
+    setThemeMode(
+        initialThemeMode ?? configService.config['theme'] ?? ThemeMode.system);
   }
-
   ThemeMode get themeMode => _themeMode;
   ThemeData get lightTheme => _lightTheme;
   ThemeData get darkTheme => _darkTheme;
@@ -41,7 +45,31 @@ class ThemeManager extends ChangeNotifier {
     } else {
       _themeMode = ThemeMode.system;
     }
+    _saveThemePreference();
     notifyListeners();
+  }
+
+  void toggleTheme() {
+    _themeMode =
+        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
+    _saveThemePreference();
+    notifyListeners();
+  }
+
+  void _saveThemePreference() {
+    String themeString;
+    switch (_themeMode) {
+      case ThemeMode.light:
+        themeString = 'light';
+        break;
+      case ThemeMode.dark:
+        themeString = 'dark';
+        break;
+      case ThemeMode.system:
+        themeString = 'system';
+        break;
+    }
+    _configService.updateConfig('theme', themeString);
   }
 
   ThemeMode _parseThemeMode(String mode) {
@@ -62,12 +90,6 @@ class ThemeManager extends ChangeNotifier {
 
   void setDarkTheme(ThemeData theme) {
     _darkTheme = theme;
-    notifyListeners();
-  }
-
-  void toggleTheme() {
-    _themeMode =
-        _themeMode == ThemeMode.light ? ThemeMode.dark : ThemeMode.light;
     notifyListeners();
   }
 
