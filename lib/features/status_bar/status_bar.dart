@@ -53,23 +53,6 @@ class StatusBar extends StatelessWidget {
                 },
               ),
               const SizedBox(width: 8),
-              // Current File Path
-              Expanded(
-                child: ValueListenableBuilder<int?>(
-                  valueListenable: tabService.currentTabIndexNotifier,
-                  builder: (context, currentTabIndex, child) {
-                    final Tab? currentTab = currentTabIndex != null &&
-                            currentTabIndex < tabService.tabs.length
-                        ? tabService.tabs[currentTabIndex]
-                        : null;
-                    return Text(
-                      currentTab?.path ?? '',
-                      style: Theme.of(context).textTheme.bodySmall,
-                      overflow: TextOverflow.ellipsis,
-                    );
-                  },
-                ),
-              ),
               // Cursor Position and Tab Size
               ValueListenableBuilder<CursorPosition>(
                 valueListenable: tabService.cursorPositionNotifier,

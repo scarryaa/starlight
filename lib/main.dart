@@ -197,8 +197,10 @@ class _MyHomePageState extends State<MyHomePage> {
                   .content,
               isModified: false);
           widget.fileService.writeFile(
-              widget.tabService
-                  .tabs[widget.tabService.currentTabIndexNotifier.value!].path,
+              widget
+                  .tabService
+                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
+                  .fullPath,
               widget
                   .tabService
                   .tabs[widget.tabService.currentTabIndexNotifier.value!]

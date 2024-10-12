@@ -43,12 +43,14 @@ class EditorContent extends StatefulWidget {
   final List<int> matchPositions;
   final int currentMatch;
   final List<int> selectedMatches;
+  final ValueNotifier<String> contentNotifier;
 
   double get actualLineHeight => EditorContentState.lineHeight;
   double get charWidth => EditorContentState.charWidth;
 
   const EditorContent({
     super.key,
+    required this.contentNotifier,
     required this.configService,
     required this.editorSelectionManager,
     required this.hotkeyService,
@@ -70,14 +72,6 @@ class EditorContent extends StatefulWidget {
     required this.currentMatch,
     required this.selectedMatches,
   });
-
-  void updateContent(String newContent) {
-    if (key is GlobalKey<EditorContentState>) {
-      (key as GlobalKey<EditorContentState>)
-          .currentState
-          ?.updateContent(newContent);
-    }
-  }
 
   @override
   State<EditorContent> createState() => EditorContentState();
@@ -108,6 +102,7 @@ class EditorContentState extends State<EditorContent> {
   @override
   void initState() {
     super.initState();
+    widget.contentNotifier.addListener(_onContentChanged);
     rope = Rope(widget.tab.content);
     updateLineCounts();
 
@@ -174,10 +169,20 @@ class EditorContentState extends State<EditorContent> {
 
   @override
   void dispose() {
+    widget.contentNotifier.removeListener(_onContentChanged);
     widget.caretPositionNotifier.removeListener(_handleCaretPositionChange);
     widget.verticalController.removeListener(_handleVerticalScroll);
     widget.horizontalController.removeListener(_handleHorizontalScroll);
     super.dispose();
+  }
+
+  void _onContentChanged() {
+    setState(() {
+      rope = Rope(widget.contentNotifier.value);
+      updateLineCounts();
+      widget.editorSelectionManager.updateRope(rope);
+      keyboardHandler.rope = rope;
+    });
   }
 
   void _handleVerticalScroll() {

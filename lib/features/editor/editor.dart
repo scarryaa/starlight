@@ -51,6 +51,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   late TabController tabController;
   late CaretPositionNotifier _caretPositionNotifier;
   late EditorContent currentEditorContent;
+  final Map<String, ValueNotifier<String>> _contentNotifiers = {};
 
   // Search-related state
   bool isSearchVisible = false;
@@ -79,6 +80,15 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     );
     _updateEditorInstances();
     widget.tabService.addListener(_handleTabsChanged);
+    _initContentNotifiers();
+  }
+
+  void _initContentNotifiers() {
+    for (var tab in widget.tabService.tabs) {
+      if (!_contentNotifiers.containsKey(tab.path)) {
+        _contentNotifiers[tab.path] = ValueNotifier<String>(tab.content);
+      }
+    }
   }
 
   void _initScrollControllers() {
@@ -92,18 +102,23 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     if (!mounted) return;
 
     setState(() {
-      // Add controllers for new tabs
+      // Add controllers and notifiers for new tabs
       for (var tab in widget.tabService.tabs) {
         if (!_verticalControllers.containsKey(tab.path)) {
           _verticalControllers[tab.path] = ScrollController();
           _horizontalControllers[tab.path] = ScrollController();
         }
+        if (!_contentNotifiers.containsKey(tab.path)) {
+          _contentNotifiers[tab.path] = ValueNotifier<String>(tab.content);
+        }
       }
 
-      // Remove controllers for closed tabs
+      // Remove controllers and notifiers for closed tabs
       _verticalControllers.removeWhere(
           (key, _) => !widget.tabService.tabs.any((tab) => tab.path == key));
       _horizontalControllers.removeWhere(
+          (key, _) => !widget.tabService.tabs.any((tab) => tab.path == key));
+      _contentNotifiers.removeWhere(
           (key, _) => !widget.tabService.tabs.any((tab) => tab.path == key));
 
       // Recreate TabController
@@ -126,14 +141,19 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   }
 
   Widget _buildEditor(Tab tab) {
+    if (!_contentNotifiers.containsKey(tab.path)) {
+      _contentNotifiers[tab.path] = ValueNotifier<String>(tab.content);
+    }
+
     currentEditorContent = EditorContent(
-      key: GlobalKey<EditorContentState>(),
+      contentNotifier: _contentNotifiers[tab.path]!,
       searchQuery: searchQuery,
       matchPositions: matchPositions,
       currentMatch: currentMatch,
       isSearchVisible: isSearchVisible,
       selectedMatches: selectedMatches,
       caretPositionNotifier: _caretPositionNotifier,
+      key: ValueKey(tab.path),
       editorSelectionManager: widget.editorSelectionManager,
       configService: widget.configService,
       hotkeyService: widget.hotkeyService,
@@ -211,9 +231,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
           isModified: true);
 
       // Update the EditorContent
-      EditorContent editorContent =
-          _editorInstances[tabController.index] as EditorContent;
-      editorContent.updateContent(newContent);
+      _contentNotifiers[widget.tabService.currentTab!.path]!.value = newContent;
 
       // Re-run search to update matches
       _performSearch();
@@ -232,9 +250,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
           isModified: true);
 
       // Update the EditorContent
-      EditorContent editorContent =
-          _editorInstances[tabController.index] as EditorContent;
-      editorContent.updateContent(newContent);
+      _contentNotifiers[widget.tabService.currentTab!.path]!.value = newContent;
 
       _performSearch(); // Re-run search to update matches
     });
@@ -500,6 +516,9 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     }
     for (var controller in _horizontalControllers.values) {
       controller.dispose();
+    }
+    for (var notifier in _contentNotifiers.values) {
+      notifier.dispose();
     }
     tabController.dispose();
     widget.tabService.removeListener(_handleTabsChanged);
