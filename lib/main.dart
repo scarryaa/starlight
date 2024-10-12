@@ -12,6 +12,7 @@ import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/services/theme_manager.dart';
+import 'package:starlight/widgets/tab/command_palette/command_palette.dart';
 
 // Conditionally import desktop-specific packages
 import 'desktop_config.dart' if (dart.library.html) 'desktop_config_stub.dart';
@@ -117,22 +118,106 @@ class MyHomePage extends StatefulWidget {
 class _MyHomePageState extends State<MyHomePage> {
   late HotkeyService hotkeyService;
   final FocusNode _rootFocusNode = FocusNode();
-  final FocusNode _childFocusNode = FocusNode();
+  bool isCommandPaletteVisible = false;
+  final FocusNode _mainLayoutFocusNode = FocusNode();
+  late List<CommandItem> _commands;
 
   @override
   void initState() {
     super.initState();
     hotkeyService = HotkeyService();
+    _mainLayoutFocusNode.requestFocus();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _registerHotkeys();
     });
+    _initializeCommands();
+    _mainLayoutFocusNode.requestFocus();
   }
 
-  @override
-  void dispose() {
-    _rootFocusNode.dispose();
-    _childFocusNode.dispose();
-    super.dispose();
+  void _toggleCommandPalette() {
+    setState(() {
+      isCommandPaletteVisible = !isCommandPaletteVisible;
+      if (!isCommandPaletteVisible) {
+        _mainLayoutFocusNode.requestFocus();
+      }
+    });
+  }
+
+  void _initializeCommands() {
+    _commands = [
+      CommandItem(
+        icon: Icons.save,
+        label: 'Save File',
+        category: 'File',
+      ),
+      CommandItem(
+        icon: Icons.add,
+        label: 'New File',
+        category: 'File',
+      ),
+      CommandItem(
+        icon: Icons.settings,
+        label: 'Open Settings',
+        category: 'Editor',
+      ),
+      CommandItem(
+        icon: Icons.folder,
+        label: 'Toggle File Explorer',
+        category: 'View',
+      ),
+      // Add more commands as needed
+    ];
+  }
+
+  void _handleCommandSelection(String command) {
+    switch (command) {
+      case 'Save File':
+        _saveCurrentFile();
+        break;
+      case 'New File':
+        _createNewFile();
+        break;
+      case 'Open Settings':
+        _openSettings();
+        break;
+      case 'Toggle File Explorer':
+        _toggleFileExplorer();
+        break;
+      // Add more cases for other commands
+    }
+    _toggleCommandPalette();
+  }
+
+  void _saveCurrentFile() {
+    if (widget.tabService.currentTabIndexNotifier.value != null) {
+      widget.tabService.updateTabContent(
+        widget.tabService.currentTab!.path,
+        widget.tabService.tabs[widget.tabService.currentTabIndexNotifier.value!]
+            .content,
+        isModified: false,
+      );
+      widget.fileService.writeFile(
+        widget.tabService.tabs[widget.tabService.currentTabIndexNotifier.value!]
+            .fullPath,
+        widget.tabService.tabs[widget.tabService.currentTabIndexNotifier.value!]
+            .content,
+      );
+    } else {
+      print("Could not save: currentTabIndexNotifier.value is null.");
+    }
+  }
+
+  void _createNewFile() {
+    // Implement new file creation logic
+    print("Creating a new file");
+  }
+
+  void _openSettings() {
+    widget.configService.openConfig();
+  }
+
+  void _toggleFileExplorer() {
+    widget.configService.toggleFileExplorerVisibility();
   }
 
   @override
@@ -145,13 +230,8 @@ class _MyHomePageState extends State<MyHomePage> {
       autofocus: true,
       actions: const {},
       child: Focus(
-        focusNode: _childFocusNode,
-        onKeyEvent: (node, event) {
-          final result = hotkeyService.handleKeyEvent(event);
-          return result == KeyEventResult.handled
-              ? KeyEventResult.handled
-              : KeyEventResult.ignored;
-        },
+        focusNode: _mainLayoutFocusNode,
+        onKeyEvent: _handleKeyEvent,
         child: Scaffold(
           appBar: isDesktop ? null : AppBar(title: Text(widget.title)),
           drawer: isDesktop
@@ -164,22 +244,55 @@ class _MyHomePageState extends State<MyHomePage> {
                     tabService: widget.tabService,
                   ),
                 ),
-          body: isDesktop
-              ? DesktopLayout(
-                  configService: widget.configService,
-                  fileService: widget.fileService,
-                  tabService: widget.tabService,
-                  hotkeyService: hotkeyService,
-                )
-              : MobileLayout(
-                  configService: widget.configService,
-                  fileService: widget.fileService,
-                  tabService: widget.tabService,
-                  hotkeyService: hotkeyService,
+          body: Stack(
+            children: [
+              isDesktop
+                  ? DesktopLayout(
+                      configService: widget.configService,
+                      fileService: widget.fileService,
+                      tabService: widget.tabService,
+                      hotkeyService: hotkeyService,
+                    )
+                  : MobileLayout(
+                      configService: widget.configService,
+                      fileService: widget.fileService,
+                      tabService: widget.tabService,
+                      hotkeyService: hotkeyService,
+                    ),
+              if (isCommandPaletteVisible)
+                GestureDetector(
+                  onTap: _toggleCommandPalette,
+                  child: Container(
+                    color: Colors.black.withOpacity(0.25),
+                    child: Focus(
+                      canRequestFocus: isCommandPaletteVisible,
+                      child: CommandPalette(
+                        onCommandSelected: _handleCommandSelection,
+                        onClose: _toggleCommandPalette,
+                        commands: _commands,
+                      ),
+                    ),
+                  ),
                 ),
+            ],
+          ),
         ),
       ),
     );
+  }
+
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is KeyDownEvent) {
+      final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+      if (event.logicalKey == LogicalKeyboardKey.keyP &&
+          (isMacOS
+              ? HardwareKeyboard.instance.isMetaPressed
+              : HardwareKeyboard.instance.isControlPressed)) {
+        _toggleCommandPalette();
+        return KeyEventResult.handled;
+      }
+    }
+    return KeyEventResult.ignored;
   }
 
   void _registerHotkeys() {
@@ -220,6 +333,12 @@ class _MyHomePageState extends State<MyHomePage> {
       () {
         widget.configService.openConfig();
       },
+    );
+
+    hotkeyService.registerGlobalHotkey(
+      SingleActivator(LogicalKeyboardKey.keyP,
+          meta: isMacOS, control: !isMacOS),
+      _toggleCommandPalette,
     );
   }
 }

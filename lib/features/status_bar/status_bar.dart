@@ -51,7 +51,7 @@ class StatusBar extends StatelessWidget {
                   );
                 },
               ),
-              const Spacer(), // This pushes the following items to the right
+              const Spacer(),
               // Cursor Position and Tab Size
               ValueListenableBuilder<CursorPosition>(
                 valueListenable: tabService.cursorPositionNotifier,

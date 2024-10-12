@@ -37,29 +37,29 @@ class _EditorMinimapState extends State<EditorMinimap> {
   @override
   void initState() {
     super.initState();
-    _minimapCache = MinimapCache(
-      rope: widget.rope,
-      syntaxHighlighter: widget.syntaxHighlighter,
-      editorHeight: widget.editorHeight,
-      lineHeight: widget.lineHeight,
-    );
+    _updateMinimapCache();
+    WidgetsBinding.instance.addPostFrameCallback(_postFrameCallback);
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (widget.verticalController.hasClients) {
-        setState(() {});
-      }
-      widget.verticalController.addListener(_handleScroll);
-    });
+  void _postFrameCallback(_) {
+    if (widget.verticalController.hasClients) {
+      setState(() {});
+    }
+    widget.verticalController.addListener(_handleScroll);
   }
 
   @override
   void didUpdateWidget(EditorMinimap oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.rope != widget.rope ||
-        oldWidget.editorHeight != widget.editorHeight ||
-        oldWidget.lineHeight != widget.lineHeight) {
+    if (_shouldUpdateCache(oldWidget)) {
       _updateMinimapCache();
     }
+  }
+
+  bool _shouldUpdateCache(EditorMinimap oldWidget) {
+    return oldWidget.rope != widget.rope ||
+        oldWidget.editorHeight != widget.editorHeight ||
+        oldWidget.lineHeight != widget.lineHeight;
   }
 
   void _updateMinimapCache() {
@@ -108,15 +108,14 @@ class _EditorMinimapState extends State<EditorMinimap> {
   void _handleMouseWheel(PointerSignalEvent event) {
     if (event is PointerScrollEvent && widget.verticalController.hasClients) {
       final scrollDelta = event.scrollDelta.dy;
-      final viewportDimension = widget.verticalController.hasClients
-          ? widget.verticalController.position.viewportDimension
-          : 0.0;
+      final viewportDimension =
+          widget.verticalController.position.viewportDimension;
       final scaleFactor = widget.editorHeight / viewportDimension;
       var scrollAmount = scrollDelta * scaleFactor * _scrollMultiplier;
 
-      if (scrollAmount.abs() < _minScrollAmount) {
-        scrollAmount = scrollAmount.sign * _minScrollAmount;
-      }
+      scrollAmount = scrollAmount.abs() < _minScrollAmount
+          ? scrollAmount.sign * _minScrollAmount
+          : scrollAmount;
 
       final newScrollPosition = widget.verticalController.offset + scrollAmount;
       _scrollToPosition(newScrollPosition);
@@ -133,7 +132,7 @@ class _EditorMinimapState extends State<EditorMinimap> {
 
   @override
   Widget build(BuildContext context) {
-    if (!widget.verticalController.hasClients || _minimapCache == null) {
+    if (!widget.verticalController.hasClients) {
       return const SizedBox.shrink();
     }
 
@@ -163,12 +162,9 @@ class _EditorMinimapState extends State<EditorMinimap> {
             painter: MinimapPainter(
               minimapCache: _minimapCache,
               scale: miniMapScale,
-              scrollOffset: widget.verticalController.hasClients
-                  ? widget.verticalController.offset
-                  : 0,
-              viewportHeight: widget.verticalController.hasClients
-                  ? widget.verticalController.position.viewportDimension
-                  : 0,
+              scrollOffset: widget.verticalController.offset,
+              viewportHeight:
+                  widget.verticalController.position.viewportDimension,
               editorHeight: widget.editorHeight,
               currentLine: widget.currentLine,
             ),
@@ -249,15 +245,20 @@ class MinimapPainter extends CustomPainter {
     final scaleFactor =
         contentHeight < size.height ? 1.0 : size.height / contentHeight;
 
-    _drawMinimapContent(canvas, size, scaleFactor.toDouble());
-    _drawViewportIndicator(canvas, size, scaleFactor.toDouble());
-    _drawCurrentLineIndicator(canvas, size, scaleFactor.toDouble());
+    _drawMinimapContent(canvas, size, scaleFactor);
+    _drawViewportIndicator(canvas, size, scaleFactor);
+    _drawCurrentLineIndicator(canvas, size, scaleFactor);
   }
 
   void _drawMinimapContent(Canvas canvas, Size size, double scaleFactor) {
-    for (int i = 0; i < minimapCache.cachedLines.length; i++) {
-      final yPosition = i * minimapCache.lineHeight * scale * scaleFactor;
-      if (yPosition > size.height) break;
+    final visibleLines =
+        (size.height / (minimapCache.lineHeight * scale * scaleFactor)).ceil();
+    final startLine = (scrollOffset / minimapCache.lineHeight).floor();
+    final endLine =
+        min(startLine + visibleLines, minimapCache.cachedLines.length);
+
+    for (int i = 0; i < endLine; i++) {
+      final yPosition = (i) * minimapCache.lineHeight * scale * scaleFactor;
       _drawHighlightedLine(
           canvas, minimapCache.cachedLines[i], yPosition, size.width);
     }
@@ -266,7 +267,7 @@ class MinimapPainter extends CustomPainter {
   void _drawViewportIndicator(Canvas canvas, Size size, double scaleFactor) {
     final contentHeight =
         minimapCache.rope.lineCount * minimapCache.lineHeight * scale;
-    final actualHeight = min<double>(contentHeight, size.height).toDouble();
+    final actualHeight = min<double>(contentHeight, size.height);
     final viewportRatio = viewportHeight / editorHeight;
     final indicatorHeight = actualHeight * viewportRatio;
 
@@ -280,21 +281,27 @@ class MinimapPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     canvas.drawRect(
-      Rect.fromLTWH(0, indicatorTop.toDouble(), size.width, indicatorHeight),
+      Rect.fromLTWH(0, indicatorTop, size.width, indicatorHeight),
       indicatorPaint,
     );
   }
 
   void _drawCurrentLineIndicator(Canvas canvas, Size size, double scaleFactor) {
-    final currentLineY =
-        currentLine * minimapCache.lineHeight * scale * scaleFactor;
-    canvas.drawRect(
-      Rect.fromLTWH(0, currentLineY, size.width,
-          minimapCache.lineHeight * scale * scaleFactor),
-      Paint()
-        ..color = Colors.lightBlue.withOpacity(0.2)
-        ..style = PaintingStyle.fill,
-    );
+    final startLine = (scrollOffset / minimapCache.lineHeight).floor();
+    final currentLineY = (currentLine - startLine) *
+        minimapCache.lineHeight *
+        scale *
+        scaleFactor;
+
+    if (currentLineY >= 0 && currentLineY < size.height) {
+      canvas.drawRect(
+        Rect.fromLTWH(0, currentLineY, size.width,
+            minimapCache.lineHeight * scale * scaleFactor),
+        Paint()
+          ..color = Colors.lightBlue.withOpacity(0.2)
+          ..style = PaintingStyle.fill,
+      );
+    }
   }
 
   void _drawHighlightedLine(Canvas canvas, List<MinimapSpan> spans,
@@ -330,4 +337,3 @@ class MinimapPainter extends CustomPainter {
         oldDelegate.minimapCache != minimapCache;
   }
 }
-
