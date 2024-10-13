@@ -255,24 +255,6 @@ class EditorHotbarState extends State<EditorHotbar> {
     );
   }
 
-  void _handleReplaceKeyPress(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
-      final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
-      final bool isMetaOrControl =
-          isMacOS ? event.isMetaPressed : event.isControlPressed;
-
-      if (event.isKeyPressed(LogicalKeyboardKey.keyF) && isMetaOrControl) {
-        // Ctrl+F or Cmd+F: Hide search
-        widget.searchService.closeSearch();
-      } else if (event.isKeyPressed(LogicalKeyboardKey.keyH) &&
-          event.isShiftPressed &&
-          isMetaOrControl) {
-        // Ctrl+Shift+H or Cmd+Shift+H: Toggle replace
-        _toggleReplace();
-      }
-    }
-  }
-
   void _handleSearchKeyPress(RawKeyEvent event) {
     if (event is RawKeyDownEvent) {
       final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
@@ -280,13 +262,28 @@ class EditorHotbarState extends State<EditorHotbar> {
           isMacOS ? event.isMetaPressed : event.isControlPressed;
 
       if (event.logicalKey == LogicalKeyboardKey.escape) {
-        // Escape: Close search
         widget.searchService.closeSearch();
-      } else if (event.isKeyPressed(LogicalKeyboardKey.keyF) &&
+      } else if (event.logicalKey == LogicalKeyboardKey.keyF &&
           isMetaOrControl) {
+        widget.searchService.closeSearch();
+      } else if (event.logicalKey == LogicalKeyboardKey.keyH &&
+          event.isShiftPressed &&
+          isMetaOrControl) {
+        _toggleReplace();
+      }
+    }
+  }
+
+  void _handleReplaceKeyPress(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+      final bool isMetaOrControl =
+          isMacOS ? event.isMetaPressed : event.isControlPressed;
+
+      if (event.logicalKey == LogicalKeyboardKey.keyF && isMetaOrControl) {
         // Ctrl+F or Cmd+F: Hide search
         widget.searchService.closeSearch();
-      } else if (event.isKeyPressed(LogicalKeyboardKey.keyH) &&
+      } else if (event.logicalKey == LogicalKeyboardKey.keyH &&
           event.isShiftPressed &&
           isMetaOrControl) {
         // Ctrl+Shift+H or Cmd+Shift+H: Toggle replace
@@ -310,10 +307,6 @@ class EditorHotbarState extends State<EditorHotbar> {
     if (event is RawKeyDownEvent) {
       if (event.logicalKey == LogicalKeyboardKey.escape) {
         widget.searchService.closeSearch();
-      } else if (event.isKeyPressed(LogicalKeyboardKey.keyH) &&
-          event.isShiftPressed &&
-          (event.isMetaPressed || event.isControlPressed)) {
-        refocusReplace();
       }
     }
   }
