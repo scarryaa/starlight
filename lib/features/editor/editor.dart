@@ -9,6 +9,7 @@ import 'package:starlight/features/editor/services/editor_selection_manager.dart
 import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
+import 'package:starlight/services/search_service.dart';
 import 'package:starlight/widgets/tab/tab.dart' as CustomTab;
 import 'package:starlight/services/file_service.dart';
 import 'package:starlight/services/tab_service.dart';
@@ -26,6 +27,7 @@ class Editor extends StatefulWidget {
   final double fontSize;
   final int tabSize;
   final ConfigService configService;
+  final SearchService searchService;
 
   Editor({
     super.key,
@@ -33,6 +35,7 @@ class Editor extends StatefulWidget {
     required this.fileService,
     required this.hotkeyService,
     required this.configService,
+    required this.searchService,
     this.lineHeight = 1.5,
     this.fontFamily = "ZedMono Nerd Font",
     this.fontSize = 16,
@@ -52,9 +55,10 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   late CaretPositionNotifier _caretPositionNotifier;
   late EditorContent currentEditorContent;
   final Map<String, ValueNotifier<String>> _contentNotifiers = {};
+  final GlobalKey<EditorHotbarState> _editorHotbarKey =
+      GlobalKey<EditorHotbarState>();
 
   // Search-related state
-  bool isSearchVisible = false;
   String searchQuery = '';
   String replaceQuery = '';
   int currentMatch = 0;
@@ -81,6 +85,22 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     _updateEditorInstances();
     widget.tabService.addListener(_handleTabsChanged);
     _initContentNotifiers();
+    widget.searchService.isSearchVisibleNotifier
+        .addListener(_onSearchVisibilityChanged);
+  }
+
+  void _onSearchVisibilityChanged() {
+    if (!widget.searchService.isSearchVisibleNotifier.value) {
+      _clearSearch();
+    }
+    _updateEditorInstances();
+  }
+
+  void toggleSearch() {
+    widget.searchService.requestSearchFocus();
+    if (widget.searchService.isSearchVisibleNotifier.value) {
+      _editorHotbarKey.currentState?.refocusSearch();
+    }
   }
 
   void _initContentNotifiers() {
@@ -150,7 +170,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       searchQuery: searchQuery,
       matchPositions: matchPositions,
       currentMatch: currentMatch,
-      isSearchVisible: isSearchVisible,
+      isSearchVisible: widget.searchService.isSearchVisibleNotifier.value,
       selectedMatches: selectedMatches,
       caretPositionNotifier: _caretPositionNotifier,
       key: ValueKey(tab.path),
@@ -178,17 +198,11 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   }
 
   void _toggleSearch() {
-    setState(() {
-      isSearchVisible = !isSearchVisible;
-      if (!isSearchVisible) {
-        _clearSearch();
-      }
-      _updateEditorInstances();
-    });
-  }
-
-  void _closeSearch() {
-    _clearSearch();
+    widget.searchService.toggleSearch();
+    if (!widget.searchService.isSearchVisibleNotifier.value) {
+      _clearSearch();
+    }
+    _updateEditorInstances();
   }
 
   void _handleSearchChanged(String query) {
@@ -398,16 +412,14 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   }
 
   void _clearSearch() {
-    setState(() {
-      isSearchVisible = false;
-      searchQuery = '';
-      replaceQuery = '';
-      currentMatch = 0;
-      totalMatches = 0;
-      matchPositions.clear();
-      selectedMatches.clear();
-      _updateEditorInstances();
-    });
+    widget.searchService.closeSearch();
+    searchQuery = '';
+    replaceQuery = '';
+    currentMatch = 0;
+    totalMatches = 0;
+    matchPositions.clear();
+    selectedMatches.clear();
+    _updateEditorInstances();
   }
 
   void _handleCaretPositionChange() {
@@ -474,28 +486,33 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
           ),
         ),
         if (widget.tabService.tabs.isNotEmpty)
-          EditorHotbar(
-            currentTab: widget.tabService.currentTab,
-            isSearchVisible: isSearchVisible,
-            onSearch: _toggleSearch,
-            onCloseSearch: _closeSearch,
-            onSearchChanged: _handleSearchChanged,
-            onReplaceChanged: _handleReplaceChanged,
-            onNextMatch: _nextMatch,
-            onPreviousMatch: _previousMatch,
-            onReplace: _replace,
-            onReplaceAll: _replaceAll,
-            onSelectAllMatches: _selectAllMatches,
-            currentMatch: currentMatch,
-            totalMatches: totalMatches,
-            showReplace: showReplace,
-            onToggleReplace: _toggleReplace,
-            matchCase: matchCase,
-            matchWholeWord: matchWholeWord,
-            useRegex: useRegex,
-            onMatchCaseChanged: _toggleMatchCase,
-            onMatchWholeWordChanged: _toggleMatchWholeWord,
-            onUseRegexChanged: _toggleUseRegex,
+          ValueListenableBuilder<bool>(
+            valueListenable: widget.searchService.isSearchVisibleNotifier,
+            builder: (context, isSearchVisible, child) {
+              return EditorHotbar(
+                key: _editorHotbarKey,
+                currentTab: widget.tabService.currentTab,
+                searchService: widget.searchService,
+                onSearchChanged: _handleSearchChanged,
+                onReplaceChanged: _handleReplaceChanged,
+                onNextMatch: _nextMatch,
+                onPreviousMatch: _previousMatch,
+                onReplace: _replace,
+                onReplaceAll: _replaceAll,
+                onSelectAllMatches: _selectAllMatches,
+                currentMatch: currentMatch,
+                totalMatches: totalMatches,
+                showReplace: showReplace,
+                onToggleReplace: _toggleReplace,
+                matchCase: matchCase,
+                matchWholeWord: matchWholeWord,
+                useRegex: useRegex,
+                onMatchCaseChanged: _toggleMatchCase,
+                onMatchWholeWordChanged: _toggleMatchWholeWord,
+                onUseRegexChanged: _toggleUseRegex,
+                isSearchVisible: isSearchVisible,
+              );
+            },
           ),
         Expanded(
           child: TabBarView(
@@ -522,6 +539,8 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     }
     tabController.dispose();
     widget.tabService.removeListener(_handleTabsChanged);
+    widget.searchService.isSearchVisibleNotifier
+        .removeListener(_onSearchVisibilityChanged);
     super.dispose();
   }
 }

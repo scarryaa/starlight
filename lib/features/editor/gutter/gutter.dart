@@ -164,4 +164,3 @@ class _EditorGutterState extends State<EditorGutter> {
     super.dispose();
   }
 }
-

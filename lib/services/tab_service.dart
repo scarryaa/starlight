@@ -160,9 +160,14 @@ class TabService extends ChangeNotifier {
     }
   }
 
-  void addTab(String fileName, String path, String fullAbsolutePath) {
-    if (!_tabs.any((tab) => tab.fullPath == path)) {
-      final fileContent = fileService.readFile(path);
+  void addTab(String fileName, String path, String fullAbsolutePath,
+      {String? content}) {
+    int existingIndex =
+        _tabs.indexWhere((tab) => tab.fullPath == fullAbsolutePath);
+
+    if (existingIndex == -1) {
+      // Tab doesn't exist, create a new one
+      final fileContent = content ?? fileService.readFile(fullAbsolutePath);
       _tabs.add(Tab(
         onCloseRequest: onCloseRequest,
         fullAbsolutePath: fullAbsolutePath,
@@ -173,12 +178,17 @@ class TabService extends ChangeNotifier {
         isModified: false,
       ));
       setCurrentTab(_tabs.length - 1);
-      notifyListeners();
     } else {
-      // If the tab already exists, just set it as the current tab
-      int existingIndex = _tabs.indexWhere((tab) => tab.fullPath == path);
+      // Tab already exists
+      if (content != null && content != _tabs[existingIndex].content) {
+        // Update the content if it's provided and different
+        _tabs[existingIndex].content = content;
+        _tabs[existingIndex].isModified = true;
+      }
       setCurrentTab(existingIndex);
     }
+
+    notifyListeners();
   }
 
   void pinTab(int index) {

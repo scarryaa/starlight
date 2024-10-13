@@ -1,6 +1,8 @@
 import 'dart:io' show Platform;
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:starlight/features/editor/editor.dart';
@@ -9,6 +11,7 @@ import 'package:starlight/features/status_bar/status_bar.dart';
 import 'package:starlight/services/caret_position_notifier.dart';
 import 'package:starlight/services/config_service.dart';
 import 'package:starlight/services/file_service.dart';
+import 'package:starlight/services/search_service.dart';
 import 'package:starlight/services/tab_service.dart';
 import 'package:starlight/services/hotkey_service.dart';
 import 'package:starlight/services/theme_manager.dart';
@@ -16,6 +19,10 @@ import 'package:starlight/widgets/tab/command_palette/command_palette.dart';
 
 // Conditionally import desktop-specific packages
 import 'desktop_config.dart' if (dart.library.html) 'desktop_config_stub.dart';
+
+class SearchIntent extends Intent {
+  const SearchIntent();
+}
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -26,6 +33,7 @@ void main() async {
       fileService: fileService, caretPositionNotifier: caretPositionNotifier);
   final configService =
       ConfigService(fileService: fileService, tabService: tabService);
+  final searchService = SearchService();
 
   configService.loadConfig();
 
@@ -36,6 +44,8 @@ void main() async {
     initialThemeMode: configService.config['theme'] ?? 'system',
     configService: configService,
   );
+
+  final hotkeyService = HotkeyService();
 
   // Conditionally initialize desktop-specific configuration
   if (!kIsWeb && (Platform.isWindows || Platform.isLinux || Platform.isMacOS)) {
@@ -48,6 +58,8 @@ void main() async {
     configService: configService,
     fileService: fileService,
     tabService: tabService,
+    hotkeyService: hotkeyService,
+    searchService: searchService,
   ));
 }
 
@@ -57,6 +69,8 @@ class MyApp extends StatelessWidget {
   final FileService fileService;
   final TabService tabService;
   final CaretPositionNotifier caretPositionNotifier;
+  final HotkeyService hotkeyService;
+  final SearchService searchService;
 
   const MyApp({
     super.key,
@@ -65,6 +79,8 @@ class MyApp extends StatelessWidget {
     required this.fileService,
     required this.tabService,
     required this.caretPositionNotifier,
+    required this.hotkeyService,
+    required this.searchService,
   });
 
   @override
@@ -76,6 +92,8 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider.value(value: fileService),
         ChangeNotifierProvider.value(value: tabService),
         ChangeNotifierProvider.value(value: caretPositionNotifier),
+        Provider.value(value: hotkeyService),
+        Provider.value(value: searchService),
       ],
       child: Consumer<ThemeManager>(
         builder: (context, themeManager, child) {
@@ -90,6 +108,8 @@ class MyApp extends StatelessWidget {
               configService: configService,
               fileService: fileService,
               tabService: tabService,
+              hotkeyService: hotkeyService,
+              searchService: searchService,
             ),
           );
         },
@@ -103,6 +123,8 @@ class MyHomePage extends StatefulWidget {
   final ConfigService configService;
   final FileService fileService;
   final TabService tabService;
+  final HotkeyService hotkeyService;
+  final SearchService searchService;
 
   const MyHomePage({
     super.key,
@@ -110,6 +132,8 @@ class MyHomePage extends StatefulWidget {
     required this.configService,
     required this.fileService,
     required this.tabService,
+    required this.hotkeyService,
+    required this.searchService,
   });
 
   @override
@@ -254,9 +278,71 @@ class _MyHomePageState extends State<MyHomePage> {
     }
   }
 
-  void _openFile() {
-    // Implement file opening logic
-    print("Opening a file");
+  void _createNewFile() {
+    final currentDirectory = widget.fileService.currentDirectoryNotifier.value;
+    showDialog(
+      context: context,
+      builder: (context) {
+        final TextEditingController controller = TextEditingController();
+        return AlertDialog(
+          title: const Text('New File'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'Enter file name'),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () {
+                final fileName = controller.text.trim();
+                if (fileName.isNotEmpty) {
+                  final path = p.join(currentDirectory, fileName);
+                  widget.fileService.createFile(path);
+                  widget.tabService.addTab(fileName, path, path);
+                  Navigator.of(context).pop();
+                }
+              },
+              child: const Text('Create'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Future<void> _openFile() async {
+    FilePickerResult? result = await FilePicker.platform.pickFiles(
+      type: FileType.any,
+      allowMultiple: false,
+    );
+
+    if (result != null && result.files.single.path != null) {
+      String filePath = result.files.single.path!;
+      String fileName = p.basename(filePath);
+
+      // Read the file content
+      String fileContent = widget.fileService.readFile(filePath);
+
+      // Add the file to the tab service
+      widget.tabService
+          .addTab(fileName, filePath, filePath, content: fileContent);
+    }
+  }
+
+  void _undo() {
+    if (widget.tabService.currentTabIndexNotifier.value != null) {
+      final currentTab = widget.tabService.currentTab!;
+    }
+  }
+
+  void _redo() {
+    if (widget.tabService.currentTabIndexNotifier.value != null) {
+      final currentTab = widget.tabService.currentTab!;
+    }
   }
 
   void _toggleDarkMode() {
@@ -272,21 +358,6 @@ class _MyHomePageState extends State<MyHomePage> {
   void _decreaseFontSize() {
     widget.configService.updateConfig(
         'fontSize', (widget.configService.config['fontSize'] ?? 16) - 1);
-  }
-
-  void _undo() {
-    // Implement undo logic
-    print("Undoing last action");
-  }
-
-  void _redo() {
-    // Implement redo logic
-    print("Redoing last undone action");
-  }
-
-  void _createNewFile() {
-    // Implement new file creation logic
-    print("Creating a new file");
   }
 
   void _openSettings() {
@@ -305,7 +376,21 @@ class _MyHomePageState extends State<MyHomePage> {
     return FocusableActionDetector(
       focusNode: _rootFocusNode,
       autofocus: true,
-      actions: const {},
+      actions: {
+        SearchIntent: CallbackAction<SearchIntent>(
+          onInvoke: (SearchIntent intent) {
+            widget.searchService.toggleSearch();
+            widget.searchService.requestSearchFocus();
+            return null;
+          },
+        ),
+      },
+      shortcuts: {
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
+            const SearchIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
+            const SearchIntent(),
+      },
       child: Focus(
         focusNode: _mainLayoutFocusNode,
         onKeyEvent: _handleKeyEvent,
@@ -325,12 +410,14 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               isDesktop
                   ? DesktopLayout(
+                      searchService: widget.searchService,
                       configService: widget.configService,
                       fileService: widget.fileService,
                       tabService: widget.tabService,
                       hotkeyService: hotkeyService,
                     )
                   : MobileLayout(
+                      searchService: widget.searchService,
                       configService: widget.configService,
                       fileService: widget.fileService,
                       tabService: widget.tabService,
@@ -374,6 +461,15 @@ class _MyHomePageState extends State<MyHomePage> {
 
   void _registerHotkeys() {
     final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+    hotkeyService.registerGlobalHotkey(
+      SingleActivator(LogicalKeyboardKey.keyF,
+          meta: isMacOS, control: !isMacOS),
+      () {
+        widget.searchService.toggleSearch();
+        widget.searchService.requestSearchFocus();
+      },
+    );
+
     hotkeyService.registerGlobalHotkey(
       SingleActivator(LogicalKeyboardKey.keyS,
           meta: isMacOS, control: !isMacOS),
@@ -425,6 +521,7 @@ class DesktopLayout extends StatelessWidget {
   final FileService fileService;
   final TabService tabService;
   final HotkeyService hotkeyService;
+  final SearchService searchService;
 
   const DesktopLayout({
     super.key,
@@ -432,6 +529,7 @@ class DesktopLayout extends StatelessWidget {
     required this.fileService,
     required this.tabService,
     required this.hotkeyService,
+    required this.searchService,
   });
 
   @override
@@ -462,6 +560,7 @@ class DesktopLayout extends StatelessWidget {
               ),
               Expanded(
                 child: Editor(
+                  searchService: searchService,
                   configService: configService,
                   hotkeyService: hotkeyService,
                   tabService: tabService,
@@ -490,6 +589,7 @@ class MobileLayout extends StatelessWidget {
   final FileService fileService;
   final TabService tabService;
   final HotkeyService hotkeyService;
+  final SearchService searchService;
 
   const MobileLayout({
     super.key,
@@ -497,6 +597,7 @@ class MobileLayout extends StatelessWidget {
     required this.fileService,
     required this.tabService,
     required this.hotkeyService,
+    required this.searchService,
   });
 
   @override
@@ -513,6 +614,7 @@ class MobileLayout extends StatelessWidget {
                   ),
                 )
               : Editor(
+                  searchService: searchService,
                   configService: configService,
                   hotkeyService: hotkeyService,
                   tabService: tabService,
