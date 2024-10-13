@@ -24,6 +24,10 @@ class SearchIntent extends Intent {
   const SearchIntent();
 }
 
+class ReplaceIntent extends Intent {
+  const ReplaceIntent();
+}
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -380,7 +384,14 @@ class _MyHomePageState extends State<MyHomePage> {
         SearchIntent: CallbackAction<SearchIntent>(
           onInvoke: (SearchIntent intent) {
             widget.searchService.toggleSearch();
-            widget.searchService.requestSearchFocus();
+            _mainLayoutFocusNode.requestFocus();
+            return null;
+          },
+        ),
+        ReplaceIntent: CallbackAction<ReplaceIntent>(
+          onInvoke: (ReplaceIntent intent) {
+            widget.searchService.toggleReplaceAndOpenSearch();
+            _mainLayoutFocusNode.requestFocus();
             return null;
           },
         ),
@@ -390,6 +401,10 @@ class _MyHomePageState extends State<MyHomePage> {
             const SearchIntent(),
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyF):
             const SearchIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.shift,
+            LogicalKeyboardKey.keyH): const ReplaceIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.shift,
+            LogicalKeyboardKey.keyH): const ReplaceIntent(),
       },
       child: Focus(
         focusNode: _mainLayoutFocusNode,
@@ -466,7 +481,14 @@ class _MyHomePageState extends State<MyHomePage> {
           meta: isMacOS, control: !isMacOS),
       () {
         widget.searchService.toggleSearch();
-        widget.searchService.requestSearchFocus();
+      },
+    );
+
+    hotkeyService.registerGlobalHotkey(
+      SingleActivator(LogicalKeyboardKey.keyH,
+          meta: isMacOS, control: !isMacOS, shift: true),
+      () {
+        widget.searchService.toggleReplace();
       },
     );
 

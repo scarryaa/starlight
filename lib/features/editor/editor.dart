@@ -87,20 +87,92 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     _initContentNotifiers();
     widget.searchService.isSearchVisibleNotifier
         .addListener(_onSearchVisibilityChanged);
+    widget.searchService.isReplaceVisibleNotifier
+        .addListener(_onReplaceVisibilityChanged);
   }
 
   void _onSearchVisibilityChanged() {
-    if (!widget.searchService.isSearchVisibleNotifier.value) {
-      _clearSearch();
-    }
-    _updateEditorInstances();
+    setState(() {
+      if (!widget.searchService.isSearchVisibleNotifier.value) {
+        _clearSearch();
+      } else {
+        _performSearch();
+      }
+    });
+  }
+
+  void _onReplaceVisibilityChanged() {
+    setState(() {
+      showReplace = widget.searchService.isReplaceVisibleNotifier.value;
+    });
   }
 
   void toggleSearch() {
-    widget.searchService.requestSearchFocus();
+    widget.searchService.toggleSearch();
     if (widget.searchService.isSearchVisibleNotifier.value) {
       _editorHotbarKey.currentState?.refocusSearch();
     }
+  }
+
+  void toggleReplace() {
+    widget.searchService.toggleReplace();
+    if (widget.searchService.isReplaceVisibleNotifier.value) {
+      _editorHotbarKey.currentState?.refocusReplace();
+    }
+  }
+
+  void _handleSearchChanged(String query) {
+    setState(() {
+      searchQuery = query;
+      _performSearch();
+    });
+  }
+
+  void _handleReplaceChanged(String query) {
+    setState(() {
+      replaceQuery = query;
+    });
+  }
+
+  void _performSearch() {
+    if (widget.tabService.currentTab == null || searchQuery.isEmpty) {
+      setState(() {
+        totalMatches = 0;
+        currentMatch = 0;
+        matchPositions.clear();
+        selectedMatches.clear();
+      });
+      return;
+    }
+
+    String content = widget.tabService.currentTab!.content;
+    RegExp regExp = _createSearchRegExp();
+    Iterable<Match> matches = regExp.allMatches(content);
+
+    setState(() {
+      matchPositions = matches.map((m) => m.start).toList();
+      totalMatches = matchPositions.length;
+      currentMatch = totalMatches > 0 ? 1 : 0;
+      selectedMatches.clear();
+    });
+
+    if (totalMatches > 0) {
+      _scrollToCurrentMatch();
+    }
+
+    _updateEditorInstances();
+  }
+
+  void _clearSearch() {
+    setState(() {
+      searchQuery = '';
+      replaceQuery = '';
+      currentMatch = 0;
+      totalMatches = 0;
+      matchPositions.clear();
+      selectedMatches.clear();
+    });
+    _updateEditorInstances();
   }
 
   void _initContentNotifiers() {
@@ -195,28 +267,6 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   void _updateEditorInstances() {
     _editorInstances =
         widget.tabService.tabs.map((tab) => _buildEditor(tab)).toList();
-  }
-
-  void _toggleSearch() {
-    widget.searchService.toggleSearch();
-    if (!widget.searchService.isSearchVisibleNotifier.value) {
-      _clearSearch();
-    }
-    _updateEditorInstances();
-  }
-
-  void _handleSearchChanged(String query) {
-    setState(() {
-      searchQuery = query;
-      _performSearch();
-      _updateEditorInstances();
-    });
-  }
-
-  void _handleReplaceChanged(String query) {
-    setState(() {
-      replaceQuery = query;
-    });
   }
 
   void _toggleReplace() {
@@ -337,34 +387,6 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     }
   }
 
-  void _performSearch() {
-    if (widget.tabService.currentTab == null || searchQuery.isEmpty) {
-      setState(() {
-        totalMatches = 0;
-        currentMatch = 0;
-        matchPositions.clear();
-        selectedMatches.clear();
-      });
-      return;
-    }
-
-    String content = widget.tabService.currentTab!.content;
-    RegExp regExp = _createSearchRegExp();
-    Iterable<Match> matches = regExp.allMatches(content);
-
-    setState(() {
-      matchPositions = matches.map((m) => m.start).toList();
-      totalMatches = matchPositions.length;
-      currentMatch = totalMatches > 0 ? 1 : 0;
-      selectedMatches.clear();
-      _updateEditorInstances();
-    });
-
-    if (totalMatches > 0) {
-      _scrollToCurrentMatch();
-    }
-  }
-
   void _scrollToCurrentMatch() {
     if (currentMatch > 0 && currentMatch <= matchPositions.length) {
       int position = matchPositions[currentMatch - 1];
@@ -409,17 +431,6 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     } else {
       print('Invalid currentMatch: $currentMatch');
     }
-  }
-
-  void _clearSearch() {
-    widget.searchService.closeSearch();
-    searchQuery = '';
-    replaceQuery = '';
-    currentMatch = 0;
-    totalMatches = 0;
-    matchPositions.clear();
-    selectedMatches.clear();
-    _updateEditorInstances();
   }
 
   void _handleCaretPositionChange() {
@@ -541,6 +552,8 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     widget.tabService.removeListener(_handleTabsChanged);
     widget.searchService.isSearchVisibleNotifier
         .removeListener(_onSearchVisibilityChanged);
+    widget.searchService.isReplaceVisibleNotifier
+        .removeListener(_onReplaceVisibilityChanged);
     super.dispose();
   }
 }

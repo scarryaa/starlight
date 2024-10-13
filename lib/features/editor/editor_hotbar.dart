@@ -55,6 +55,7 @@ class EditorHotbar extends StatefulWidget {
 
 class EditorHotbarState extends State<EditorHotbar> {
   final FocusNode _searchFocusNode = FocusNode();
+  final FocusNode _replaceFocusNode = FocusNode();
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _replaceController = TextEditingController();
 
@@ -63,6 +64,8 @@ class EditorHotbarState extends State<EditorHotbar> {
     super.initState();
     widget.searchService.isSearchVisibleNotifier
         .addListener(_handleSearchVisibilityChange);
+    widget.searchService.isReplaceVisibleNotifier
+        .addListener(_handleReplaceVisibilityChange);
   }
 
   void _handleSearchVisibilityChange() {
@@ -73,17 +76,36 @@ class EditorHotbarState extends State<EditorHotbar> {
     }
   }
 
+  void _handleReplaceVisibilityChange() {
+    if (widget.searchService.isReplaceVisibleNotifier.value) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _replaceFocusNode.requestFocus();
+      });
+    }
+  }
+
   void refocusSearch() {
     _searchFocusNode.requestFocus();
   }
 
+  void refocusReplace() {
+    if (!widget.searchService.isReplaceVisibleNotifier.value) {
+      widget.searchService.toggleReplace();
+    }
+    _replaceFocusNode.requestFocus();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _buildHotbarHeader(),
-        if (widget.isSearchVisible) _buildSearchBar(),
-      ],
+    return RawKeyboardListener(
+      focusNode: FocusNode(),
+      onKey: _handleKeyPress,
+      child: Column(
+        children: [
+          _buildHotbarHeader(),
+          if (widget.isSearchVisible) _buildSearchBar(),
+        ],
+      ),
     );
   }
 
@@ -146,7 +168,7 @@ class EditorHotbarState extends State<EditorHotbar> {
         Expanded(
           child: RawKeyboardListener(
             focusNode: FocusNode(),
-            onKey: _handleKeyPress,
+            onKey: _handleSearchKeyPress,
             child: TextField(
               controller: _searchController,
               focusNode: _searchFocusNode,
@@ -199,16 +221,21 @@ class EditorHotbarState extends State<EditorHotbar> {
       child: Row(
         children: [
           Expanded(
-            child: TextField(
-              controller: _replaceController,
-              decoration: const InputDecoration(
-                hintText: 'Replace',
-                border: InputBorder.none,
-                isDense: true,
-                contentPadding: EdgeInsets.symmetric(vertical: 8),
+            child: RawKeyboardListener(
+              focusNode: FocusNode(),
+              onKey: _handleReplaceKeyPress,
+              child: TextField(
+                controller: _replaceController,
+                focusNode: _replaceFocusNode,
+                decoration: const InputDecoration(
+                  hintText: 'Replace',
+                  border: InputBorder.none,
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(vertical: 8),
+                ),
+                style: const TextStyle(fontSize: 12),
+                onChanged: widget.onReplaceChanged,
               ),
-              style: const TextStyle(fontSize: 12),
-              onChanged: widget.onReplaceChanged,
             ),
           ),
           TextButton(
@@ -226,6 +253,69 @@ class EditorHotbarState extends State<EditorHotbar> {
         ],
       ),
     );
+  }
+
+  void _handleReplaceKeyPress(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+      final bool isMetaOrControl =
+          isMacOS ? event.isMetaPressed : event.isControlPressed;
+
+      if (event.isKeyPressed(LogicalKeyboardKey.keyF) && isMetaOrControl) {
+        // Ctrl+F or Cmd+F: Hide search
+        widget.searchService.closeSearch();
+      } else if (event.isKeyPressed(LogicalKeyboardKey.keyH) &&
+          event.isShiftPressed &&
+          isMetaOrControl) {
+        // Ctrl+Shift+H or Cmd+Shift+H: Toggle replace
+        _toggleReplace();
+      }
+    }
+  }
+
+  void _handleSearchKeyPress(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final bool isMacOS = Theme.of(context).platform == TargetPlatform.macOS;
+      final bool isMetaOrControl =
+          isMacOS ? event.isMetaPressed : event.isControlPressed;
+
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        // Escape: Close search
+        widget.searchService.closeSearch();
+      } else if (event.isKeyPressed(LogicalKeyboardKey.keyF) &&
+          isMetaOrControl) {
+        // Ctrl+F or Cmd+F: Hide search
+        widget.searchService.closeSearch();
+      } else if (event.isKeyPressed(LogicalKeyboardKey.keyH) &&
+          event.isShiftPressed &&
+          isMetaOrControl) {
+        // Ctrl+Shift+H or Cmd+Shift+H: Toggle replace
+        _toggleReplace();
+      }
+    }
+  }
+
+  void _toggleReplace() {
+    widget.onToggleReplace();
+    if (widget.showReplace) {
+      // If replace is being shown, focus the replace input
+      _replaceFocusNode.requestFocus();
+    } else {
+      // If replace is being hidden, focus the search input
+      _searchFocusNode.requestFocus();
+    }
+  }
+
+  void _handleKeyPress(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        widget.searchService.closeSearch();
+      } else if (event.isKeyPressed(LogicalKeyboardKey.keyH) &&
+          event.isShiftPressed &&
+          (event.isMetaPressed || event.isControlPressed)) {
+        refocusReplace();
+      }
+    }
   }
 
   Widget _buildSearchOptions() {
@@ -299,19 +389,14 @@ class EditorHotbarState extends State<EditorHotbar> {
     );
   }
 
-  void _handleKeyPress(RawKeyEvent event) {
-    if (event is RawKeyDownEvent) {
-      if (event.logicalKey == LogicalKeyboardKey.escape) {
-        widget.searchService.closeSearch();
-      }
-    }
-  }
-
   @override
   void dispose() {
     widget.searchService.isSearchVisibleNotifier
         .removeListener(_handleSearchVisibilityChange);
+    widget.searchService.isReplaceVisibleNotifier
+        .removeListener(_handleReplaceVisibilityChange);
     _searchFocusNode.dispose();
+    _replaceFocusNode.dispose();
     _searchController.dispose();
     _replaceController.dispose();
     super.dispose();
