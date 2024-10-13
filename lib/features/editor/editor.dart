@@ -57,6 +57,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   final Map<String, ValueNotifier<String>> _contentNotifiers = {};
   final GlobalKey<EditorHotbarState> _editorHotbarKey =
       GlobalKey<EditorHotbarState>();
+  final ValueNotifier<String> searchQueryNotifier = ValueNotifier('');
 
   // Search-related state
   String searchQuery = '';
@@ -95,6 +96,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     setState(() {
       if (!widget.searchService.isSearchVisibleNotifier.value) {
         _clearSearch();
+        searchQueryNotifier.value = '';
       } else {
         _performSearch();
       }
@@ -124,6 +126,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
   void _handleSearchChanged(String query) {
     setState(() {
       searchQuery = query;
+      searchQueryNotifier.value = query;
       _performSearch();
     });
   }
@@ -171,6 +174,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       totalMatches = 0;
       matchPositions.clear();
       selectedMatches.clear();
+      searchQueryNotifier.value = '';
     });
     _updateEditorInstances();
   }
@@ -238,6 +242,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
     }
 
     currentEditorContent = EditorContent(
+      searchQueryNotifier: searchQueryNotifier,
       contentNotifier: _contentNotifiers[tab.path]!,
       searchQuery: searchQuery,
       matchPositions: matchPositions,
@@ -549,6 +554,7 @@ class _EditorState extends State<Editor> with TickerProviderStateMixin {
       notifier.dispose();
     }
     tabController.dispose();
+    searchQueryNotifier.dispose();
     widget.tabService.removeListener(_handleTabsChanged);
     widget.searchService.isSearchVisibleNotifier
         .removeListener(_onSearchVisibilityChanged);

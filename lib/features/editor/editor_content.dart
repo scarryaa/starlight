@@ -44,34 +44,35 @@ class EditorContent extends StatefulWidget {
   final int currentMatch;
   final List<int> selectedMatches;
   final ValueNotifier<String> contentNotifier;
+  final ValueNotifier<String> searchQueryNotifier;
 
   double get actualLineHeight => EditorContentState.lineHeight;
   double get charWidth => EditorContentState.charWidth;
 
-  const EditorContent({
-    super.key,
-    required this.contentNotifier,
-    required this.configService,
-    required this.editorSelectionManager,
-    required this.hotkeyService,
-    required this.verticalController,
-    required this.horizontalController,
-    required this.scrollManager,
-    required this.tab,
-    required this.fileService,
-    required this.tabService,
-    required this.lineHeight,
-    required this.fontFamily,
-    required this.fontSize,
-    required this.tabSize,
-    required this.caretPositionNotifier,
-    this.showMinimap = true,
-    required this.isSearchVisible,
-    required this.searchQuery,
-    required this.matchPositions,
-    required this.currentMatch,
-    required this.selectedMatches,
-  });
+  const EditorContent(
+      {super.key,
+      required this.contentNotifier,
+      required this.configService,
+      required this.editorSelectionManager,
+      required this.hotkeyService,
+      required this.verticalController,
+      required this.horizontalController,
+      required this.scrollManager,
+      required this.tab,
+      required this.fileService,
+      required this.tabService,
+      required this.lineHeight,
+      required this.fontFamily,
+      required this.fontSize,
+      required this.tabSize,
+      required this.caretPositionNotifier,
+      this.showMinimap = true,
+      required this.isSearchVisible,
+      required this.searchQuery,
+      required this.matchPositions,
+      required this.currentMatch,
+      required this.selectedMatches,
+      required this.searchQueryNotifier});
 
   @override
   State<EditorContent> createState() => EditorContentState();
@@ -113,6 +114,7 @@ class EditorContentState extends State<EditorContent> {
     widget.verticalController.addListener(_handleVerticalScroll);
     widget.horizontalController.addListener(_handleHorizontalScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) => _updateContentSize());
+    widget.searchQueryNotifier.addListener(_onSearchQueryChanged);
 
     keyboardHandler = EditorKeyboardHandler(
       updateCursorPosition: (line, column) {
@@ -145,6 +147,10 @@ class EditorContentState extends State<EditorContent> {
     );
   }
 
+  void _onSearchQueryChanged() {
+    setState(() {});
+  }
+
   void _handleCaretPositionChange() {
     final newPosition = widget.caretPositionNotifier.position;
     setState(() {
@@ -173,6 +179,7 @@ class EditorContentState extends State<EditorContent> {
     widget.caretPositionNotifier.removeListener(_handleCaretPositionChange);
     widget.verticalController.removeListener(_handleVerticalScroll);
     widget.horizontalController.removeListener(_handleHorizontalScroll);
+    widget.searchQueryNotifier.removeListener(_onSearchQueryChanged);
     super.dispose();
   }
 
