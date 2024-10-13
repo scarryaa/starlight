@@ -1,3 +1,7 @@
+import 'dart:io';
+import 'package:path/path.dart' as p;
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart' hide Tab;
 import 'package:flutter/services.dart';
 import 'package:starlight/features/editor/models/cursor_position.dart';
@@ -61,6 +65,106 @@ class TabService extends ChangeNotifier {
       }
     }
     return true;
+  }
+
+  Future<void> saveTab(BuildContext context, {int? index}) async {
+    final tabIndex = index ?? currentTabIndexNotifier.value;
+    if (tabIndex == null || tabIndex < 0 || tabIndex >= _tabs.length) {
+      print("Invalid tab index for saving");
+      return;
+    }
+
+    final tab = _tabs[tabIndex];
+    String filePath = tab.fullAbsolutePath;
+
+    // Check if the file is new (hasn't been saved to disk yet)
+    if (!await File(filePath).exists()) {
+      // Prompt for a save location
+      String? selectedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save File',
+        fileName: p.basename(filePath),
+      );
+
+      if (selectedPath == null) {
+        // User cancelled the save dialog
+        return;
+      }
+
+      filePath = selectedPath;
+    }
+
+    // Save the file
+    fileService.writeFile(filePath, tab.content);
+
+    // Update the tab information
+    _tabs[tabIndex] = tab.copyWith(
+      isModified: false,
+      fullAbsolutePath: filePath,
+      fullPath: p.relative(filePath,
+          from: fileService.currentDirectoryNotifier.value),
+      path: p.basename(filePath),
+    );
+
+    notifyListeners();
+  }
+
+  void createNewFile(BuildContext context) {
+    final newFileName = 'Untitled-${_tabs.length + 1}.txt';
+    final newFilePath =
+        p.join(fileService.currentDirectoryNotifier.value, newFileName);
+    addTab(newFileName, newFileName, newFilePath, content: '');
+  }
+
+  void addTab(String fileName, String path, String fullAbsolutePath,
+      {String? content}) {
+    int existingIndex =
+        _tabs.indexWhere((tab) => tab.fullPath == fullAbsolutePath);
+
+    if (existingIndex == -1) {
+      // Tab doesn't exist, create a new one
+      final fileContent = content ??
+          (File(fullAbsolutePath).existsSync()
+              ? fileService.readFile(fullAbsolutePath)
+              : '');
+      _tabs.add(Tab(
+        onCloseRequest: onCloseRequest,
+        fullAbsolutePath: fullAbsolutePath,
+        fullPath: path,
+        path: fileName,
+        content: fileContent,
+        isSelected: true,
+        isModified: content != null, // Mark as modified if content is provided
+      ));
+      setCurrentTab(_tabs.length - 1);
+    } else {
+      // Tab already exists
+      if (content != null && content != _tabs[existingIndex].content) {
+        // Update the content if it's provided and different
+        _tabs[existingIndex] = _tabs[existingIndex].copyWith(
+          content: content,
+          isModified: true,
+        );
+      }
+      setCurrentTab(existingIndex);
+    }
+
+    notifyListeners();
+  }
+
+  // Keep only this version of updateTabContent
+  void updateTabContent(String path, String content,
+      {bool isModified = true, String? newPath}) {
+    final index = _tabs.indexWhere((tab) => tab.path == path);
+    if (index != -1) {
+      _tabs[index] = _tabs[index].copyWith(
+        content: content,
+        isModified: isModified,
+        path: newPath ?? _tabs[index].path,
+        fullPath: newPath ?? _tabs[index].fullPath,
+        fullAbsolutePath: newPath ?? _tabs[index].fullAbsolutePath,
+      );
+      notifyListeners();
+    }
   }
 
   Future<void> _saveAndClose(int index) async {
@@ -160,37 +264,6 @@ class TabService extends ChangeNotifier {
     }
   }
 
-  void addTab(String fileName, String path, String fullAbsolutePath,
-      {String? content}) {
-    int existingIndex =
-        _tabs.indexWhere((tab) => tab.fullPath == fullAbsolutePath);
-
-    if (existingIndex == -1) {
-      // Tab doesn't exist, create a new one
-      final fileContent = content ?? fileService.readFile(fullAbsolutePath);
-      _tabs.add(Tab(
-        onCloseRequest: onCloseRequest,
-        fullAbsolutePath: fullAbsolutePath,
-        fullPath: path,
-        path: fileName,
-        content: fileContent,
-        isSelected: true,
-        isModified: false,
-      ));
-      setCurrentTab(_tabs.length - 1);
-    } else {
-      // Tab already exists
-      if (content != null && content != _tabs[existingIndex].content) {
-        // Update the content if it's provided and different
-        _tabs[existingIndex].content = content;
-        _tabs[existingIndex].isModified = true;
-      }
-      setCurrentTab(existingIndex);
-    }
-
-    notifyListeners();
-  }
-
   void pinTab(int index) {
     if (index >= 0 && index < _tabs.length) {
       _tabs[index] = _tabs[index].copyWith(isPinned: true);
@@ -239,24 +312,6 @@ class TabService extends ChangeNotifier {
       Clipboard.setData(ClipboardData(text: _tabs[index].fullAbsolutePath));
     } else {
       print('Invalid tab index');
-    }
-  }
-
-  void updateTabContent(String path, String content,
-      {required bool isModified}) {
-    final index = _tabs.indexWhere((tab) => tab.path == path);
-    if (index != -1) {
-      _tabs[index] = Tab(
-        onCloseRequest: _tabs[index].onCloseRequest,
-        fullAbsolutePath: _tabs[index].fullAbsolutePath,
-        fullPath: _tabs[index].fullPath,
-        path: path,
-        content: content,
-        isSelected: _tabs[index].isSelected,
-        isModified: isModified,
-        cursorPosition: _tabs[index].cursorPosition,
-      );
-      notifyListeners();
     }
   }
 

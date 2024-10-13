@@ -872,7 +872,7 @@ class EditorContentState extends State<EditorContent> {
     final currentTab = widget
         .tabService.tabs[widget.tabService.currentTabIndexNotifier.value!];
     try {
-      File(currentTab.path).writeAsStringSync(rope.text);
+      File(currentTab.fullPath).writeAsStringSync(rope.text);
       widget.tabService
           .updateTabContent(currentTab.path, rope.text, isModified: false);
     } catch (e) {

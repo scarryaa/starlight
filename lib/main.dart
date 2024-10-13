@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'dart:io' show Directory, File, Platform;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -19,6 +19,14 @@ import 'package:starlight/widgets/tab/command_palette/command_palette.dart';
 
 // Conditionally import desktop-specific packages
 import 'desktop_config.dart' if (dart.library.html) 'desktop_config_stub.dart';
+
+class SaveFileIntent extends Intent {
+  const SaveFileIntent();
+}
+
+class NewFileIntent extends Intent {
+  const NewFileIntent();
+}
 
 class SearchIntent extends Intent {
   const SearchIntent();
@@ -293,7 +301,8 @@ class _MyHomePageState extends State<MyHomePage> {
           content: TextField(
             controller: controller,
             autofocus: true,
-            decoration: const InputDecoration(hintText: 'Enter file name'),
+            decoration: const InputDecoration(
+                hintText: 'Enter file name (including subdirectories)'),
           ),
           actions: [
             TextButton(
@@ -302,11 +311,21 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
             TextButton(
               onPressed: () {
-                final fileName = controller.text.trim();
-                if (fileName.isNotEmpty) {
-                  final path = p.join(currentDirectory, fileName);
-                  widget.fileService.createFile(path);
-                  widget.tabService.addTab(fileName, path, path);
+                final filePath = controller.text.trim();
+                if (filePath.isNotEmpty) {
+                  final fullPath = p.join(currentDirectory, filePath);
+                  final directory = p.dirname(fullPath);
+
+                  // Create all directories in the path
+                  Directory(directory).createSync(recursive: true);
+
+                  // Create the file
+                  widget.fileService.createFile(fullPath);
+
+                  // Add the new tab
+                  final fileName = p.basename(fullPath);
+                  widget.tabService.addTab(fileName, fullPath, fullPath);
+
                   Navigator.of(context).pop();
                 }
               },
@@ -395,6 +414,18 @@ class _MyHomePageState extends State<MyHomePage> {
             return null;
           },
         ),
+        SaveFileIntent: CallbackAction<SaveFileIntent>(
+          onInvoke: (SaveFileIntent intent) async {
+            await widget.tabService.saveTab(context);
+            return null;
+          },
+        ),
+        NewFileIntent: CallbackAction<NewFileIntent>(
+          onInvoke: (NewFileIntent intent) {
+            widget.tabService.createNewFile(context);
+            return null;
+          },
+        ),
       },
       shortcuts: {
         LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyF):
@@ -405,6 +436,14 @@ class _MyHomePageState extends State<MyHomePage> {
             LogicalKeyboardKey.keyH): const ReplaceIntent(),
         LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.shift,
             LogicalKeyboardKey.keyH): const ReplaceIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyS):
+            const SaveFileIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyS):
+            const SaveFileIntent(),
+        LogicalKeySet(LogicalKeyboardKey.control, LogicalKeyboardKey.keyN):
+            const NewFileIntent(),
+        LogicalKeySet(LogicalKeyboardKey.meta, LogicalKeyboardKey.keyN):
+            const NewFileIntent(),
       },
       child: Focus(
         focusNode: _mainLayoutFocusNode,
@@ -495,38 +534,16 @@ class _MyHomePageState extends State<MyHomePage> {
     hotkeyService.registerGlobalHotkey(
       SingleActivator(LogicalKeyboardKey.keyS,
           meta: isMacOS, control: !isMacOS),
-      () {
-        if (widget.tabService.currentTabIndexNotifier.value != null) {
-          widget.tabService.updateTabContent(
-              widget.tabService.currentTab!.path,
-              widget
-                  .tabService
-                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
-                  .content,
-              isModified: false);
-          widget.fileService.writeFile(
-              widget
-                  .tabService
-                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
-                  .fullPath,
-              widget
-                  .tabService
-                  .tabs[widget.tabService.currentTabIndexNotifier.value!]
-                  .content);
-        } else {
-          print("Could not save: currentTabIndexNotifier.value is null.");
-        }
+      () async {
+        await widget.tabService.saveTab(context);
       },
     );
+
     hotkeyService.registerGlobalHotkey(
-        SingleActivator(LogicalKeyboardKey.keyN,
-            meta: isMacOS, control: !isMacOS),
-        () {});
-    hotkeyService.registerGlobalHotkey(
-      SingleActivator(LogicalKeyboardKey.comma,
+      SingleActivator(LogicalKeyboardKey.keyN,
           meta: isMacOS, control: !isMacOS),
       () {
-        widget.configService.openConfig();
+        widget.tabService.createNewFile(context);
       },
     );
 
